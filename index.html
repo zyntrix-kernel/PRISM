@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" href="data:," />
+    <title>PRISM — Projected Reality Interaction &amp; Spatial Manipulation</title>
+    <link rel="stylesheet" href="/src/styles.css" />
+  </head>
+  <body>
+    <div id="app">
+      <!-- 3D scene renders here -->
+      <div id="scene-container"></div>
+
+      <!-- Small mirrored webcam preview (helps users frame their hands) -->
+      <video id="webcam" autoplay playsinline muted></video>
+
+      <!-- Hand skeleton overlay aligned with the webcam preview -->
+      <canvas id="landmark-overlay"></canvas>
+
+      <!-- Top HUD -->
+      <header id="hud">
+        <div id="hud-title">PRISM <span>hand-controlled 3D lab</span></div>
+        <div id="hud-status">Starting…</div>
+        <div id="hud-controls">
+          <button id="btn-camera" type="button" aria-label="Enable camera for hand tracking">Enable camera</button>
+          <select id="sel-preset" title="World preset (keys 1-6)" aria-label="World preset">
+            <option value="space" selected>Space</option>
+            <option value="blocks">Block game</option>
+            <option value="test">Test</option>
+            <option value="singularity">Black hole</option>
+            <option value="drive">Drive</option>
+            <option value="atom">Atom</option>
+          </select>
+          <button id="btn-easy" type="button" class="hidden" title="Easy point-and-go mode (E)" aria-label="Toggle easy point-and-go driving">Easy: OFF</button>
+          <select id="sel-quality" title="Render quality" aria-label="Render quality">
+            <option value="high">High</option>
+            <option value="medium" selected>Medium</option>
+            <option value="low">Low</option>
+            <option value="auto">Auto</option>
+          </select>
+          <button id="btn-debug" type="button" title="Toggle debug overlay (D)" aria-label="Toggle debug overlay">Debug</button>
+          <button id="btn-ai" type="button" title="AI observer: watches the camera with FastVLM (off by default)" aria-label="Toggle AI observer">AI</button>
+          <button id="btn-help" type="button" title="Show help" aria-label="Show help">?</button>
+        </div>
+      </header>
+
+      <!-- Debug overlay (toggle with D or ?debug=0) -->
+      <div id="debug" class="hidden"></div>
+
+      <!-- Science info for the hovered/grabbed body -->
+      <div id="planet-info" class="hidden"></div>
+
+      <!-- Help card -->
+      <div id="help" class="hidden">
+        <h2>How to interact — point + pinch, nothing else</h2>
+        <ul>
+          <li><b>Point</b> your index finger to move the cursor. Near-misses snap to nearby bodies.</li>
+          <li><b>Pinch</b> (thumb + index together) to grab the highlighted body. The ring cinches as the pinch closes — it grabs at full close.</li>
+          <li><b>Move</b> while pinching to drag it, <b>release</b> to drop. Thresholds self-calibrate to your hand; watch <b>d=</b> in the debug box.</li>
+          <li><b>Two-hand pinch:</b> move apart/together to zoom, twist to rotate.</li>
+          <li><b>No camera?</b> Use the mouse: move to point, hold left button to grab.</li>
+        </ul>
+        </ul>
+        <h2>Camera (mouse / keys)</h2>
+        <ul>
+          <li><b>Drag empty space</b> to orbit · <b>wheel</b> to zoom toward the cursor · <b>right-drag</b> to pan.</li>
+          <li><b>Arrows</b> orbit · <b>+/-</b> zoom · <b>R</b> reset view · <b>T</b> top · <b>F</b> edge · <b>V</b> overview · <b>O</b> auto-orbit.</li>
+          <li><b>1–6</b> switch presets (Space / Blocks / Test / Black hole / Drive / Atom).</li>
+          <li><b>High</b> quality adds procedural planet textures + bloom glow.</li>
+        </ul>
+        <h2>Drive preset</h2>
+        <ul>
+          <li><b>Steer</b> with pointer left/right · <b>pinch-hold</b> = gas (pinch gently for partial throttle) · release to coast · <b>Space</b> = brake.</li>
+          <li><b>Easy mode</b> (button or <b>E</b>): point at the ground, <b>pinch</b> to drop a pin, <b>pinch</b> again to GO, <b>pinch</b> once more to stop.</li>
+          <li>Stay inside the neon rails — the grass slows you down. Hard cornering and braking puff tire smoke. Cross the start line for lap times.</li>
+        </ul>
+        <h2>Atom preset</h2>
+        <ul>
+          <li>Grab an <b>electron</b> and drop it on another shell (<b>n=1, 2, 3</b>).</li>
+          <li>Dropping to a <b>lower</b> shell emits a photon flash labeled with its true wavelength (3→2 glows red at 656 nm).</li>
+        </ul>
+        <button id="btn-help-close" type="button">Close</button>
+      </div>
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

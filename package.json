@@ -1,0 +1,24 @@
+{
+  "name": "prism",
+  "version": "0.1.0",
+  "private": true,
+  "description": "PRISM — Projected Reality Interaction & Spatial Manipulation (ZYNASH LABS)",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@huggingface/transformers": "^4.3.0",
+    "@mediapipe/tasks-vision": "1.0.1",
+    "three": "0.186.0"
+  },
+  "devDependencies": {
+    "@types/three": "^0.186.0",
+    "typescript": "7.0.2",
+    "vite": "8.3.0",
+    "vitest": "5.0.1"
+  }
+}

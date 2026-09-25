@@ -1,0 +1,237 @@
+:root {
+  --hud-bg: rgba(8, 12, 24, 0.72);
+  --hud-fg: #d7e6ff;
+  --accent: #00f0ff;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: #04060d;
+  color: var(--hud-fg);
+  font-family: "Segoe UI", system-ui, sans-serif;
+}
+
+#app {
+  position: relative;
+  width: 100vw;
+  height: 100vh;
+}
+
+#scene-container,
+#scene-container canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  touch-action: none; /* pointer gestures drive the camera, not the page */
+}
+
+#webcam {
+  position: absolute;
+  right: 12px;
+  bottom: 12px;
+  width: 200px;
+  aspect-ratio: 16 / 9;
+  object-fit: cover;
+  transform: scaleX(-1); /* mirror: selfie view */
+  border: 1px solid rgba(0, 240, 255, 0.5);
+  border-radius: 8px;
+  background: #000;
+  z-index: 5;
+}
+
+#landmark-overlay {
+  position: absolute;
+  right: 12px;
+  bottom: 12px;
+  width: 200px;
+  aspect-ratio: 16 / 9;
+  transform: scaleX(-1);
+  pointer-events: none;
+  z-index: 6;
+}
+
+#hud {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  background: var(--hud-bg);
+  backdrop-filter: blur(6px);
+  z-index: 10;
+}
+
+#hud-title {
+  font-weight: 700;
+  letter-spacing: 2px;
+  color: var(--accent);
+  white-space: nowrap;
+}
+
+#hud-title span {
+  font-weight: 400;
+  letter-spacing: 0;
+  color: var(--hud-fg);
+  font-size: 0.85em;
+}
+
+#hud-status {
+  flex: 1;
+  font-size: 0.9em;
+  opacity: 0.9;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+#hud-controls {
+  display: flex;
+  gap: 8px;
+}
+
+#hud-controls button,
+#hud-controls select {
+  background: rgba(0, 240, 255, 0.12);
+  color: var(--hud-fg);
+  border: 1px solid rgba(0, 240, 255, 0.45);
+  border-radius: 6px;
+  padding: 6px 10px;
+  font-size: 0.85em;
+  cursor: pointer;
+}
+
+#hud-controls button:hover,
+#hud-controls select:hover {
+  background: rgba(0, 240, 255, 0.25);
+}
+
+#hud-controls button.active {
+  background: var(--accent);
+  color: #001318;
+  font-weight: 700;
+}
+
+#debug {
+  position: absolute;
+  left: 12px;
+  bottom: 12px;
+  min-width: 230px;
+  padding: 10px 12px;
+  background: rgba(0, 0, 0, 0.65);
+  border: 1px solid rgba(0, 240, 255, 0.35);
+  border-radius: 8px;
+  font-family: Consolas, monospace;
+  font-size: 12px;
+  line-height: 1.6;
+  z-index: 10;
+  pointer-events: none;
+}
+
+#debug .warn {
+  color: #ffcf5c;
+}
+
+#planet-info {
+  position: absolute;
+  right: 12px;
+  top: 64px;
+  max-width: 280px;
+  padding: 10px 12px;
+  background: rgba(0, 0, 0, 0.65);
+  border: 1px solid rgba(180, 107, 255, 0.5);
+  border-radius: 8px;
+  font-size: 13px;
+  line-height: 1.5;
+  z-index: 10;
+  pointer-events: none;
+}
+
+#help {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  max-width: 420px;
+  padding: 18px 22px;
+  background: rgba(6, 10, 22, 0.94);
+  border: 1px solid var(--accent);
+  border-radius: 12px;
+  z-index: 20;
+}
+
+#help h2 {
+  margin: 0 0 8px;
+  color: var(--accent);
+  font-size: 1.1em;
+}
+
+#help ul {
+  margin: 0 0 12px;
+  padding-left: 20px;
+  font-size: 0.92em;
+}
+
+#help li {
+  margin: 4px 0;
+}
+
+.hidden {
+  display: none !important;
+}
+
+/* Small / touch screens: wrap the HUD, shrink the preview, fat buttons. */
+@media (max-width: 760px) {
+  #hud {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  #hud-status {
+    flex-basis: 100%;
+    order: 3;
+  }
+
+  #hud-controls button,
+  #hud-controls select {
+    min-height: 44px;
+    font-size: 1em;
+  }
+
+  #webcam,
+  #landmark-overlay {
+    width: 128px;
+  }
+
+  #planet-info {
+    top: auto;
+    bottom: 12px;
+    right: 12px;
+    max-width: 200px;
+    font-size: 12px;
+  }
+
+  #debug {
+    display: none;
+  }
+}
+
+@media (pointer: coarse) {
+  #hud-controls button,
+  #hud-controls select {
+    min-height: 44px;
+  }
+}

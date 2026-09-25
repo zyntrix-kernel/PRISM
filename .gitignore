@@ -1,0 +1,9 @@
+node_modules/
+dist/
+*.log
+.DS_Store
+Thumbs.db
+coverage/
+.env
+# Local third-party reference material (not PRISM source, not pushed).
+Reference Repos/

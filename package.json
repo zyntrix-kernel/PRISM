@@ -4,6 +4,9 @@
   "private": true,
   "description": "PRISM — Projected Reality Interaction & Spatial Manipulation (ZYNASH LABS)",
   "type": "module",
+  "engines": {
+    "node": ">=20.19.0"
+  },
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && vite build",

@@ -5,12 +5,13 @@ import type { PresetId } from './presets/types';
 
 export const PrismConfig = {
   tracking: {
-    // Local override first (put hand_landmarker.task in public/models/ for
-    // fully-offline use), otherwise fall back to the public CDN model.
+    // Fully offline-capable: the wasm runtime and model ship in
+    // public/wasm and public/models (copied from the npm package and the
+    // MediaPipe model hub at build time). CDN is a legacy fallback only.
     localModelUrl: './models/hand_landmarker.task',
     cdnModelUrl:
       'https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task',
-    wasmUrl: 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@1.0.1/wasm',
+    wasmUrl: './wasm',
     numHands: 2,
     minHandDetectionConfidence: 0.5,
     minHandPresenceConfidence: 0.5,

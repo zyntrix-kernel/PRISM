@@ -5,5 +5,8 @@ dist/
 Thumbs.db
 coverage/
 .env
+# Offline vendor output (rebuilt via `npm run vendor:offline`, ~41 MB).
+public/wasm/
+public/models/
 # Local third-party reference material (not PRISM source, not pushed).
 Reference Repos/

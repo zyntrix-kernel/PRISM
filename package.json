@@ -11,7 +11,9 @@
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
-    "test": "vitest run"
+    "test": "vitest run",
+    "vendor:offline": "node scripts/vendor-offline.mjs",
+    "package:usb": "npm run vendor:offline && npm run build"
   },
   "dependencies": {
     "@huggingface/transformers": "^4.3.0",

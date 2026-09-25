@@ -40,6 +40,22 @@ npm run build
 npx serve dist
 ```
 
+## USB offline stick
+
+`npm run package:usb` vendors the hand-tracking runtime (MediaPipe wasm +
+model, ~41 MB, rebuilt from npm + model hub — never committed) and builds:
+
+```bash
+npm run package:usb
+# copy dist/* + portable/Start-PRISM.* to the stick as G:\PRISM\
+```
+
+On any Windows PC, double-click **`Start-PRISM.bat`** — a tiny local server
+starts (no install, no admin rights) and opens the app on localhost, so the
+camera works. What's offline: everything except the optional AI observer
+(FastVLM weights download once from Hugging Face when first enabled, then
+cache in that browser).
+
 ## Devices & quality
 
 Quality defaults to **Auto**: PRISM probes the device (mobile, CPU/RAM,

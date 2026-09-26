@@ -745,3 +745,99 @@ container, `overflow: hidden` on the container clips it cleanly without
 affecting the container's own box-shadow. This is the simplest fix for
 "glow leak" visual bugs. Always check if inner decorative glows need
 containment when using large box-shadow radii.
+
+---
+Task ID: 8
+Agent: webDevReview (cron round 7)
+Task: Fix planet label overlap + add onboarding minimize
+
+## 1. Current Project Status Assessment
+
+PRISM (Next.js 16 + Three.js + MediaPipe) is stable after rounds 0-7.
+Dev server runs on port 3000, HTTP 200, ~230ms. All features functional:
+command palette, preset transitions, input mode indicator (breathing),
+toasts, parallax stars, settings panel, webcam placeholder, onboarding
+(with progress bar, overflow-fixed, bright ticks). ESLint clean, no
+hydration mismatch.
+
+**QA performed via agent-browser + VLM (fresh browser session):**
+- Page loads HTTP 200, 3D scene renders
+- All features verified working
+- **VLM-surfaced highest-impact issue:** Planet label overlap — inner
+  planet labels (Mercury, Venus, Earth, Mars) clustered into an illegible
+  "text knot" near the sun, with labels overlapping each other and
+  bleeding into the sun's glow.
+
+**Work focus:** Fix the planet label overlap (the #1 priority recommendation
+from round 7) + add onboarding collapsibility (round 7 recommendation #6).
+
+## 2. Completed Modifications + Verification
+
+**Bug fix:**
+- **Planet label overlap** (presets/solar.ts): Rewrote the per-frame label
+  position loop with three improvements for inner planets (distFromSun < 4):
+  1. **Radial outward offset**: Labels are pushed away from the sun along
+     the sun→planet direction (offset 1.1 + up to 1.44 extra for closest
+     planets). This spreads stacked labels apart radially.
+  2. **Y stagger**: Per-index vertical stagger (0, 0.55, 1.1, repeating)
+     so labels at similar angles don't vertically overlap.
+  3. **Sun-proximity fade**: Labels closer than 1.0 to the sun fade to
+     0.12 opacity (they'd be unreadable against the corona anyway),
+     ramping to full opacity by 2.8 units.
+  Outer planets keep the original simple positioning. VLM confirmed:
+  "No significant overlap", 7/10 readability improvement, labels spread
+  radially + staggered at different heights + faded near sun.
+
+**New feature:**
+- **Onboarding minimize** (PrismStage.tsx + prism.css): Added a
+  ChevronDown toggle button to the onboarding header. Clicking it
+  collapses the card to just header + progress bar (hides the checklist
+  + buttons), freeing screen space. The chevron rotates -90° when
+  minimized. Clicking again expands back. VLM rated 9/10: "excellent —
+  provides immediate visual feedback on task progress without occupying
+  valuable screen real estate". Added CSS for the header layout,
+  minimize button hover/focus states. (PrismStage.tsx, prism.css)
+
+**Verification:**
+- ESLint: clean (0 errors)
+- Server HTML: 0 stars (no hydration mismatch)
+- Planet labels: VLM confirmed "no significant overlap", labels spread +
+  staggered + faded
+- Onboarding minimize: tested expand→minimize→expand cycle, VLM confirmed
+  minimized state shows "just header + progress bar, no checklist"
+- All other features verified intact
+
+## 3. Unresolved Issues / Risks + Next-Phase Recommendations
+
+**Resolved this round:**
+- ✅ Planet label overlap (highest-impact visual issue) → radial offset +
+  Y stagger + sun-proximity fade
+- ✅ Onboarding not collapsible → minimize toggle with chevron
+
+**Still unresolved (from previous rounds):**
+- Camera + MediaPipe hand-tracking can't be tested in headless browser
+  (no device). Mouse fallback is the verified path.
+- AI observer (FastVLM) off by default; loads on opt-in (WebGPU + ~500MB).
+- Responsive CSS in place for ≤820px but headless browser can't resize.
+- agent-browser console accumulates stale errors across HMR rebuilds.
+
+**Priority recommendations for next phase:**
+1. **Compass styling**: The "N" compass indicator (3D scene element) floats
+  without a container — add a glass backing plate for polish.
+2. **Status text shortening**: VLM noted the status message is verbose.
+  Consider an icon + short state (e.g. mouse icon + "Fallback").
+3. **Performance monitoring widget**: Add a small FPS graph in settings.
+4. **Sound design (optional)**: Subtle UI sounds (off by default, toggle).
+5. **Label leader lines**: Connect the offset labels to their planets with
+  thin leader lines for clarity (especially for the radially-offset inner
+  planet labels).
+6. **Preset-specific label tuning**: The label fix is solar-system-specific;
+  other presets (atom, drive) may benefit from similar label polish.
+
+**Key learning for future rounds:**
+For 3D label de-collision, three techniques work together: (1) radial
+outward offset spreads labels that share an angular sector, (2) per-index
+Y stagger breaks vertical alignment, (3) proximity-based fade hides
+labels that would be unreadable against bright backgrounds. Combining all
+three is more effective than any single approach. The fade uses the
+existing SpriteMaterial.opacity (no shader changes needed).

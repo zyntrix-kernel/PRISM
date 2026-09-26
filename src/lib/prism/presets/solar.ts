@@ -303,7 +303,30 @@ export function buildSolar(ctx: BuilderCtx): WorldAPI {
         const body = orbits.bodies[i];
         body.getWorldPosition(tmp);
         const size = (body.geometry as THREE.SphereGeometry).parameters.radius;
-        labels[i].position.set(tmp.x, tmp.y + size + 0.3, tmp.z);
+        // Distance from the sun (at origin) — inner planets cluster and their
+        // labels overlap. Offset labels radially outward + stagger Y height +
+        // fade very close ones so they don't merge into the sun's glow.
+        const distFromSun = Math.hypot(tmp.x, tmp.z);
+        const mat = labels[i].material as THREE.SpriteMaterial;
+        if (distFromSun < 4) {
+          // Inner planet: push the label radially outward from the sun so
+          // stacked labels spread apart. Add a per-index Y stagger so labels
+          // at similar angles don't vertically overlap.
+          const dirX = distFromSun > 0.01 ? tmp.x / distFromSun : 0;
+          const dirZ = distFromSun > 0.01 ? tmp.z / distFromSun : 0;
+          const offset = 1.1 + Math.max(0, 3.2 - distFromSun) * 0.45;
+          const yStagger = (i % 3) * 0.55; // stagger 0, 0.55, 1.1, repeat
+          labels[i].position.set(
+            tmp.x + dirX * offset,
+            tmp.y + size + 0.4 + yStagger,
+            tmp.z + dirZ * offset,
+          );
+          // Fade labels very close to the sun (unreadable against the corona).
+          mat.opacity = THREE.MathUtils.clamp((distFromSun - 1.0) / 1.8, 0.12, 1);
+        } else {
+          labels[i].position.set(tmp.x, tmp.y + size + 0.3, tmp.z);
+          mat.opacity = 1;
+        }
       }
     },
     setOrbitFromPoint(mesh: THREE.Mesh, localPoint: THREE.Vector3): void {

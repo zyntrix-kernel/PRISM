@@ -933,6 +933,42 @@ video#prism-webcam.live + #prism-webcam-frame .prism-webcam-placeholder {
   font-weight: 700;
 }
 
+/* Onboarding header with minimize toggle */
+.prism-onboard-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.prism-onboard-header h2 {
+  margin: 0;
+}
+
+.prism-onboard-min {
+  background: transparent;
+  border: none;
+  color: var(--hud-fg-faint);
+  cursor: pointer;
+  padding: 3px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background var(--motion-fast) var(--motion-ease),
+    color var(--motion-fast) var(--motion-ease);
+}
+
+.prism-onboard-min:hover {
+  background: rgba(154, 220, 255, 0.14);
+  color: var(--accent);
+}
+
+.prism-onboard-min:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
 #prism-onboard .prism-onboard-sub {
   font-size: 12px;
   color: var(--hud-fg-faint);

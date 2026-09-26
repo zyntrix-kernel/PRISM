@@ -23,6 +23,7 @@ import {
   X,
   Check,
   ChevronRight,
+  ChevronDown,
   Command,
 } from "lucide-react";
 
@@ -57,6 +58,7 @@ export default function PrismStage() {
   const [presetOpen, setPresetOpen] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [cmdOpen, setCmdOpen] = useState(false);
+  const [onboardMin, setOnboardMin] = useState(false);
 
   // Cmd/Ctrl + K opens the command palette
   useEffect(() => {
@@ -376,22 +378,44 @@ export default function PrismStage() {
         aria-label="Getting started"
         ref={setEl("onboard")}
       >
-        <h2>First flight</h2>
-        <p className="prism-onboard-sub">Three steps to lift off.</p>
-        <ol>
-          <li data-step="camera">
-            <span className="tick">✓</span>
-            <span>Enable the camera</span>
-          </li>
-          <li data-step="hand">
-            <span className="tick">✓</span>
-            <span>Show your hand</span>
-          </li>
-          <li data-step="grab">
-            <span className="tick">✓</span>
-            <span>Pinch to grab</span>
-          </li>
-        </ol>
+        <div className="prism-onboard-header">
+          <h2>First flight</h2>
+          <button
+            type="button"
+            className="prism-onboard-min"
+            onClick={() => setOnboardMin((v) => !v)}
+            aria-label={onboardMin ? "Expand onboarding" : "Minimize onboarding"}
+            aria-expanded={!onboardMin}
+            title={onboardMin ? "Expand" : "Minimize"}
+          >
+            <ChevronDown
+              size={15}
+              style={{
+                transform: onboardMin ? "rotate(-90deg)" : "rotate(0deg)",
+                transition: "transform 200ms cubic-bezier(0.2,0,0,1)",
+              }}
+            />
+          </button>
+        </div>
+        {!onboardMin && (
+          <>
+            <p className="prism-onboard-sub">Three steps to lift off.</p>
+            <ol>
+              <li data-step="camera">
+                <span className="tick">✓</span>
+                <span>Enable the camera</span>
+              </li>
+              <li data-step="hand">
+                <span className="tick">✓</span>
+                <span>Show your hand</span>
+              </li>
+              <li data-step="grab">
+                <span className="tick">✓</span>
+                <span>Pinch to grab</span>
+              </li>
+            </ol>
+          </>
+        )}
         {/* Dreamy progress bar — fills as onboarding steps complete */}
         <div className="prism-onboard-progress" aria-hidden="true">
           <div
@@ -403,14 +427,16 @@ export default function PrismStage() {
             }}
           />
         </div>
-        <div className="row">
-          <button id="prism-btn-onboard-close" type="button" ref={setEl("onboardClose") as React.RefObject<HTMLButtonElement>}>
-            Skip tour
-          </button>
-          <button id="prism-btn-onboard-help" type="button" ref={setEl("onboardHelp") as React.RefObject<HTMLButtonElement>}>
-            Full guide
-          </button>
-        </div>
+        {!onboardMin && (
+          <div className="row">
+            <button id="prism-btn-onboard-close" type="button" ref={setEl("onboardClose") as React.RefObject<HTMLButtonElement>}>
+              Skip tour
+            </button>
+            <button id="prism-btn-onboard-help" type="button" ref={setEl("onboardHelp") as React.RefObject<HTMLButtonElement>}>
+              Full guide
+            </button>
+          </div>
+        )}
         <div className="celebrate hidden">Ready to explore ✓</div>
       </aside>
 

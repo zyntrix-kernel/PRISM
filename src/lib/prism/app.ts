@@ -236,9 +236,9 @@ export class PrismApp {
 
   // ---- UI binding -------------------------------------------------------
 
-  private setStatus(msg: string): void {
+  private setStatus(msg: string, full?: string): void {
     this.el.status.textContent = msg;
-    this.el.status.title = msg; // hover reveals truncated text
+    this.el.status.title = full ?? msg; // hover reveals the full text
     this.emit();
   }
 
@@ -283,7 +283,7 @@ export class PrismApp {
       this.scene.resize(c.clientWidth, c.clientHeight);
     });
     window.addEventListener('error', (e) => {
-      this.setStatus(`Runtime fault: ${e.message} — mouse fallback still works; report this text.`);
+      this.setStatus('Runtime fault — mouse still works', `Runtime fault: ${e.message} — mouse fallback still works; report this text.`);
     });
 
     try {
@@ -362,7 +362,8 @@ export class PrismApp {
       if (await this.enableCamera()) await this.ensureTracking();
     } catch (err) {
       console.error('[PRISM] vision stack failed:', err);
-      this.setStatus(`Hand tracking unavailable (${describeMediaError(err)}). Mouse fallback active.`);
+      const full = `Hand tracking unavailable (${describeMediaError(err)}). Mouse fallback active.`;
+      this.setStatus('Hand tracking unavailable — mouse active', full);
     }
   }
 
@@ -379,7 +380,8 @@ export class PrismApp {
       video.classList.add('live');
       return true;
     } catch (err) {
-      this.setStatus(err instanceof Error ? err.message : String(err));
+      const full = err instanceof Error ? err.message : String(err);
+      this.setStatus('Camera unavailable — mouse fallback active', full);
       cameraBtn.classList.remove('active');
       video.classList.remove('live');
       return false;
@@ -470,7 +472,8 @@ export class PrismApp {
       );
       this.scene.render();
     } catch (err) {
-      this.setStatus(`Frame fault (${err instanceof Error ? err.message : String(err)}) — continuing; report this text.`);
+      const full = `Frame fault (${err instanceof Error ? err.message : String(err)}) — continuing; report this text.`;
+      this.setStatus('Frame fault — continuing', full);
       console.error('[PRISM] frame fault:', err);
     }
   };

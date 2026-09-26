@@ -263,6 +263,115 @@
   }
 }
 
+/* Webcam frame wrapper — holds the video + the off-state placeholder.
+ * The placeholder overlays the black box with an inviting camera-off
+ * state (icon + label + subtle scan shimmer). Hides when video is live. */
+#prism-webcam-frame {
+  position: absolute;
+  right: 16px;
+  bottom: 16px;
+  width: 208px;
+  aspect-ratio: 16 / 9;
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  z-index: 5;
+  pointer-events: none;
+}
+
+#prism-webcam-frame .prism-webcam-placeholder {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background: linear-gradient(135deg, rgba(22, 14, 32, 0.9), rgba(12, 8, 20, 0.95));
+  border: 1px solid var(--glass-line);
+  border-radius: var(--radius-md);
+  box-shadow: var(--glass-glow), var(--glass-highlight);
+  color: var(--hud-fg-faint);
+  font-size: 11px;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+  text-shadow: var(--text-lift);
+  transition: opacity var(--motion-med) var(--motion-ease);
+  overflow: hidden;
+}
+
+/* When the video is live, hide the placeholder */
+#prism-webcam.live ~ #prism-webcam-frame .prism-webcam-placeholder,
+video#prism-webcam.live + #prism-webcam-frame .prism-webcam-placeholder {
+  opacity: 0;
+  pointer-events: none;
+}
+
+#prism-webcam-frame .prism-webcam-placeholder .prism-wcam-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: radial-gradient(circle, rgba(154, 220, 255, 0.18), transparent 70%);
+  color: var(--accent);
+  position: relative;
+}
+
+#prism-webcam-frame .prism-webcam-placeholder .prism-wcam-icon::before {
+  content: "";
+  position: absolute;
+  inset: -4px;
+  border-radius: 50%;
+  border: 1px solid rgba(154, 220, 255, 0.25);
+  animation: prism-wcam-ring 3s ease-in-out infinite;
+}
+
+@keyframes prism-wcam-ring {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 0.5;
+  }
+  50% {
+    transform: scale(1.15);
+    opacity: 0.15;
+  }
+}
+
+/* Subtle scan-line shimmer across the placeholder (dreamy, not gimmicky) */
+#prism-webcam-frame .prism-webcam-placeholder::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    180deg,
+    transparent 0%,
+    rgba(154, 220, 255, 0.06) 50%,
+    transparent 100%
+  );
+  animation: prism-wcam-scan 4s linear infinite;
+  pointer-events: none;
+}
+
+@keyframes prism-wcam-scan {
+  0% {
+    transform: translateY(-100%);
+  }
+  100% {
+    transform: translateY(100%);
+  }
+}
+
+#prism-webcam-frame .prism-webcam-placeholder .prism-wcam-hint {
+  font-size: 10px;
+  color: var(--hud-fg-faint);
+  letter-spacing: 0.4px;
+  text-transform: none;
+  text-align: center;
+  padding: 0 12px;
+  line-height: 1.4;
+}
+
 #prism-landmark-overlay {
   position: absolute;
   right: 16px;
@@ -369,10 +478,14 @@
   color: var(--hud-fg-dim);
   text-shadow: var(--text-lift);
   overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  line-height: 1.4;
   min-width: 0;
+  max-height: 2.8em;
   transition: color var(--motion-fast) var(--motion-ease);
+  cursor: help;
 }
 
 #prism-hud-controls {

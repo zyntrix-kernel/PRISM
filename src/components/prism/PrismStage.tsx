@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { PrismApp, type PrismState } from "@/lib/prism/app";
 import "@/lib/prism/prism.css";
 import CommandPalette from "./CommandPalette";
+import ShortcutLegend from "./ShortcutLegend";
 import {
   Camera,
   Eye,
@@ -139,6 +140,19 @@ export default function PrismStage() {
       {/* Mirrored webcam preview + hand skeleton overlay */}
       <video id="prism-webcam" autoPlay playsInline muted ref={videoRef} aria-label="Webcam preview for hand tracking" />
       <canvas id="prism-landmark-overlay" ref={overlayRef} />
+
+      {/* Webcam off-state placeholder — invites camera enable, hides when live */}
+      {!state?.cameraOn && (
+        <div id="prism-webcam-frame" aria-hidden="true">
+          <div className="prism-webcam-placeholder">
+            <div className="prism-wcam-icon">
+              <Camera size={18} />
+            </div>
+            <span>Camera off</span>
+            <span className="prism-wcam-hint">Enable for hand tracking</span>
+          </div>
+        </div>
+      )}
 
       {/* ===== Top HUD — spatial control bar ===== */}
       <header id="prism-hud" className="prism-glass">
@@ -460,6 +474,16 @@ export default function PrismStage() {
           flex: none;
         }
       `}</style>
+
+      {/* Keyboard shortcut legend (bottom-left chip) */}
+      <ShortcutLegend
+        onPickPreset={(n) => {
+          // Preset keys 1-7 map to PRESET_ORDER indices
+          if (n >= 1 && n <= 7) {
+            window.dispatchEvent(new KeyboardEvent("keydown", { key: String(n) }));
+          }
+        }}
+      />
     </div>
   );
 }

@@ -1,0 +1,123 @@
+// Webcam acquisition with graceful errors. Kept separate from tracking so
+// camera failures (no device, permission denied) surface as friendly UI
+// messages instead of silent tracking loss.
+
+import { PrismConfig } from './config';
+
+export interface CameraHandle {
+  stream: MediaStream;
+  width: number;
+  height: number;
+  stop(): void;
+}
+
+/**
+ * Human-readable form for getUserMedia/play/model-load rejections.
+ * Duck-types instead of instanceof: rejections cross realms and library
+ * boundaries (DOMException, ProgressEvent, wrapped errors), where class
+ * checks silently fail and String() yields "[object Event]".
+ */
+export function describeMediaError(err: unknown): string {
+  if (typeof err === 'string' && err) return err;
+  if (err && typeof err === 'object') {
+    const rec = err as Record<string, unknown>;
+    if (typeof rec.message === 'string' && rec.message) return rec.message;
+    if (typeof rec.type === 'string') return `media event '${rec.type}' with no details`;
+  }
+  if (err instanceof Error && err.message) return err.message;
+  try {
+    const json = JSON.stringify(err);
+    if (json && json !== '{}') return json;
+  } catch {
+    /* unserializable (circular refs): fall through to the safe label */
+  }
+  return typeof err === 'object' && err !== null ? 'unknown error (unserializable)' : String(err);
+}
+
+/** Rejects if the promise doesn't settle within ms (hung camera drivers exist). */
+function withTimeout<T>(promise: Promise<T>, ms: number, what: string): Promise<T> {
+  let timer: ReturnType<typeof setTimeout>;
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new Error(`${what} timed out after ${ms}ms`)), ms);
+  });
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
+}
+
+/** Requests the webcam and attaches it to the given video element. */
+export async function startCamera(video: HTMLVideoElement): Promise<CameraHandle> {
+  if (!('mediaDevices' in navigator) || !navigator.mediaDevices?.getUserMedia) {
+    throw new Error('This browser does not support camera access (mediaDevices API missing).');
+  }
+
+  let stream: MediaStream;
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({
+      video: {
+        width: { ideal: PrismConfig.camera.idealWidth },
+        height: { ideal: PrismConfig.camera.idealHeight },
+        facingMode: 'user',
+      },
+      audio: false,
+    });
+  } catch (err) {
+    // Permission denial gets actionable guidance (the #1 expo failure);
+    // everything else keeps the generic fallback path.
+    const name = (err as { name?: unknown })?.name;
+    const hint =
+      name === 'NotAllowedError' || name === 'SecurityError'
+        ? 'Camera blocked: click the camera icon in the address bar, choose Allow, then press Enable camera again. Until then the mouse works fully.'
+        : 'You can still try the mouse fallback (move = point, hold = grab).';
+    throw new Error(`Camera unavailable: ${describeMediaError(err)}. ${hint}`);
+  }
+
+  video.srcObject = stream;
+  video.muted = true;
+  try {
+    await withTimeout(
+      video.play().catch(() => {
+        /* autoplay policies vary; canplay listener below still resolves */
+      }),
+      8000,
+      'Camera playback',
+    );
+  } catch (err) {
+    stream.getTracks().forEach((t) => t.stop());
+    throw new Error(
+      `Camera started but video never played (${describeMediaError(err)}).`,
+    );
+  }
+  try {
+    await withTimeout(
+      new Promise<void>((resolve) => {
+        if (video.readyState >= 2 && video.videoWidth > 0) {
+          resolve();
+          return;
+        }
+        const onCanPlay = (): void => {
+          video.removeEventListener('canplay', onCanPlay);
+          resolve();
+        };
+        video.addEventListener('canplay', onCanPlay);
+      }),
+      8000,
+      'Camera first frame',
+    );
+  } catch (err) {
+    stream.getTracks().forEach((t) => t.stop());
+    throw new Error(
+      `Camera produced no frames (${describeMediaError(err)}).`,
+    );
+  }
+
+  const track = stream.getVideoTracks()[0];
+  const settings = track?.getSettings();
+  return {
+    stream,
+    width: settings?.width ?? video.videoWidth,
+    height: settings?.height ?? video.videoHeight,
+    stop() {
+      stream.getTracks().forEach((t) => t.stop());
+      video.srcObject = null;
+    },
+  };
+}

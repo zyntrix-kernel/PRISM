@@ -14,24 +14,28 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Z.ai Code Scaffold - AI-Powered Development",
-  description: "Modern Next.js scaffold optimized for AI-powered development with Z.ai. Built with TypeScript, Tailwind CSS, and shadcn/ui.",
-  keywords: ["Z.ai", "Next.js", "TypeScript", "Tailwind CSS", "shadcn/ui", "AI development", "React"],
-  authors: [{ name: "Z.ai Team" }],
+  title: "PRISM — Projected Reality Interaction & Spatial Manipulation",
+  description:
+    "PRISM by ZYNASH LABS: a dreamy, hand-controlled 3D science lab. Point to move the cursor, pinch to grab — no controller needed. Built on Three.js + MediaPipe.",
+  keywords: [
+    "PRISM",
+    "hand tracking",
+    "MediaPipe",
+    "Three.js",
+    "spatial interface",
+    "gesture control",
+    "3D visualization",
+    "ZYNASH LABS",
+  ],
+  authors: [{ name: "ZYNASH LABS" }],
   icons: {
-    icon: "https://z-cdn.chatglm.cn/z-ai/static/logo.svg",
+    icon: "data:,",
   },
   openGraph: {
-    title: "Z.ai Code Scaffold",
-    description: "AI-powered development with modern React stack",
-    url: "https://chat.z.ai",
-    siteName: "Z.ai",
+    title: "PRISM — Spatial Interaction Lab",
+    description:
+      "A dreamy, hand-controlled 3D science lab. Point + pinch to explore the solar system, atoms, black holes, and more.",
     type: "website",
-  },
-  twitter: {
-    card: "summary_large_image",
-    title: "Z.ai Code Scaffold",
-    description: "AI-powered development with modern React stack",
   },
 };
 

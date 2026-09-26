@@ -1,0 +1,744 @@
+     1→// Interaction controller: turns gestures + pointer motion into scene action.
+     2→//
+     3→// Pipeline per frame:
+     4→//   landmarks (or mouse) -> smoothed pointer NDC -> raycast -> hover
+     5→//   pinch rising edge + hover -> grab (anchor plane + offset captured)
+     6→//   pinch held -> drag grabbed orb along the grab plane (smoothed)
+     7→//   pinch falling edge -> release
+     8→//   two simultaneous pinches -> world zoom + rotate
+     9→//
+    10→// All transient math uses preallocated temporaries (no hot-loop garbage).
+    11→
+    12→import * as THREE from 'three';
+    13→import { PrismConfig } from './config';
+    14→import { GestureTracker, PinchCalibrator, TwoHandGesture, pinchRatio, type PoseKind } from './gestures';
+    15→import { AdaptivePointerFilter } from './pointer';
+    16→import { PRESET_ORDER } from './presets/types';
+    17→import { Vec3Smoother } from './smoothing';
+    18→import type { CursorMode, PrismScene } from './scene';
+    19→import type { HandFrame, Landmark, Point2D } from './types';
+    20→
+    21→export type InputMode = 'hand' | 'mouse' | 'none';
+    22→
+    23→const INDEX_TIP = 8;
+    24→const THUMB_TIP = 4;
+    25→
+    26→function pinchPoint2D(landmarks: Landmark[]): Point2D {
+    27→  return {
+    28→    x: (landmarks[THUMB_TIP].x + landmarks[INDEX_TIP].x) / 2,
+    29→    y: (landmarks[THUMB_TIP].y + landmarks[INDEX_TIP].y) / 2,
+    30→  };
+    31→}
+    32→
+    33→export class InteractionController {
+    34→  private readonly raycaster = new THREE.Raycaster();
+    35→  private readonly pointerNdc = new THREE.Vector2(0, 0);
+    36→  // Adaptive pointer: self-retunes to any camera on earth (5–120 fps),
+    37→  // outlier-gates spikes, and predicts ~2 frames ahead to hide latency.
+    38→  private readonly pointerFilter = new AdaptivePointerFilter({
+    39→    ...PrismConfig.interaction.pointerAdaptive,
+    40→  });
+    41→  private readonly grabSmoother = new Vec3Smoother(PrismConfig.interaction.grabSmoothing);
+    42→  private readonly trackers = [new GestureTracker(), new GestureTracker()];
+    43→  private readonly twoHand = new TwoHandGesture();
+    44→
+    45→  // Grab state
+    46→  private grabbed: THREE.Mesh | null = null;
+    47→  private readonly grabPlane = new THREE.Plane();
+    48→  private readonly grabOffset = new THREE.Vector3();
+    49→  private readonly tmpA = new THREE.Vector3();
+    50→  private readonly tmpB = new THREE.Vector3();
+    51→  private readonly tmpTarget = new THREE.Vector3();
+    52→  private readonly tmpNdcSample = { x: 0, y: 0, z: 0 };
+    53→  private readonly tmpSmoothed = { x: 0, y: 0, z: 0 };
+    54→  private readonly tmpNdc = new THREE.Vector2();
+    55→  private readonly tmpProj = new THREE.Vector3();
+    56→  /** Per-frame pick memo: hover, grab, and cursor share one raycast. */
+    57→  private frameCount = 0;
+    58→  private pickFrame = -1;
+    59→  private cachedPick: THREE.Mesh | null = null;
+    60→  // Orbit-drag temporaries: the pointer ray is converted into world-local
+    61→  // space so two-hand zoom/rotation doesn't skew the ecliptic plane.
+    62→  private readonly eclipticPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+    63→  private readonly tmpRay = new THREE.Ray();
+    64→  private readonly tmpMat = new THREE.Matrix4();
+    65→  private readonly tmpLocal = new THREE.Vector3();
+    66→  private orbitDragPrimed = false;
+    67→
+    68→  // Two-hand incremental state
+    69→  private lastScaleRatio = 1;
+    70→  private lastAngleDelta = 0;
+    71→  private prevTwoHand = false;
+    72→  /** Self-tuning pinch thresholds for this user's hand and camera. */
+    73→  private readonly calibrator = new PinchCalibrator();
+    74→  /** Last tracking timestamp: resumed streams prime without a fake jump. */
+    75→  private lastTrackT = 0;
+    76→  // Stable hand identity: MediaPipe reorders hands frame-to-frame, so blindly
+    77→  // taking hands[0] teleports the pointer whenever hands cross or re-enter.
+    78→  // Wrists are matched by least movement (with a stickiness margin), and a
+    79→  // genuine jump (>0.25) snaps the pointer filter instead of streaking.
+    80→  private primaryFirst = true;
+    81→  private anchorA: { x: number; y: number } | null = null;
+    82→  private anchorB: { x: number; y: number } | null = null;
+    83→  private readonly lastRaw: { x: number; y: number } = { x: 0, y: 0 };
+    84→
+    85→  // Mouse fallback + camera-control state
+    86→  private mouseNdc: THREE.Vector2 | null = null;
+    87→  private mouseDown = false;
+    88→  private prevMouseDown = false;
+    89→  /** True while the left button orbits the camera (pressed on empty space). */
+    90→  private orbitArmed = false;
+    91→  private panning = false;
+    92→  private readonly lastClient = { x: 0, y: 0 };
+    93→  // Click-vs-drag disambiguation: a quick press-release without dragging
+    94→  // counts as a CLICK (pin drop / button action), a real drag orbits.
+    95→  private downClientX = 0;
+    96→  private downClientY = 0;
+    97→  private downTime = 0;
+    98→  private mouseClicked = false;
+    99→  // Multi-touch: two active pointers switch to pinch-zoom + orbit.
+   100→  private readonly activePointers = new Map<number, { x: number; y: number }>();
+   101→  private pinchMode = false;
+   102→  private lastPinchDist = 0;
+   103→  private lastPinchMid = { x: 0, y: 0 };
+   104→
+   105→  // Debug snapshot (updated every frame, read by the overlay)
+   106→  mode: InputMode = 'none';
+   107→  gesture: PoseKind = 'NONE';
+   108→  isPinching = false;
+   109→  /** Unified action edges for worlds that consume raw input (drive preset). */
+   110→  actionHeld = false;
+   111→  actionPressed = false;
+   112→  actionReleased = false;
+   113→  private prevActionHeld = false;
+   114→  /** Space key doubles as the brake pedal. */
+   115→  spaceDown = false;
+   116→  /** Raw scale-normalized thumb-index distance of the primary hand (null when no hand). */
+   117→  pinchValue: number | null = null;
+   118→  /** World-space cursor anchor (null when hidden): zoom-to-cursor target. */
+   119→  cursorWorld: THREE.Vector3 | null = null;
+   120→  private readonly cursorWorldVec = new THREE.Vector3();
+   121→  private displayedHover: THREE.Mesh | null = null;
+   122→  private hoverMissMs = 0;
+   123→  private lastSeenAt = 0;
+   124→  hoveredName: string | null = null;
+   125→  grabbedName: string | null = null;
+   126→  twoHandActive = false;
+   127→
+   128→  constructor(private readonly prism: PrismScene) {
+   129→    // Mouse fallback: moving over the canvas points, holding grabs.
+   130→    // Pressing on EMPTY space orbits the camera instead of grabbing.
+   131→    const el = prism.renderer.domElement;
+   132→    el.style.pointerEvents = 'auto';
+   133→    el.addEventListener('pointermove', (e) => {
+   134→      if (this.activePointers.has(e.pointerId)) {
+   135→        this.activePointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+   136→      }
+   137→      // Two-finger gesture owns the frame: pinch = dolly, drift = orbit.
+   138→      if (this.pinchMode && this.activePointers.size >= 2) {
+   139→        const [a, b] = [...this.activePointers.values()];
+   140→        const dist = Math.max(1, Math.hypot(a.x - b.x, a.y - b.y));
+   141→        const mid = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+   142→        prism.rig.dolly(this.lastPinchDist / dist);
+   143→        prism.rig.orbitBy(mid.x - this.lastPinchMid.x, mid.y - this.lastPinchMid.y);
+   144→        this.lastPinchDist = dist;
+   145→        this.lastPinchMid = mid;
+   146→        this.lastClient.x = e.clientX;
+   147→        this.lastClient.y = e.clientY;
+   148→        return;
+   149→      }
+   150→      const dx = e.clientX - this.lastClient.x;
+   151→      const dy = e.clientY - this.lastClient.y;
+   152→      this.lastClient.x = e.clientX;
+   153→      this.lastClient.y = e.clientY;
+   154→      if (this.mouseDown && this.orbitArmed) {
+   155→        prism.rig.orbitBy(dx, dy); // camera orbits, pointer stays frozen
+   156→        return;
+   157→      }
+   158→      if (this.panning) {
+   159→        prism.rig.panBy(dx, dy, prism.camera);
+   160→        return;
+   161→      }
+   162→      const rect = el.getBoundingClientRect();
+   163→      this.mouseNdc = new THREE.Vector2(
+   164→        ((e.clientX - rect.left) / rect.width) * 2 - 1,
+   165→        -((e.clientY - rect.top) / rect.height) * 2 + 1,
+   166→      );
+   167→    });
+   168→    el.addEventListener('pointerdown', (e) => {
+   169→      this.lastClient.x = e.clientX;
+   170→      this.lastClient.y = e.clientY;
+   171→      this.activePointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+   172→      // Second simultaneous pointer: switch to pinch-zoom, drop any grab
+   173→      // (the camera is moving, so a held object would swim).
+   174→      if (this.activePointers.size === 2) {
+   175→        const [a, b] = [...this.activePointers.values()];
+   176→        this.lastPinchDist = Math.max(1, Math.hypot(a.x - b.x, a.y - b.y));
+   177→        this.lastPinchMid = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+   178→        this.pinchMode = true;
+   179→        this.mouseDown = false;
+   180→        this.orbitArmed = false;
+   181→        this.panning = false;
+   182→        if (this.grabbed) this.release();
+   183→        return;
+   184→      }
+   185→      const primary = e.button === 0 || e.pointerType === 'touch' || e.pointerType === 'pen';
+   186→      if (primary && !this.pinchMode) {
+   187→        this.mouseDown = true;
+   188→        this.downClientX = e.clientX;
+   189→        this.downClientY = e.clientY;
+   190→        this.downTime = performance.now();
+   191→        // Decide immediately: body under cursor → grab mode, else orbit mode.
+   192→        const rect = el.getBoundingClientRect();
+   193→        this.tmpNdc.set(
+   194→          ((e.clientX - rect.left) / rect.width) * 2 - 1,
+   195→          -((e.clientY - rect.top) / rect.height) * 2 + 1,
+   196→        );
+   197→        this.raycaster.setFromCamera(this.tmpNdc, prism.camera);
+   198→        this.orbitArmed =
+   199→          this.raycaster.intersectObjects(prism.grabbables, false).length === 0 &&
+   200→          !prism.capturesPointer();
+   201→      } else if (e.button === 2) {
+   202→        this.panning = true;
+   203→      }
+   204→    });
+   205→    const endPointer = (e: PointerEvent | { pointerId: number; clientX?: number; clientY?: number }): void => {
+   206→      this.activePointers.delete(e.pointerId);
+   207→      if (this.activePointers.size < 2) this.pinchMode = false;
+   208→      // Click (not drag) on empty space = action pulse for worlds like drive.
+   209→      const up = e as PointerEvent;
+   210→      if (this.orbitArmed && typeof up?.clientX === 'number') {
+   211→        const moved = Math.hypot(up.clientX - this.downClientX, up.clientY - this.downClientY);
+   212→        if (moved < 6 && performance.now() - this.downTime < 400) {
+   213→          this.mouseClicked = true;
+   214→        }
+   215→      }
+   216→      this.mouseDown = false;
+   217→      this.orbitArmed = false;
+   218→      this.panning = false;
+   219→    };
+   220→    window.addEventListener('pointerup', endPointer);
+   221→    window.addEventListener('pointercancel', endPointer);
+   222→    el.addEventListener('contextmenu', (e) => e.preventDefault());
+   223→    el.addEventListener(
+   224→      'wheel',
+   225→      (e) => {
+   226→        e.preventDefault();
+   227→        prism.rig.dolly(Math.exp(e.deltaY * PrismConfig.cameraRig.zoomFactor));
+   228→        // Zoom toward the cursor, not the screen center: keeps the thing
+   229→        // you are looking at under the pointer while dollying.
+   230→        if (this.cursorWorld) {
+   231→          prism.rig.target.lerp(this.cursorWorld, 0.12);
+   232→          prism.rig.target.x = THREE.MathUtils.clamp(prism.rig.target.x, -10, 10);
+   233→          prism.rig.target.y = THREE.MathUtils.clamp(prism.rig.target.y, -6, 6);
+   234→          prism.rig.target.z = THREE.MathUtils.clamp(prism.rig.target.z, -10, 10);
+   235→        }
+   236→      },
+   237→      { passive: false },
+   238→    );
+   239→    window.addEventListener('keydown', (e) => {
+   240→      const tag = (e.target as HTMLElement | null)?.tagName;
+   241→      if (tag === 'SELECT' || tag === 'INPUT' || tag === 'TEXTAREA') return;
+   242→      const step = 26;
+   243→      switch (e.key) {
+   244→        case 'ArrowLeft': prism.rig.orbitBy(-step, 0); break;
+   245→        case 'ArrowRight': prism.rig.orbitBy(step, 0); break;
+   246→        case 'ArrowUp': prism.rig.orbitBy(0, -step); break;
+   247→        case 'ArrowDown': prism.rig.orbitBy(0, step); break;
+   248→        case '+': case '=': prism.rig.dolly(0.9); break;
+   249→        case '-': case '_': prism.rig.dolly(1.1); break;
+   250→        case 'r': case 'R': prism.rig.resetToHome(); break;
+   251→        case 'x': case 'X':
+   252→          window.dispatchEvent(new CustomEvent('prism-reset-world'));
+   253→          break;
+   254→        case 't': case 'T': prism.rig.setView('top'); break;
+   255→        case 'f': case 'F': prism.rig.setView('edge'); break;
+   256→        case 'v': case 'V': prism.rig.setView('overview'); break;
+   257→        case 'o': case 'O': prism.rig.autoRotate = !prism.rig.autoRotate; break;
+   258→        case 'e': case 'E':
+   259→          window.dispatchEvent(new CustomEvent('prism-easy'));
+   260→          window.dispatchEvent(new CustomEvent('prism-cycle', { detail: 1 }));
+   261→          break;
+   262→        case 'q': case 'Q':
+   263→          window.dispatchEvent(new CustomEvent('prism-cycle', { detail: -1 }));
+   264→          break;
+   265→        case ' ': this.spaceDown = true; e.preventDefault(); break;
+   266→        case '1': case '2': case '3': case '4': case '5': case '6': case '7': {
+   267→          const id = PRESET_ORDER[Number(e.key) - 1];
+   268→          if (id) window.dispatchEvent(new CustomEvent('prism-preset', { detail: id }));
+   269→          break;
+   270→        }
+   271→      }
+   272→    });
+   273→    window.addEventListener('keyup', (e) => {
+   274→      if (e.key === ' ') this.spaceDown = false;
+   275→    });
+   276→  }
+   277→
+   278→  /** Called when the world preset changes: drop stale grabs and camera drags. */
+   279→  onPresetChange(): void {
+   280→    this.release();
+   281→    this.twoHand.reset();
+   282→    this.twoHandActive = false;
+   283→    this.prevTwoHand = false;
+   284→    this.mouseDown = false;
+   285→    this.orbitArmed = false;
+   286→    this.panning = false;
+   287→    this.orbitDragPrimed = false;
+   288→    this.actionHeld = false;
+   289→    this.actionPressed = false;
+   290→    this.actionReleased = false;
+   291→    this.prevActionHeld = false;
+   292→    this.mouseClicked = false;
+   293→    this.spaceDown = false;
+   294→    this.displayedHover = null;
+   295→    this.hoverMissMs = 0;
+   296→    this.cursorWorld = null;
+   297→    this.activePointers.clear();
+   298→    this.pinchMode = false;
+   299→    this.primaryFirst = true;
+   300→    this.anchorA = null;
+   301→    this.anchorB = null;
+   302→    this.lastRaw.x = 0;
+   303→    this.lastRaw.y = 0;
+   304→    this.calibrator.reset();
+   305→  }
+   306→
+   307→  /** Smoothed pointer NDC x (-1 left .. +1 right): steering axis. */
+   308→  get pointerNX(): number {
+   309→    return this.pointerNdc.x;
+   310→  }
+   311→
+   312→  /** Smoothed pointer NDC (read-only view for overlays). */
+   313→  get pointerNDC(): THREE.Vector2 {
+   314→    return this.pointerNdc;
+   315→  }
+   316→
+   317→  /** Analog gas pedal: 0 at the exit threshold, 1 at full touch. */
+   318→  get pinchCloseness(): number {
+   319→    if (this.pinchValue === null) return 0;
+   320→    const g = PrismConfig.gestures;
+   321→    return THREE.MathUtils.clamp(
+   322→      (g.pinchExit - this.pinchValue) / (g.pinchExit - g.pinchEnter),
+   323→      0,
+   324→      1,
+   325→    );
+   326→  }
+   327→
+   328→  /**
+   329→   * World-local ground point (y=0) under the current pointer ray.
+   330→   * Returns null when tracking/mouse is idle or the ray is parallel.
+   331→   */
+   332→  groundXZ(): { x: number; z: number } | null {
+   333→    if (this.mode === 'none') return null;
+   334→    this.tmpMat.copy(this.prism.world.matrixWorld).invert();
+   335→    this.tmpRay.copy(this.raycaster.ray).applyMatrix4(this.tmpMat);
+   336→    if (!this.tmpRay.intersectPlane(this.eclipticPlane, this.tmpLocal)) return null;
+   337→    return { x: this.tmpLocal.x, z: this.tmpLocal.z };
+   338→  }
+   339→
+   340→  /** Landmark x is unmirrored camera space; the selfie view needs a flip. */
+   341→  private toNdc(lm: Landmark): { x: number; y: number } {
+   342→    return { x: 1 - lm.x * 2, y: -(lm.y * 2 - 1) };
+   343→  }
+   344→
+   345→  update(dt: number, frame: HandFrame | null): void {
+   346→    const dtMs = dt * 1000;
+   347→    this.frameCount += 1;
+   348→    const hasHands = !!frame && frame.hands.length > 0;
+   349→
+   350→    if (hasHands && frame) {
+   351→      this.mode = 'hand';
+   352→      this.updateFromHands(dt, dtMs, frame);
+   353→    } else if (this.mouseNdc) {
+   354→      this.mode = 'mouse';
+   355→      this.updateFromMouse(dt);
+   356→    } else {
+   357→      this.mode = 'none';
+   358→      this.gesture = 'NONE';
+   359→      this.isPinching = false;
+   360→      this.pinchValue = null;
+   361→      this.prevTwoHand = false;
+   362→      // Keep a latched grab only while its hand exists; a lost hand drops it.
+   363→      if (this.grabbed) this.release();
+   364→      this.twoHand.reset();
+   365→      this.twoHandActive = false;
+   366→      // Let stale per-hand state decay so re-entry starts clean.
+   367→      this.trackers[0].update(null, dtMs);
+   368→      this.trackers[1].update(null, dtMs);
+   369→      // Tracking clock restarts on resume: no fake time jump into the latch.
+   370→      this.lastTrackT = 0;
+   371→      // Coast: keep the last cursor/hover briefly instead of blinking out.
+   372→      if (performance.now() - this.lastSeenAt > PrismConfig.interaction.coastMs) {
+   373→        this.hoverMissMs = PrismConfig.interaction.hoverClearMs;
+   374→        this.applyHover(null, 0);
+   375→        this.prism.setCursor(null, 'hidden');
+   376→        this.cursorWorld = null;
+   377→      }
+   378→    }
+   379→
+   380→    // Unified action edges (hand pinch or non-orbit mouse hold / click).
+   381→    const held =
+   382→      this.mode === 'hand'
+   383→        ? this.isPinching
+   384→        : this.mode === 'mouse'
+   385→          ? this.mouseDown && !this.orbitArmed
+   386→          : false;
+   387→    this.actionPressed = (held && !this.prevActionHeld) || this.mouseClicked;
+   388→    this.actionReleased = !held && this.prevActionHeld;
+   389→    this.actionHeld = held;
+   390→    this.prevActionHeld = held;
+   391→    this.mouseClicked = false;
+   392→  }
+   393→
+   394→  // ---- hand input -------------------------------------------------------
+   395→
+   396→  private updateFromHands(dt: number, dtMs: number, frame: HandFrame): void {
+   397→    const hands = frame.hands;
+   398→    // Tracking-clock delta (NOT render dt): at 10 fps frames arrive 100 ms
+   399→    // apart, and the pinch latch + pointer filter must see true time or
+   400→    // slow cameras feel either twitchy or dead. Crucially, repeated polls
+   401→    // of the SAME stale frame contribute ZERO (first sighting advances the
+   402→    // clock; re-reads don't), so render rate never inflates tracking time.
+   403→    // First frame after tracking loss primes with zero: no fake jump.
+   404→    let trackDtMs = 0;
+   405→    if (this.lastTrackT > 0 && frame.timestampMs > this.lastTrackT) {
+   406→      trackDtMs = Math.min(frame.timestampMs - this.lastTrackT, 500);
+   407→    }
+   408→    this.lastTrackT = frame.timestampMs;
+   409→
+   410→    // Stable hand identity: MediaPipe reorders hands frame-to-frame, so
+   411→    // blindly taking hands[0] teleports the pointer whenever hands cross,
+   412→    // leave, or re-enter. Match by least wrist movement with a stickiness
+   413→    // margin; a genuine jump snaps the filter instead of streaking.
+   414→    const wrists = hands.map((h) => h.landmarks[0]);
+   415→    const wristDist = (a: { x: number; y: number }, b: { x: number; y: number }): number =>
+   416→      Math.hypot(a.x - b.x, a.y - b.y);
+   417→    let primaryHand = hands[0];
+   418→    let secondaryHand: (typeof hands)[number] | null = null;
+   419→    if (hands.length > 1 && this.anchorA) {
+   420→      const d0A = wristDist(wrists[0], this.anchorA);
+   421→      const d1A = wristDist(wrists[1], this.anchorA);
+   422→      const d0B = this.anchorB ? wristDist(wrists[0], this.anchorB) : 0;
+   423→      const d1B = this.anchorB ? wristDist(wrists[1], this.anchorB) : 0;
+   424→      const costX = d0A + d1B;
+   425→      const costY = d1A + d0B;
+   426→      // Hysteresis margin: keep the current assignment unless the swap is
+   427→      // decisively better — kills flicker when wrists pass each other.
+   428→      const takeX = this.primaryFirst ? costX <= costY + 0.04 : costX + 0.04 < costY;
+   429→      primaryHand = takeX ? hands[0] : hands[1];
+   430→      secondaryHand = takeX ? hands[1] : hands[0];
+   431→      this.primaryFirst = takeX;
+   432→    } else {
+   433→      if (hands.length > 1) secondaryHand = hands[1];
+   434→      this.primaryFirst = true;
+   435→    }
+   436→    const jumped = this.anchorA !== null && wristDist(primaryHand.landmarks[0], this.anchorA) > 0.25;
+   437→    this.anchorA = { x: primaryHand.landmarks[0].x, y: primaryHand.landmarks[0].y };
+   438→    this.anchorB = secondaryHand
+   439→      ? { x: secondaryHand.landmarks[0].x, y: secondaryHand.landmarks[0].y }
+   440→      : null;
+   441→
+   442→    this.trackers[0].update(primaryHand.landmarks, trackDtMs);
+   443→    this.trackers[1].update(secondaryHand ? secondaryHand.landmarks : null, trackDtMs);
+   444→    const prime = this.trackers[0];
+   445→    this.gesture = prime.pose;
+   446→    this.isPinching = prime.pinch.isPinching;
+   447→    this.pinchValue = pinchRatio(primaryHand.landmarks);
+   448→    // Feed the self-calibration with clearly-open hands (never pinches).
+   449→    this.calibrator.observe(
+   450→      this.pinchValue,
+   451→      prime.pose === 'POINT' || prime.pose === 'OPEN_PALM',
+   452→    );
+   453→
+   454→    // Smoothed pointer from the primary index fingertip.
+   455→    const tip = primaryHand.landmarks[INDEX_TIP];
+   456→    const raw = this.toNdc(tip);
+   457→    if (jumped) {
+   458→      // True discontinuity (re-entry elsewhere): snap honestly. Slewing
+   459→      // toward stale data is what "teleport streaks" are made of.
+   460→      this.tmpNdcSample.x = raw.x;
+   461→      this.tmpNdcSample.y = raw.y;
+   462→      this.pointerFilter.reset(this.tmpNdcSample);
+   463→      this.lastRaw.x = raw.x;
+   464→      this.lastRaw.y = raw.y;
+   465→    } else {
+   466→      // Adaptive micro-deadzone: sub-pixel tremor never enters the filter.
+   467→      // It breathes with measured noise (old cameras get a wider floor)
+   468→      // and vanishes the moment the hand genuinely moves.
+   469→      const dead =
+   470→        this.pointerFilter.pointerSpeed < 0.3
+   471→          ? 0.0015 + Math.min(this.pointerFilter.noisePerSample * 0.3, 0.004)
+   472→          : 0;
+   473→      if (dead > 0 && Math.hypot(raw.x - this.lastRaw.x, raw.y - this.lastRaw.y) < dead) {
+   474→        raw.x = this.lastRaw.x;
+   475→        raw.y = this.lastRaw.y;
+   476→      }
+   477→      this.lastRaw.x = raw.x;
+   478→      this.lastRaw.y = raw.y;
+   479→    }
+   480→    this.tmpNdcSample.x = raw.x;
+   481→    this.tmpNdcSample.y = raw.y;
+   482→    // Tracking-clock step (NOT render dt) + sensor confidence: the filter
+   483→    // stays honest whether frames arrive at 10 Hz or 120 Hz, clean or noisy.
+   484→    this.pointerFilter.update(this.tmpNdcSample, trackDtMs, primaryHand.confidence, this.tmpSmoothed);
+   485→    this.pointerNdc.set(this.tmpSmoothed.x, this.tmpSmoothed.y);
+   486→
+   487→    // Two-hand transform takes precedence over single-hand dragging.
+   488→    const bothPinching =
+   489→      prime.pinch.isPinching && this.trackers[1].pinch.isPinching && secondaryHand !== null;
+   490→    if (bothPinching && secondaryHand) {
+   491→      // Fresh baseline on entry: stale ratios from a previous gesture would
+   492→      // otherwise teleport the world scale on the first frame.
+   493→      if (!this.prevTwoHand) {
+   494→        this.lastScaleRatio = 1;
+   495→        this.lastAngleDelta = 0;
+   496→      }
+   497→      this.prevTwoHand = true;
+   498→      const delta = this.twoHand.update(
+   499→        pinchPoint2D(primaryHand.landmarks),
+   500→        pinchPoint2D(secondaryHand.landmarks),
+   501→      );
+   502→      this.twoHandActive = true;
+   503→      if (delta) this.applyTwoHandDelta(delta.scaleRatio, delta.angleDelta);
+   504→      if (this.grabbed) this.release(); // two-hand mode owns the world, not an orb
+   505→      this.applyHover(null, dtMs);
+   506→      this.updateCursor();
+   507→      return;
+   508→    }
+   509→    this.prevTwoHand = false;
+   510→    this.twoHand.reset();
+   511→    this.twoHandActive = false;
+   512→
+   513→    this.raycaster.setFromCamera(this.pointerNdc, this.prism.camera);
+   514→    this.prism.trackPointer(this.pointerNdc.x, this.pointerNdc.y);
+   515→
+   516→    // Rising edge: grab whatever is hovered.
+   517→    const hovered = this.pick();
+   518→    if (prime.pinch.isPinching) {
+   519→      if (!this.grabbed && hovered) this.grab(hovered);
+   520→      if (this.grabbed) this.drag(dt);
+   521→    } else if (this.grabbed) {
+   522→      this.release();
+   523→    }
+   524→
+   525→    this.applyHover(hovered, dtMs);
+   526→    this.grabbedName = this.grabbed?.name ?? null;
+   527→    this.lastSeenAt = performance.now();
+   528→    this.updateCursor();
+   529→  }
+   530→
+   531→  // ---- mouse fallback ----------------------------------------------------
+   532→
+   533→  private updateFromMouse(dt: number): void {
+   534→    const ndc = this.mouseNdc;
+   535→    if (!ndc) return;
+   536→    // Camera-orbit drag: re-aim the frozen pointer ray, skip grab logic.
+   537→    if (this.mouseDown && this.orbitArmed) {
+   538→      this.raycaster.setFromCamera(this.pointerNdc, this.prism.camera);
+   539→      this.gesture = 'NONE';
+   540→      this.isPinching = false;
+   541→      this.prevTwoHand = false;
+   542→      if (this.grabbed) this.release();
+   543→      this.applyHover(null, dt * 1000);
+   544→      this.lastSeenAt = performance.now();
+   545→      this.updateCursor();
+   546→      this.prevMouseDown = this.mouseDown;
+   547→      return;
+   548→    }
+   549→    this.tmpNdcSample.x = ndc.x;
+   550→    this.tmpNdcSample.y = ndc.y;
+   551→    // Mouse rides the same adaptive filter at full confidence: at 60+ Hz
+   552→    // render polling it stays wide open, and its spike gate still eats
+   553→    // single-frame glitches (alt-tab jumps, resolution snaps).
+   554→    this.pointerFilter.update(this.tmpNdcSample, dt * 1000, 1, this.tmpSmoothed);
+   555→    this.pointerNdc.set(this.tmpSmoothed.x, this.tmpSmoothed.y);
+   556→    this.raycaster.setFromCamera(this.pointerNdc, this.prism.camera);
+   557→    this.prism.trackPointer(this.pointerNdc.x, this.pointerNdc.y);
+   558→
+   559→    const hovered = this.pick();
+   560→    const pinching = this.mouseDown;
+   561→    this.gesture = pinching ? 'PINCH' : hovered ? 'POINT' : 'NONE';
+   562→    this.isPinching = pinching;
+   563→    this.pinchValue = null;
+   564→
+   565→    if (pinching && !this.prevMouseDown) {
+   566→      if (!this.grabbed && hovered && !this.orbitArmed) this.grab(hovered);
+   567→    }
+   568→    if (pinching && this.grabbed) this.drag(dt);
+   569→    if (!pinching && this.grabbed) this.release();
+   570→    this.prevMouseDown = this.mouseDown;
+   571→
+   572→    this.applyHover(hovered, dt * 1000);
+   573→    this.grabbedName = this.grabbed?.name ?? null;
+   574→    this.lastSeenAt = performance.now();
+   575→    this.updateCursor();
+   576→  }
+   577→
+   578→  // ---- shared mechanics ---------------------------------------------------
+   579→
+   580→  private pick(): THREE.Mesh | null {
+   581→    if (this.pickFrame === this.frameCount) return this.cachedPick;
+   582→    this.pickFrame = this.frameCount;
+   583→    const hits = this.raycaster.intersectObjects(this.prism.grabbables, false);
+   584→    const direct = (hits[0]?.object as THREE.Mesh | undefined) ?? null;
+   585→    if (direct) {
+   586→      this.cachedPick = direct;
+   587→      return direct;
+   588→    }
+   589→    // Grab assist: a near-miss within a small screen radius snaps to the
+   590→    // nearest body center (tiny Mercury would otherwise be unhittable).
+   591→    let best: THREE.Mesh | null = null;
+   592→    let bestD = PrismConfig.interaction.hoverRadius;
+   593→    for (const obj of this.prism.grabbables) {
+   594→      const mesh = obj as THREE.Mesh;
+   595→      mesh.getWorldPosition(this.tmpProj).project(this.prism.camera);
+   596→      if (this.tmpProj.z > 1) continue; // behind the camera
+   597→      const d = Math.hypot(this.tmpProj.x - this.pointerNdc.x, this.tmpProj.y - this.pointerNdc.y);
+   598→      if (d < bestD) {
+   599→        bestD = d;
+   600→        best = mesh;
+   601→      }
+   602→    }
+   603→    this.cachedPick = best;
+   604→    return best;
+   605→  }
+   606→
+   607→  /**
+   608→   * Hover with flicker guard: highlights switch instantly, but clearing
+   609→   * waits out a time window (not frames) so edge-grazing never strobes at
+   610→   * any render rate.
+   611→   */
+   612→  private applyHover(candidate: THREE.Mesh | null, dtMs: number): void {
+   613→    const target = this.grabbed ?? candidate;
+   614→    if (target) {
+   615→      this.hoverMissMs = 0;
+   616→      this.displayedHover = target;
+   617→      this.prism.setHover(target);
+   618→    } else {
+   619→      this.hoverMissMs += dtMs;
+   620→      if (this.hoverMissMs >= PrismConfig.interaction.hoverClearMs) {
+   621→        this.displayedHover = null;
+   622→        this.prism.setHover(null);
+   623→      }
+   624→    }
+   625→    this.hoveredName = this.displayedHover?.name ?? null;
+   626→  }
+   627→
+   628→  private grab(mesh: THREE.Mesh): void {
+   629→    // Info-only bodies (e.g. the sun) highlight but cannot be grabbed.
+   630→    if (mesh.userData.grabbable === false) return;
+   631→    this.grabbed = mesh;
+   632→    this.orbitDragPrimed = false;
+   633→    // Anchor plane: perpendicular to the view ray through the hit point, so
+   634→    // lateral hand motion drags along the screen and depth stays stable.
+   635→    const hit = this.raycaster.intersectObject(mesh, false)[0];
+   636→    const anchor = hit ? hit.point : mesh.position;
+   637→    this.tmpA.copy(this.prism.camera.position).sub(anchor).normalize();
+   638→    this.grabPlane.setFromNormalAndCoplanarPoint(this.tmpA, anchor);
+   639→    this.grabOffset.copy(mesh.position).sub(anchor);
+   640→    this.grabSmoother.reset(mesh.position);
+   641→    this.prism.markGrabbed(mesh);
+   642→  }
+   643→
+   644→  private drag(dt: number): void {
+   645→    if (!this.grabbed) return;
+   646→    // Orbit bodies slide within the ecliptic plane (retargeting their orbit);
+   647→    // free bodies drag along the anchored camera-facing plane.
+   648→    if (this.grabbed.userData.orbitBody) {
+   649→      this.tmpMat.copy(this.prism.world.matrixWorld).invert();
+   650→      this.tmpRay.copy(this.raycaster.ray).applyMatrix4(this.tmpMat);
+   651→      if (this.tmpRay.intersectPlane(this.eclipticPlane, this.tmpLocal)) {
+   652→        // Prime the smoother in world-local space on the first drag frame
+   653→        // (it was reset in world space at grab time — different frame).
+   654→        if (!this.orbitDragPrimed) {
+   655→          this.grabSmoother.reset(this.tmpLocal);
+   656→          this.orbitDragPrimed = true;
+   657→        }
+   658→        this.grabSmoother.update(this.tmpLocal, dt, this.tmpTarget);
+   659→        this.prism.setOrbitFromPoint(this.grabbed, this.tmpTarget);
+   660→      }
+   661→      return;
+   662→    }
+   663→    // Intersect the pointer ray with the anchored grab plane.
+   664→    if (this.raycaster.ray.intersectPlane(this.grabPlane, this.tmpB)) {
+   665→      this.tmpTarget.copy(this.tmpB).add(this.grabOffset);
+   666→      // Clamp to a comfortable interaction volume.
+   667→      this.tmpTarget.x = THREE.MathUtils.clamp(this.tmpTarget.x, -4, 4);
+   668→      this.tmpTarget.y = THREE.MathUtils.clamp(this.tmpTarget.y, -2.5, 2.5);
+   669→      this.tmpTarget.z = THREE.MathUtils.clamp(this.tmpTarget.z, -2.5, 2.5);
+   670→      this.grabSmoother.update(this.tmpTarget, dt, this.grabbed.position);
+   671→    }
+   672→  }
+   673→
+   674→  private release(): void {
+   675→    const mesh = this.grabbed;
+   676→    // Voxel preset: snap onto the build grid on release (stackable towers).
+   677→    if (mesh?.userData.gridSnap) {
+   678→      const g = PrismConfig.interaction.gridSnap;
+   679→      mesh.position.set(
+   680→        Math.round(mesh.position.x / g) * g,
+   681→        Math.max(g / 2, Math.round(mesh.position.y / g) * g),
+   682→        Math.round(mesh.position.z / g) * g,
+   683→      );
+   684→    }
+   685→    this.grabbed = null;
+   686→    this.prism.markGrabbed(null);
+   687→    this.grabbedName = null;
+   688→  }
+   689→
+   690→  private applyTwoHandDelta(scaleRatio: number, angleDelta: number): void {
+   691→    const cfg = PrismConfig.interaction;
+   692→    // Incremental application avoids compounding error from a stale baseline.
+   693→    const step = scaleRatio / Math.max(1e-6, this.lastScaleRatio);
+   694→    const target = THREE.MathUtils.clamp(
+   695→      this.prism.world.scale.x * Math.pow(step, cfg.zoomSpeed),
+   696→      cfg.worldScaleMin,
+   697→      cfg.worldScaleMax,
+   698→    );
+   699→    this.prism.world.scale.setScalar(target);
+   700→    this.prism.world.rotation.y += (angleDelta - this.lastAngleDelta) * cfg.rotateSpeed;
+   701→    this.lastScaleRatio = scaleRatio;
+   702→    this.lastAngleDelta = angleDelta;
+   703→  }
+   704→
+   705→  private updateCursor(): void {
+   706→    const closeness =
+   707→      this.mode === 'hand' ? this.pinchCloseness : this.mouseDown ? 1 : 0;
+   708→    // World-owned target (voxel picking): ride the hit point directly.
+   709→    // (scene.setCursor stretches the pointer ray through the point itself.)
+   710→    if (!this.grabbed && !this.hoveredName && this.prism.pointerFocus(this.tmpB)) {
+   711→      this.cursorWorldVec.copy(this.tmpB);
+   712→      this.cursorWorld = this.cursorWorldVec;
+   713→      this.prism.setCursor(this.tmpB, 'hover', 1.25, closeness);
+   714→      return;
+   715→    }
+   716→    // Project the smoothed pointer ray onto a plane facing the camera at the
+   717→    // hovered/grabbed depth (or z=0) to place the 3D cursor.
+   718→    const focus = this.grabbed ?? (this.hoveredName ? this.pick() : null);
+   719→    const depth = focus
+   720→      ? this.tmpA.copy(focus.position).sub(this.prism.camera.position).length()
+   721→      : this.prism.camera.position.length();
+   722→    this.tmpB.copy(this.raycaster.ray.direction).multiplyScalar(depth).add(this.raycaster.ray.origin);
+   723→    this.cursorWorldVec.copy(this.tmpB);
+   724→    this.cursorWorld = this.cursorWorldVec;
+   725→    let mode: CursorMode = 'point';
+   726→    let boost = 1;
+   727→    if (this.grabbed) {
+   728→      mode = 'grab';
+   729→      boost = 1.5;
+   730→    } else if (this.isPinching) {
+   731→      mode = 'pinch';
+   732→      boost = 1.4;
+   733→    } else if (this.hoveredName) {
+   734→      mode = 'hover';
+   735→      boost = 1.25;
+   736→    } else if (this.mode === 'hand' && this.pinchValue !== null) {
+   737→      // Pinch-proximity affordance: the cursor swells as the pinch closes,
+   738→      // teaching the grab threshold without a tutorial.
+   739→      boost = 1 + 0.6 * this.pinchCloseness;
+   740→    }
+   741→    this.prism.setCursor(this.tmpB, mode, boost, closeness);
+   742→  }
+   743→}
+   744→

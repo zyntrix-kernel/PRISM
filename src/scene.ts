@@ -12,6 +12,7 @@ import { buildAtom } from './presets/atom';
 import { buildBlocks } from './presets/blocks';
 import { buildDrive } from './presets/drive';
 import { buildSingularity } from './presets/singularity';
+import { buildVoxel } from './presets/voxel';
 import { buildSolar } from './presets/solar';
 import { buildTest } from './presets/test';
 import {
@@ -32,6 +33,7 @@ const BUILDERS: Record<PresetId, WorldBuilder> = {
   singularity: buildSingularity,
   drive: buildDrive,
   atom: buildAtom,
+  voxel: buildVoxel,
 };
 
 /** Orbit/pan/zoom camera rig (mouse, touch-drag, wheel, arrow keys). */
@@ -121,6 +123,7 @@ export class PrismScene {
   private readonly rayLine: THREE.Line;
   private readonly rayPositions: Float32Array;
   private readonly nebula: THREE.Mesh;
+  private stars!: THREE.Points; // built by buildStarfield() in the constructor
   private readonly composer: EffectComposer;
   private readonly glowTex: THREE.Texture;
   private readonly nebulaTex: THREE.Texture;
@@ -225,6 +228,21 @@ export class PrismScene {
     return this.api;
   }
 
+  /** Forward the smoothed pointer to worlds that pick their own targets. */
+  trackPointer(ndcX: number, ndcY: number): void {
+    this.api?.updatePointer?.(ndcX, ndcY, this.camera);
+  }
+
+  /** True when the pointer is over world-owned content (voxel ground). */
+  capturesPointer(): boolean {
+    return this.api?.capturesPointer?.() ?? false;
+  }
+
+  /** 3D focus point from world-owned picking (shared cursor placement). */
+  pointerFocus(out: THREE.Vector3): boolean {
+    return this.api?.pointerFocus?.(out) ?? false;
+  }
+
   get grabbables(): THREE.Object3D[] {
     return this.api?.grabbables ?? [];
   }
@@ -250,6 +268,7 @@ export class PrismScene {
       this.nebula.visible = false;
       this.scene.background = new THREE.Color(bg);
     }
+    this.stars.visible = this.api.stars ?? true;
     this.rig.setHome(this.api.view);
     this.setHover(null);
     this.applyTextureMaps();
@@ -313,12 +332,11 @@ export class PrismScene {
     }
     const geo = new THREE.BufferGeometry();
     geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-    this.scene.add(
-      new THREE.Points(
-        geo,
-        new THREE.PointsMaterial({ color: 0xaac4ff, size: 0.5, transparent: true, opacity: 0.85, depthWrite: false }),
-      ),
+    this.stars = new THREE.Points(
+      geo,
+      new THREE.PointsMaterial({ color: 0xaac4ff, size: 0.5, transparent: true, opacity: 0.85, depthWrite: false }),
     );
+    this.scene.add(this.stars);
   }
 
   /** Highlight the hovered body; previous hover is always restored. */

@@ -160,6 +160,35 @@ body {
   pointer-events: none;
 }
 
+#voxel-palette {
+  position: absolute;
+  left: 50%;
+  bottom: 14px;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 6px;
+  padding: 6px 8px;
+  background: rgba(0, 0, 0, 0.6);
+  border: 1px solid rgba(0, 240, 255, 0.35);
+  border-radius: 10px;
+  z-index: 10;
+}
+
+#voxel-palette button {
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--hud-fg);
+  border: 2px solid #888;
+  border-radius: 6px;
+  padding: 5px 9px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+#voxel-palette button.active {
+  background: rgba(0, 240, 255, 0.22);
+  font-weight: 700;
+}
+
 #help {
   position: absolute;
   top: 50%;

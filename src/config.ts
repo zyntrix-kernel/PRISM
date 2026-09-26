@@ -69,7 +69,7 @@ export const PrismConfig = {
     panSpeed: 0.004,
     zoomFactor: 0.0012, // exponential dolly per wheel delta
     minDistance: 4,
-    maxDistance: 34,
+    maxDistance: 60,
     autoRotateSpeed: 0.22, // rad/s when auto-orbit is on (O key)
   },
 

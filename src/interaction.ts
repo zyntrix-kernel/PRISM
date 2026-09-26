@@ -181,7 +181,9 @@ export class InteractionController {
           -((e.clientY - rect.top) / rect.height) * 2 + 1,
         );
         this.raycaster.setFromCamera(this.tmpNdc, prism.camera);
-        this.orbitArmed = this.raycaster.intersectObjects(prism.grabbables, false).length === 0;
+        this.orbitArmed =
+          this.raycaster.intersectObjects(prism.grabbables, false).length === 0 &&
+          !prism.capturesPointer();
       } else if (e.button === 2) {
         this.panning = true;
       }
@@ -238,9 +240,13 @@ export class InteractionController {
         case 'o': case 'O': prism.rig.autoRotate = !prism.rig.autoRotate; break;
         case 'e': case 'E':
           window.dispatchEvent(new CustomEvent('prism-easy'));
+          window.dispatchEvent(new CustomEvent('prism-cycle', { detail: 1 }));
+          break;
+        case 'q': case 'Q':
+          window.dispatchEvent(new CustomEvent('prism-cycle', { detail: -1 }));
           break;
         case ' ': this.spaceDown = true; e.preventDefault(); break;
-        case '1': case '2': case '3': case '4': case '5': case '6': {
+        case '1': case '2': case '3': case '4': case '5': case '6': case '7': {
           const id = PRESET_ORDER[Number(e.key) - 1];
           if (id) window.dispatchEvent(new CustomEvent('prism-preset', { detail: id }));
           break;
@@ -403,6 +409,7 @@ export class InteractionController {
     this.twoHandActive = false;
 
     this.raycaster.setFromCamera(this.pointerNdc, this.prism.camera);
+    this.prism.trackPointer(this.pointerNdc.x, this.pointerNdc.y);
 
     // Rising edge: grab whatever is hovered.
     const hovered = this.pick();
@@ -443,6 +450,7 @@ export class InteractionController {
     this.pointerSmoother.update(this.tmpNdcSample, dt, this.tmpSmoothed);
     this.pointerNdc.set(this.tmpSmoothed.x, this.tmpSmoothed.y);
     this.raycaster.setFromCamera(this.pointerNdc, this.prism.camera);
+    this.prism.trackPointer(this.pointerNdc.x, this.pointerNdc.y);
 
     const hovered = this.pick();
     const pinching = this.mouseDown;
@@ -581,6 +589,16 @@ export class InteractionController {
   }
 
   private updateCursor(): void {
+    const closeness =
+      this.mode === 'hand' ? this.pinchCloseness : this.mouseDown ? 1 : 0;
+    // World-owned target (voxel picking): ride the hit point directly.
+    // (scene.setCursor stretches the pointer ray through the point itself.)
+    if (!this.grabbed && !this.hoveredName && this.prism.pointerFocus(this.tmpB)) {
+      this.cursorWorldVec.copy(this.tmpB);
+      this.cursorWorld = this.cursorWorldVec;
+      this.prism.setCursor(this.tmpB, 'hover', 1.25, closeness);
+      return;
+    }
     // Project the smoothed pointer ray onto a plane facing the camera at the
     // hovered/grabbed depth (or z=0) to place the 3D cursor.
     const focus = this.grabbed ?? (this.hoveredName ? this.pick() : null);
@@ -590,8 +608,6 @@ export class InteractionController {
     this.tmpB.copy(this.raycaster.ray.direction).multiplyScalar(depth).add(this.raycaster.ray.origin);
     this.cursorWorldVec.copy(this.tmpB);
     this.cursorWorld = this.cursorWorldVec;
-    const closeness =
-      this.mode === 'hand' ? this.pinchCloseness : this.mouseDown ? 1 : 0;
     let mode: CursorMode = 'point';
     let boost = 1;
     if (this.grabbed) {

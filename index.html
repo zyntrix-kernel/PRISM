@@ -24,13 +24,14 @@
         <div id="hud-status">Starting…</div>
         <div id="hud-controls">
           <button id="btn-camera" type="button" aria-label="Enable camera for hand tracking">Enable camera</button>
-          <select id="sel-preset" title="World preset (keys 1-6)" aria-label="World preset">
+          <select id="sel-preset" title="World preset (keys 1-7)" aria-label="World preset">
             <option value="space" selected>Space</option>
             <option value="blocks">Block game</option>
             <option value="test">Test</option>
             <option value="singularity">Black hole</option>
             <option value="drive">Drive</option>
             <option value="atom">Atom</option>
+            <option value="voxel">Voxel</option>
           </select>
           <button id="btn-easy" type="button" class="hidden" title="Easy point-and-go mode (E)" aria-label="Toggle easy point-and-go driving">Easy: OFF</button>
           <select id="sel-quality" title="Render quality" aria-label="Render quality">
@@ -51,6 +52,9 @@
       <!-- Science info for the hovered/grabbed body -->
       <div id="planet-info" class="hidden"></div>
 
+      <!-- Voxel block palette (only visible in the voxel preset) -->
+      <div id="voxel-palette" class="hidden"></div>
+
       <!-- Help card -->
       <div id="help" class="hidden">
         <h2>How to interact — point + pinch, nothing else</h2>
@@ -61,12 +65,11 @@
           <li><b>Two-hand pinch:</b> move apart/together to zoom, twist to rotate.</li>
           <li><b>No camera?</b> Use the mouse: move to point, hold left button to grab.</li>
         </ul>
-        </ul>
         <h2>Camera (mouse / keys)</h2>
         <ul>
           <li><b>Drag empty space</b> to orbit · <b>wheel</b> to zoom toward the cursor · <b>right-drag</b> to pan.</li>
           <li><b>Arrows</b> orbit · <b>+/-</b> zoom · <b>R</b> reset view · <b>T</b> top · <b>F</b> edge · <b>V</b> overview · <b>O</b> auto-orbit.</li>
-          <li><b>1–6</b> switch presets (Space / Blocks / Test / Black hole / Drive / Atom).</li>
+          <li><b>1–7</b> switch presets (Space / Blocks / Test / Black hole / Drive / Atom / Voxel).</li>
           <li><b>High</b> quality adds procedural planet textures + bloom glow.</li>
         </ul>
         <h2>Drive preset</h2>
@@ -79,6 +82,12 @@
         <ul>
           <li>Grab an <b>electron</b> and drop it on another shell (<b>n=1, 2, 3</b>).</li>
           <li>Dropping to a <b>lower</b> shell emits a photon flash labeled with its true wavelength (3→2 glows red at 656 nm).</li>
+        </ul>
+        <h2>Voxel preset</h2>
+        <ul>
+          <li><b>Tap</b> a pinch to place the selected block on the targeted face.</li>
+          <li><b>Hold</b> the pinch to break the block (highlight reddens) — sliding off cancels. Bedrock never breaks.</li>
+          <li>Pick blocks from the palette below, or press <b>Q</b>/<b>E</b> to cycle.</li>
         </ul>
         <button id="btn-help-close" type="button">Close</button>
       </div>

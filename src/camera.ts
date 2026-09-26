@@ -11,6 +11,29 @@ export interface CameraHandle {
   stop(): void;
 }
 
+/**
+ * Human-readable form for getUserMedia/play/model-load rejections.
+ * Duck-types instead of instanceof: rejections cross realms and library
+ * boundaries (DOMException, ProgressEvent, wrapped errors), where class
+ * checks silently fail and String() yields "[object Event]".
+ */
+export function describeMediaError(err: unknown): string {
+  if (typeof err === 'string' && err) return err;
+  if (err && typeof err === 'object') {
+    const rec = err as Record<string, unknown>;
+    if (typeof rec.message === 'string' && rec.message) return rec.message;
+    if (typeof rec.type === 'string') return `media event '${rec.type}' with no details`;
+  }
+  if (err instanceof Error && err.message) return err.message;
+  try {
+    const json = JSON.stringify(err);
+    if (json && json !== '{}') return json;
+  } catch {
+    /* unserializable (circular refs): fall through to the safe label */
+  }
+  return typeof err === 'object' && err !== null ? 'unknown error (unserializable)' : String(err);
+}
+
 /** Rejects if the promise doesn't settle within ms (hung camera drivers exist). */
 function withTimeout<T>(promise: Promise<T>, ms: number, what: string): Promise<T> {
   let timer: ReturnType<typeof setTimeout>;
@@ -38,9 +61,7 @@ export async function startCamera(video: HTMLVideoElement): Promise<CameraHandle
     });
   } catch (err) {
     throw new Error(
-      `Camera unavailable: ${
-        err instanceof Error ? err.message : String(err)
-      }. You can still try the mouse fallback (move = point, hold = grab).`,
+      `Camera unavailable: ${describeMediaError(err)}. You can still try the mouse fallback (move = point, hold = grab).`,
     );
   }
 
@@ -57,7 +78,7 @@ export async function startCamera(video: HTMLVideoElement): Promise<CameraHandle
   } catch (err) {
     stream.getTracks().forEach((t) => t.stop());
     throw new Error(
-      `Camera started but video never played (${err instanceof Error ? err.message : String(err)}).`,
+      `Camera started but video never played (${describeMediaError(err)}).`,
     );
   }
   try {
@@ -79,7 +100,7 @@ export async function startCamera(video: HTMLVideoElement): Promise<CameraHandle
   } catch (err) {
     stream.getTracks().forEach((t) => t.stop());
     throw new Error(
-      `Camera produced no frames (${err instanceof Error ? err.message : String(err)}).`,
+      `Camera produced no frames (${describeMediaError(err)}).`,
     );
   }
 

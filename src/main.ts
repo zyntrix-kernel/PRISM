@@ -1,7 +1,7 @@
 // PRISM bootstrap: wires Camera -> MediaPipe -> Gestures -> Interaction ->
 // Three.js scene, then runs the decoupled render/tracking loop.
 
-import { startCamera, type CameraHandle } from './camera';
+import { describeMediaError, startCamera, type CameraHandle } from './camera';
 import { PrismConfig, type QualityTier } from './config';
 import { DebugOverlay } from './debug';
 import { detectDevice } from './device';
@@ -32,6 +32,7 @@ async function main(): Promise<void> {
   const planetInfoEl = document.getElementById('planet-info') as HTMLElement;
   const easyBtn = document.getElementById('btn-easy') as HTMLButtonElement;
   const aiBtn = document.getElementById('btn-ai') as HTMLButtonElement;
+  const paletteEl = document.getElementById('voxel-palette') as HTMLElement;
 
   /** Steering response curve: center deadzone, full lock before the edge. */
   const applySteerCurve = (nx: number): number => {
@@ -103,6 +104,37 @@ async function main(): Promise<void> {
     const w = scene.currentWorld;
     easyBtn.textContent = `Easy: ${w?.isEasyMode?.() ? 'ON' : 'OFF'}`;
   };
+  /** Voxel block palette (only the voxel world provides one). */
+  const refreshPalette = (): void => {
+    const w = scene.currentWorld;
+    const list = w?.blockPalette?.();
+    paletteEl.innerHTML = '';
+    if (!list) {
+      paletteEl.classList.add('hidden');
+      return;
+    }
+    paletteEl.classList.remove('hidden');
+    const sel = w?.selectedBlock?.().index ?? 0;
+    list.forEach((b, i) => {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.title = b.name;
+      btn.textContent = b.name;
+      btn.style.borderColor = b.color;
+      if (i === sel) btn.classList.add('active');
+      btn.addEventListener('click', () => {
+        w?.selectBlock?.(i);
+        refreshPalette();
+      });
+      paletteEl.appendChild(btn);
+    });
+  };
+  window.addEventListener('prism-cycle', (e) => {
+    const w = scene.currentWorld;
+    if (!w?.cycleBlock) return;
+    w.cycleBlock((e as CustomEvent<number>).detail >= 0 ? 1 : -1);
+    refreshPalette();
+  });
   /** Mirrors a user-triggered preset switch for the boot-loaded preset. */
   const syncPresetUI = (): void => {
     const id = scene.currentPreset;
@@ -113,6 +145,7 @@ async function main(): Promise<void> {
       scene.currentWorld?.setEasyMode?.(true);
     }
     syncEasyLabel();
+    refreshPalette();
   };
   const toggleEasy = (): void => {
     const w = scene.currentWorld;
@@ -213,6 +246,12 @@ async function main(): Promise<void> {
         actionPressed: interaction.actionPressed,
         ground: interaction.groundXZ(),
       });
+      // Tap/hold/release edges for worlds with their own targets (voxel).
+      scene.currentWorld?.setPointerAction?.(
+        interaction.actionPressed,
+        interaction.actionHeld,
+        interaction.actionReleased,
+      );
       scene.update(dt, elapsed);
       if (overlayCtx) drawLandmarkOverlay(overlayCtx, frame);
       const info = scene.bodyInfo(interaction.grabbedName ?? interaction.hoveredName);
@@ -254,8 +293,9 @@ async function main(): Promise<void> {
     setStatus('Model ready. Enabling camera… (or use the mouse: move = point, hold = grab)');
     await enableCamera();
   } catch (err) {
+    console.error('[PRISM] vision stack failed:', err);
     setStatus(
-      `Hand tracking unavailable (${err instanceof Error ? err.message : String(err)}). Mouse fallback active.`,
+      `Hand tracking unavailable (${describeMediaError(err)}). Mouse fallback active.`,
     );
   }
 }

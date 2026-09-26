@@ -5,9 +5,9 @@
 import * as THREE from 'three';
 import type { PlanetTextureSet } from '../textures';
 
-export type PresetId = 'space' | 'blocks' | 'test' | 'singularity' | 'drive' | 'atom';
+export type PresetId = 'space' | 'blocks' | 'test' | 'singularity' | 'drive' | 'atom' | 'voxel';
 
-export const PRESET_ORDER: PresetId[] = ['space', 'blocks', 'test', 'singularity', 'drive', 'atom'];
+export const PRESET_ORDER: PresetId[] = ['space', 'blocks', 'test', 'singularity', 'drive', 'atom', 'voxel'];
 
 export const PRESET_LABELS: Record<PresetId, string> = {
   space: 'Space',
@@ -16,6 +16,7 @@ export const PRESET_LABELS: Record<PresetId, string> = {
   singularity: 'Black hole',
   drive: 'Drive',
   atom: 'Atom',
+  voxel: 'Voxel',
 };
 
 /** Per-preset camera framing applied on load. */
@@ -41,6 +42,8 @@ export interface WorldAPI {
   grabbables: THREE.Object3D[];
   /** Backdrop: nebula sphere or flat color. */
   background: 'nebula' | number;
+  /** Shared starfield visible (default true; daylight worlds hide it). */
+  stars?: boolean;
   /** Camera framing on preset load. */
   view: WorldView;
   update(dt: number, elapsed: number): void;
@@ -54,6 +57,22 @@ export interface WorldAPI {
   /** Optional: easy point-and-go mode (drive preset). */
   setEasyMode?(on: boolean): void;
   isEasyMode?(): boolean;
+  /**
+   * Optional: pointer tracking for worlds that pick their own targets
+   * (voxel preset raycasts voxels itself instead of object raycasting).
+   */
+  updatePointer?(ndcX: number, ndcY: number, camera: THREE.PerspectiveCamera): void;
+  /** Optional: true when the pointer is over world content (voxel ground). */
+  capturesPointer?(): boolean;
+  /** Optional: 3D focus point for the shared cursor. */
+  pointerFocus?(out: THREE.Vector3): boolean;
+  /** Optional: tap/hold/release action edges (voxel place/break). */
+  setPointerAction?(pressed: boolean, held: boolean, released: boolean): void;
+  /** Optional: block palette (voxel preset). */
+  blockPalette?(): Array<{ name: string; color: string }>;
+  selectBlock?(index: number): void;
+  cycleBlock?(dir: 1 | -1): void;
+  selectedBlock?(): { index: number; name: string; color: string };
   /** Dispose per-world geometries/materials (never shared ctx textures). */
   dispose(): void;
 }

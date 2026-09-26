@@ -5,6 +5,8 @@ import { PrismApp, type PrismState } from "@/lib/prism/app";
 import "@/lib/prism/prism.css";
 import CommandPalette from "./CommandPalette";
 import ShortcutLegend from "./ShortcutLegend";
+import PresetTransitionOverlay from "./PresetTransitionOverlay";
+import InputModeIndicator from "./InputModeIndicator";
 import {
   Camera,
   Eye,
@@ -120,6 +122,9 @@ export default function PrismStage() {
 
   return (
     <div className="prism-root" ref={rootRef}>
+      {/* Preset-switch transition overlay (dreamy radial flash on world change) */}
+      <PresetTransitionOverlay key={preset} preset={preset} />
+
       {/* Atmospheric layers — depth below everything */}
       <div className="prism-atmosphere" aria-hidden="true">
         <div className="prism-orb prism-orb-a" />
@@ -380,6 +385,9 @@ export default function PrismStage() {
         <span className="prism-coach-text" />
       </div>
 
+      {/* ===== Live input-mode + gesture indicator (morphing instrument) ===== */}
+      <InputModeIndicator state={state} />
+
       {/* ===== Onboarding ===== */}
       <aside
         id="prism-onboard"
@@ -403,6 +411,17 @@ export default function PrismStage() {
             <span>Pinch to grab</span>
           </li>
         </ol>
+        {/* Dreamy progress bar — fills as onboarding steps complete */}
+        <div className="prism-onboard-progress" aria-hidden="true">
+          <div
+            className="prism-onboard-progress-fill"
+            style={{
+              width: `${(state?.onboardSteps
+                ? (Number(state.onboardSteps.camera) + Number(state.onboardSteps.hand) + Number(state.onboardSteps.grab)) / 3 * 100
+                : 0)}%`,
+            }}
+          />
+        </div>
         <div className="row">
           <button id="prism-btn-onboard-close" type="button" ref={setEl("onboardClose") as React.RefObject<HTMLButtonElement>}>
             Skip tour

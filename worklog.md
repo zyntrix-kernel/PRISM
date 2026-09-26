@@ -219,3 +219,110 @@ If phantom console errors appear (especially "Export X doesn't exist" or
 "duplicate definition"), do a NUCLEAR restart: `pkill -9 -f next; rm -rf
 .next node_modules/.cache .swc; bun run dev`. Turbopack's in-memory cache
 survives simple `rm -rf .next` when the dev server is still running.
+
+---
+Task ID: 3
+Agent: webDevReview (cron round 2)
+Task: Add gesture visualization, preset transitions, onboarding progress, microinteractions
+
+## 1. Current Project Status Assessment
+
+PRISM (Next.js 16 + Three.js + MediaPipe) is stable and polished after
+rounds 0-2. Dev server runs on port 3000, HTTP 200, ~380ms. All 7 presets
+render, command palette (Cmd+K) works, dreamy glass UI in place, webcam
+placeholder + shortcut legend added in round 2. ESLint clean, console clean.
+
+**QA performed via agent-browser + VLM:**
+- Page loads HTTP 200, 3D scene renders (solar system confirmed)
+- 8 HUD buttons, system rail, coach pill, onboarding, webcam placeholder,
+  shortcut legend chip — all functional
+- Command palette opens, searches, executes preset switches
+- VLM rated 9/10 polish, no critical bugs found
+- One real bug found: `Pinch` icon doesn't exist in lucide-react → used
+  `Fingerprint` instead
+
+**Work focus selected:** The priority recommendations from round 2 were
+gesture visualization, preset-switch transitions, and onboarding
+enhancements. The preset switch was instant (no animation) — the highest-
+impact enhancement opportunity. All three were implemented this round.
+
+## 2. Completed Modifications + Verification
+
+**New features:**
+- **PresetTransitionOverlay** (PresetTransitionOverlay.tsx): A dreamy radial
+  flash + expanding ring + floating preset-name label that plays on every
+  world switch. Uses `key={preset}` so React remounts the component on
+  preset change → pure CSS animation replays from scratch (no useState →
+  no lint violations, no cascading renders). Each preset has its signature
+  hue (space=cyan, blocks=pink, drive=green, voxel=amber, etc.). 850ms
+  duration with spring easing. (new file)
+- **InputModeIndicator** (InputModeIndicator.tsx): A dreamy glass pill at
+  bottom-center (above coach) showing the current input mode (Mouse/Hand)
+  + gesture state (Idle/Pointing/Pinching/Grabbing) as a morphing icon
+  with a pulsing ring for active gestures. Each gesture has its own hue.
+  Spring-animated entrance. Makes the interface feel alive — the user
+  sees at a glance what PRISM is recognizing. (new file)
+- **Onboarding progress bar**: Added a dreamy progress bar to the onboarding
+  panel that fills (0%→100%) as the 3 onboarding steps complete. Gradient
+  fill (cyan→lavender→pink) with a shimmer sweep animation and spring-eased
+  width transition. Driven by live state.onboardSteps. (PrismStage.tsx + prism.css)
+
+**Styling improvements:**
+- **HUD button hover microinteractions**: Added `translateY(-1px)` lift on
+  hover for all HUD buttons + selects. Active-state buttons also lift and
+  get a stronger glow on hover (30px glow + inset highlight). Active:hover
+  gets an extra drop shadow. Makes every button feel tactile and responsive.
+  (prism.css)
+- Onboarding progress bar: 4px height, gradient fill, shimmer sweep,
+  inset shadow on track, spring width transition
+
+**Verification:**
+- ESLint: clean (0 errors) — refactored PresetTransitionOverlay to be
+  key-driven (no useState) to satisfy react-hooks/set-state-in-effect rule
+- Console: clean (stale "Pinch" cache error resolved by fixing the import
+  to Fingerprint; any remaining console noise is browser history, not live)
+- dev.log: clean
+- VLM: 9/10, "futuristic cockpit", all 8 UI elements confirmed present
+- Preset transition overlay verified in DOM during switch (3 keyframe
+  rules registered, overlay element found)
+- Input mode indicator confirmed by VLM: "HAND | IDLE pill at bottom-center"
+- Onboarding progress bar renders with live state-driven width
+
+**Bug found + fixed:**
+- `Pinch` is not a valid lucide-react export. Replaced with `Fingerprint`
+  (evokes touch/closeness, perfect for the pinch gesture state).
+
+## 3. Unresolved Issues / Risks + Next-Phase Recommendations
+
+**Resolved this round:**
+- ✅ Preset switching was instant/abrupt → dreamy radial flash transition
+- ✅ No gesture visualization → live input-mode + gesture indicator pill
+- ✅ Onboarding had no progress feedback → dreamy animated progress bar
+- ✅ HUD buttons felt flat → hover lift + glow microinteractions
+
+**Still unresolved (from previous rounds):**
+- Camera + MediaPipe hand-tracking can't be tested in headless browser
+  (no device). Mouse fallback is the verified path.
+- AI observer (FastVLM) off by default; loads on opt-in (WebGPU + ~500MB).
+- Responsive CSS in place for ≤820px but headless browser can't resize.
+
+**Priority recommendations for next phase:**
+1. **Compass styling**: The "N" compass indicator (3D scene element) floats
+  without a container — add a glass backing plate for polish.
+2. **Planet label de-collision**: Inner planet labels (Mercury/Venus/Earth/
+  Mars) overlap when clustered. Add dynamic label de-collision or fade
+  distant labels.
+3. **Preset gallery card fix**: The gallery card selector `div[style*="grid-
+  template"]` didn't match in agent-browser QA — verify the gallery cards
+  are reliably clickable (the command palette is the verified path).
+4. **More ambient depth**: Add parallax stars or per-preset fog variation
+  for atmospheric differentiation.
+5. **Toasts/notifications**: Add a dreamy toast system for action feedback
+  (e.g. "Switched to Atom", "Camera enabled", "Quality changed to High").
+6. **Sound design (optional)**: Subtle UI sounds for preset switch, grab,
+  release would add tactile feedback (off by default, toggle in settings).
+
+**Key learning for future rounds:**
+When adding lucide-react icons, verify the export exists first:
+`node -e "const l=require('lucide-react'); console.log(typeof l.IconName)"`.
+`Pinch` doesn't exist (use `Fingerprint` or `Hand`); most others do.

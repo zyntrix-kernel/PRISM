@@ -558,7 +558,32 @@ video#prism-webcam.live + #prism-webcam-frame .prism-webcam-placeholder {
 #prism-hud-controls select:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
-  box-shadow: 0 0 0 4px rgba(154, 220, 255, 0.25);
+  box-shadow: 0 0 0 4px rgba(154, 220, 255, 0.25), 0 0 16px rgba(154, 220, 255, 0.4);
+}
+
+/* Global focus-visible polish for all interactive elements within PRISM */
+.prism-root button:focus-visible,
+.prism-root select:focus-visible,
+.prism-root a:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  box-shadow: 0 0 0 4px rgba(154, 220, 255, 0.22);
+  transition: box-shadow var(--motion-fast) var(--motion-ease),
+    outline-offset var(--motion-fast) var(--motion-ease);
+}
+
+/* Focus ring animation for keyboard navigation (subtle pulse) */
+.prism-root button:focus-visible:not(:hover) {
+  animation: prism-focus-pulse 2s ease-in-out infinite;
+}
+
+@keyframes prism-focus-pulse {
+  0%, 100% {
+    box-shadow: 0 0 0 4px rgba(154, 220, 255, 0.22);
+  }
+  50% {
+    box-shadow: 0 0 0 4px rgba(154, 220, 255, 0.35), 0 0 12px rgba(154, 220, 255, 0.3);
+  }
 }
 
 /* Camera enable button gets a special inviting glow when off */

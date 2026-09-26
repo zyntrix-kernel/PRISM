@@ -7,6 +7,8 @@ import CommandPalette from "./CommandPalette";
 import ShortcutLegend from "./ShortcutLegend";
 import PresetTransitionOverlay from "./PresetTransitionOverlay";
 import InputModeIndicator from "./InputModeIndicator";
+import PrismToast from "./PrismToast";
+import ParallaxDepthLayer from "./ParallaxDepthLayer";
 import {
   Camera,
   Eye,
@@ -125,6 +127,9 @@ export default function PrismStage() {
       {/* Preset-switch transition overlay (dreamy radial flash on world change) */}
       <PresetTransitionOverlay key={preset} preset={preset} />
 
+      {/* Toast notifications (action feedback) */}
+      <PrismToast />
+
       {/* Atmospheric layers — depth below everything */}
       <div className="prism-atmosphere" aria-hidden="true">
         <div className="prism-orb prism-orb-a" />
@@ -133,6 +138,9 @@ export default function PrismStage() {
       </div>
       <div className="prism-grain" aria-hidden="true" />
       <div className="prism-vignette" aria-hidden="true" />
+
+      {/* Parallax depth layer — pointer-responsive drifting stars */}
+      <ParallaxDepthLayer />
 
       {/* 3D scene */}
       <main

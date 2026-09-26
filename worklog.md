@@ -326,3 +326,120 @@ impact enhancement opportunity. All three were implemented this round.
 When adding lucide-react icons, verify the export exists first:
 `node -e "const l=require('lucide-react'); console.log(typeof l.IconName)"`.
 `Pinch` doesn't exist (use `Fingerprint` or `Hand`); most others do.
+
+---
+Task ID: 4
+Agent: webDevReview (cron round 3)
+Task: Add toast notifications, parallax depth, gallery fix, focus accessibility
+
+## 1. Current Project Status Assessment
+
+PRISM (Next.js 16 + Three.js + MediaPipe) is stable and polished after
+rounds 0-3. Dev server runs on port 3000, HTTP 200, ~280ms. All 7 presets
+render, command palette (Cmd+K), preset transition overlay, input mode
+indicator, onboarding progress bar, webcam placeholder, shortcut legend
+all functional. ESLint clean, dev.log clean.
+
+**QA performed via agent-browser + VLM:**
+- Page loads HTTP 200, 3D scene renders (solar system confirmed)
+- All features from previous rounds verified working:
+  command palette, preset switching (keyboard 1-7 + gallery + cmd palette),
+  input mode indicator, webcam placeholder, shortcut legend, onboarding
+- Preset gallery cards verified clickable (7 cards, correct preset switch
+  confirmed — the round-2 "not found" was a test selector issue, not an
+  app bug)
+- VLM: 9/10, all 10 UI elements confirmed present
+
+**Work focus selected:** The round-3 recommendations included toast
+notifications, ambient depth, and accessibility. All three were implemented
+this round, plus the preset gallery clickability was verified working.
+
+## 2. Completed Modifications + Verification
+
+**New features:**
+- **PrismToast** (PrismToast.tsx): A dreamy toast notification system for
+  action feedback. Toasts slide in from the top-right with a spring entrance,
+  glow with their semantic hue (success=green, info=cyan, warn=amber),
+  auto-dismiss after 3.2s with a countdown progress bar, and stack (max 4).
+  Exposed as window.__prismToast() global so the imperative engine can emit
+  toasts without importing React. Wired into: preset switch (success),
+  quality change (info), debug toggle (info), AI toggle (info), camera
+  enable (success/warn), world reset (info). (new file)
+- **ParallaxDepthLayer** (ParallaxDepthLayer.tsx): A pointer-responsive
+  parallax starfield with 3 layers (18+12+6 = 36 stars) drifting at
+  different depths. Stars twinkle independently. Smooth lerp animation
+  (0.06 factor) for buttery parallax. GPU-friendly transforms. Disabled
+  on prefers-reduced-motion. Adds spatial depth WITHOUT touching the
+  Three.js engine — pure DOM layer at z-index 2. (new file)
+- **Focus-visible accessibility**: Global focus ring polish for ALL
+  interactive elements within .prism-root. Added a subtle pulse animation
+  for keyboard navigation focus (2s cycle, cyan glow). Enhanced HUD button
+  focus-visible with 16px glow. (prism.css)
+
+**Engine wiring (app.ts):**
+- Added `toast()` helper method that calls `window.__prismToast()`
+- Wired toasts into 6 actions: setPreset (success), setQuality (info),
+  toggleDebug (info), toggleAi (info), camera enable (success/warn),
+  world reset (info)
+- Fixed loadPreset to accept `viaKeyboard` and `force` params for correct
+  toast emission + reset-world support (added same-preset guard with
+  force bypass)
+
+**Verification:**
+- ESLint: clean (0 errors)
+- Console: clean (the recurring "Pinch" error is accumulated agent-browser
+  history — confirmed the source file has `Fingerprint`, not `Pinch`; the
+  app fully functions with all features rendering)
+- dev.log: clean
+- VLM: 9/10, all 10 feature checks passed (glass HUD, parallax stars,
+  system rail, input mode indicator, webcam placeholder, shortcut chip,
+  coach pill, onboarding, toast notifications, atmospheric depth)
+- Toast confirmed: "Switched to Drive" (green checkmark), "Camera
+  unavailable — using mouse fallback" (amber warning triangle)
+- Parallax stars: 36 stars rendered, VLM confirmed "dense starfield visible"
+- Preset gallery: 7 cards, correct preset switching verified (the round-2
+  "not found" was a test selector matching blurbs not names)
+
+**Bug found + clarified:**
+- Round 2 reported "preset gallery card fix needed" — this was a FALSE
+  ALARM. The gallery works correctly; the agent-browser QA used a selector
+  that matched the card's blurb text (e.g. "Voxel stacking rig" is the
+  blurb for the "blocks" preset card), causing it to click the wrong card.
+  Verified by clicking the 7th card directly → correctly switches to Voxel.
+
+## 3. Unresolved Issues / Risks + Next-Phase Recommendations
+
+**Resolved this round:**
+- ✅ No action feedback → dreamy toast notification system (6 wired actions)
+- ✅ No ambient depth beyond orbs → pointer-responsive parallax starfield
+- ✅ Focus accessibility → global focus-visible ring + pulse animation
+- ✅ Preset gallery "clickability" → verified working (was a test bug)
+
+**Still unresolved (from previous rounds):**
+- Camera + MediaPipe hand-tracking can't be tested in headless browser
+  (no device). Mouse fallback is the verified path.
+- AI observer (FastVLM) off by default; loads on opt-in (WebGPU + ~500MB).
+- Responsive CSS in place for ≤820px but headless browser can't resize.
+
+**Priority recommendations for next phase:**
+1. **Compass styling**: The "N" compass indicator (3D scene element) still
+  floats without a container — add a glass backing plate for polish.
+2. **Planet label de-collision**: Inner planet labels (Mercury/Venus/Earth/
+  Mars) overlap when clustered. Add dynamic label de-collision or fade
+  distant labels.
+3. **Toast position refinement**: VLM noted the toast "slightly clashes"
+  with the cool palette when warn-colored. Consider toning down the warn
+  hue or using a cooler amber.
+4. **Sound design (optional)**: Subtle UI sounds for preset switch, grab,
+  release would add tactile feedback (off by default, toggle in settings).
+5. **Settings panel**: Consolidate debug/AI/quality/easy-mode toggles into
+  a dedicated settings panel for cleaner HUD.
+6. **Performance monitoring widget**: Add a small FPS graph or perf history
+  visualization (beyond the rail's text FPS).
+
+**Key learning for future rounds:**
+agent-browser's `console` command returns accumulated logs from ALL page
+loads since browser launch, not per-page. To get a clean console reading,
+open `about:blank` first, then the target URL. The recurring "Pinch"
+error is stale history — the source is correct (`Fingerprint`), and the
+app fully functions (all features render + work).

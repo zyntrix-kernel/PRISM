@@ -173,24 +173,29 @@ export class PrismApp {
 
   /** Imperative actions exposed to the React shell (command palette etc). */
   setPreset(id: PresetId): void {
+    const prev = this.scene.currentPreset;
     this.loadPreset(id);
+    if (prev !== id) this.toast(`Switched to ${PRESET_LABELS[id]}`, 'success');
   }
   setQuality(value: string): void {
     this.el.qualitySel.value = value;
     const q = this.el.qualitySel.value === 'auto' ? this.device.tier : (this.el.qualitySel.value as QualityTier);
     this.scene.applyQuality(q);
     this.governor.rebase(q);
+    this.toast(`Quality set to ${value}`, 'info');
     this.emit();
   }
   toggleDebug(): boolean {
     const v = this.debug.toggle();
     this.el.debugBtn.classList.toggle('active', v);
+    this.toast(v ? 'Debug overlay on' : 'Debug overlay off', 'info');
     this.emit();
     return v;
   }
   toggleAi(): void {
     this.observer.setEnabled(!this.observer.isEnabled);
     this.syncAiButton();
+    this.toast(this.observer.isEnabled ? 'AI observer enabled' : 'AI observer disabled', 'info');
     this.emit();
   }
   toggleEasy(): void {
@@ -242,6 +247,13 @@ export class PrismApp {
     this.emit();
   }
 
+  /** Emit a dreamy toast notification (no-op if the React shell isn't mounted). */
+  private toast(message: string, kind: 'success' | 'info' | 'warn' = 'info'): void {
+    if (typeof window !== 'undefined' && typeof window.__prismToast === 'function') {
+      window.__prismToast({ message, kind });
+    }
+  }
+
   private syncAiButton(): void {
     this.el.aiBtn.classList.toggle('active', this.observer.isEnabled);
   }
@@ -251,8 +263,8 @@ export class PrismApp {
       this.el;
 
     presetSel.addEventListener('change', () => this.loadPreset(presetSel.value as PresetId));
-    window.addEventListener('prism-preset', (e) => this.loadPreset((e as CustomEvent<PresetId>).detail));
-    window.addEventListener('prism-reset-world', () => this.loadPreset(this.scene.currentPreset));
+    window.addEventListener('prism-preset', (e) => this.loadPreset((e as CustomEvent<PresetId>).detail, true));
+    window.addEventListener('prism-reset-world', () => this.loadPreset(this.scene.currentPreset, false, true));
     window.addEventListener('prism-easy', () => this.toggleEasy());
     window.addEventListener('prism-cycle', (e) => {
       const w = this.scene.currentWorld;
@@ -347,12 +359,17 @@ export class PrismApp {
     this.refreshPalette();
   }
 
-  private loadPreset(id: PresetId): void {
+  private loadPreset(id: PresetId, viaKeyboard = false, force = false): void {
     if (!PRESET_ORDER.includes(id)) return;
+    if (!force && id === this.scene.currentPreset) return;
     this.interaction.onPresetChange();
     this.scene.loadPreset(id);
     this.syncPresetUI();
     this.setStatus(`Preset: ${PRESET_LABELS[id]}. Point to explore.`);
+    // Keyboard-triggered switches (1-7) also emit a toast; the command palette
+    // path calls setPreset() which emits its own toast.
+    if (viaKeyboard) this.toast(`Switched to ${PRESET_LABELS[id]}`, 'success');
+    if (force) this.toast('World rebuilt', 'info');
   }
 
   // ---- vision -----------------------------------------------------------
@@ -378,10 +395,12 @@ export class PrismApp {
       this.setStatus('Requesting camera…');
       this.cameraHandle = await startCamera(video);
       video.classList.add('live');
+      this.toast('Camera enabled — hand tracking active', 'success');
       return true;
     } catch (err) {
       const full = err instanceof Error ? err.message : String(err);
       this.setStatus('Camera unavailable — mouse fallback active', full);
+      this.toast('Camera unavailable — using mouse fallback', 'warn');
       cameraBtn.classList.remove('active');
       video.classList.remove('live');
       return false;

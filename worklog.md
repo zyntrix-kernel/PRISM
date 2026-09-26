@@ -647,3 +647,101 @@ button elements in the DOM (hidden via inline style: opacity:0, width:1,
 height:1, pointerEvents:none) so the engine's keyboard-shortcut handlers
 and class-toggle logic still work. The React panel calls the same app
 methods directly for click interactions.
+
+---
+Task ID: 7
+Agent: webDevReview (cron round 6)
+Task: Fix onboarding glow leak, tick visibility, idle indicator breathing
+
+## 1. Current Project Status Assessment
+
+PRISM (Next.js 16 + Three.js + MediaPipe) is stable after rounds 0-6.
+Dev server runs on port 3000, HTTP 200, ~200ms. All features functional:
+command palette, preset transitions, input mode indicator, toasts, parallax
+stars, shortcut legend, settings panel, webcam placeholder, onboarding
+progress bar. ESLint clean, no hydration mismatch (server 0 / client 36).
+
+**QA performed via agent-browser + VLM (fresh browser session):**
+- Page loads HTTP 200, 3D scene renders
+- All features verified working (settings panel opens, toasts work, etc.)
+- **VLM-surfaced issues (top 3):**
+  1. Onboarding "FIRST FLIGHT" card top-right corner looked clipped —
+     progress bar gradient glow was leaking past the rounded border
+  2. Unchecked tick circles in onboarding were too faint (border opacity
+     0.36, looked broken/frozen)
+  3. InputModeIndicator (HAND/IDLE) looked "frozen/static" when idle —
+     no animation to signal it's an active, listening state
+
+**Work focus:** Fix all three visual polish issues. These are real UX
+problems that make the app feel unfinished.
+
+## 2. Completed Modifications + Verification
+
+**Bug fixes:**
+- **Onboarding glow leak**: Added `overflow: hidden` to `#prism-onboard`
+  so the progress bar's `box-shadow: 0 0 12px` glow stays clipped inside
+  the rounded corners. The panel's own glass box-shadow is unaffected
+  (overflow clips content, not the element's own shadow). (prism.css)
+- **Unchecked tick visibility**: Brightened the tick circle border from
+  `rgba(160, 220, 255, 0.36)` → `0.55`, added a subtle background
+  `rgba(154, 220, 255, 0.06)`, and added a `::before` pseudo-element
+  with a 6px inner dot for unchecked state (signals "not done yet").
+  The dot transitions to the checkmark when `.done` is applied.
+  (prism.css)
+
+**Styling improvements:**
+- **InputModeIndicator breathing**: Added two new keyframe animations:
+  - `prism-mode-breathe`: opacity 0.7↔1 over 3.5s (the icon itself
+    gently breathes when idle)
+  - `prism-mode-breathe-ring`: a faint ring that scales 1↔1.18 + opacity
+    0.15↔0.4 over 3.5s (a "listening" aura around the idle icon)
+  Both only activate when `gesture === "idle"`. Active gestures keep
+  the faster `prism-mode-pulse` (1.6s). This makes the indicator feel
+  alive — it's visibly "breathing" even when nothing is happening,
+  signaling that PRISM is ready and listening. (InputModeIndicator.tsx)
+
+**Verification:**
+- ESLint: clean (0 errors)
+- Server HTML: 0 stars (no hydration mismatch)
+- VLM: 9/10 improvement rating —
+  - ✅ "Onboarding card top-right corner: CLEAN, no glow leak"
+  - ✅ "Unchecked tick circles: VISIBLE & CLEAR, not too faint"
+  - ✅ "HAND/IDLE indicator: ALIVE/ANIMATED, looks professionally
+    implemented with clear state feedback"
+- All other features verified intact
+
+## 3. Unresolved Issues / Risks + Next-Phase Recommendations
+
+**Resolved this round:**
+- ✅ Onboarding progress bar glow leak → overflow:hidden on panel
+- ✅ Unchecked tick circles too faint → brighter border + inner dot
+- ✅ InputModeIndicator looked frozen → breathing + aura animation
+
+**Still unresolved (from previous rounds):**
+- Camera + MediaPipe hand-tracking can't be tested in headless browser
+  (no device). Mouse fallback is the verified path.
+- AI observer (FastVLM) off by default; loads on opt-in (WebGPU + ~500MB).
+- Responsive CSS in place for ≤820px but headless browser can't resize.
+- Planet label overlap with the Sun (3D scene rendering issue in
+  presets/labels.ts — needs a de-collision algorithm in the engine).
+- agent-browser console accumulates stale errors across HMR rebuilds.
+
+**Priority recommendations for next phase:**
+1. **Planet label de-collision**: Inner planet labels (Mercury/Venus/Earth/
+  Mars) overlap the sun when clustered. This is the highest-impact remaining
+  visual issue. Needs engine-level work in presets/labels.ts — add label
+  position offsetting or fade labels near bright bodies.
+2. **Compass styling**: The "N" compass indicator (3D scene element) floats
+  without a container — add a glass backing plate.
+3. **Status text shortening**: VLM noted the status message is verbose.
+  Consider an icon + short state (e.g. mouse icon + "Fallback").
+4. **Performance monitoring widget**: Add a small FPS graph in settings.
+5. **Sound design (optional)**: Subtle UI sounds (off by default, toggle).
+6. **Onboarding collapsibility**: Make the card collapsible/minimizable.
+
+**Key learning for future rounds:**
+When a decorative element (progress bar, glow) leaks past a rounded
+container, `overflow: hidden` on the container clips it cleanly without
+affecting the container's own box-shadow. This is the simplest fix for
+"glow leak" visual bugs. Always check if inner decorative glows need
+containment when using large box-shadow radii.

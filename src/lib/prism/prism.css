@@ -906,6 +906,7 @@ video#prism-webcam.live + #prism-webcam-frame .prism-webcam-placeholder {
   border-radius: var(--radius-lg);
   border-color: var(--glass-line-strong);
   z-index: 16;
+  overflow: hidden; /* clip the progress bar glow inside the rounded corners */
   animation: prism-onboard-in var(--motion-slow) var(--motion-dream);
   animation-delay: 400ms;
   animation-fill-mode: both;
@@ -962,11 +963,22 @@ video#prism-webcam.live + #prism-webcam-frame .prism-webcam-placeholder {
   align-items: center;
   justify-content: center;
   border-radius: 50%;
-  border: 1.5px solid rgba(160, 220, 255, 0.36);
+  border: 1.5px solid rgba(160, 220, 255, 0.55);
   font-size: 12px;
   color: transparent;
   transition: all var(--motion-med) var(--motion-spring);
   position: relative;
+  background: rgba(154, 220, 255, 0.06);
+}
+
+/* Unchecked state: a faint inner dot signals "not done yet" */
+#prism-onboard li:not(.done) .tick::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: rgba(160, 220, 255, 0.4);
+  transition: all var(--motion-med) var(--motion-ease);
 }
 
 #prism-onboard li.done {

@@ -98,6 +98,14 @@ export default function InputModeIndicator({
           0%, 100% { opacity: 0.55; transform: scale(1); }
           50% { opacity: 1; transform: scale(1.12); }
         }
+        @keyframes prism-mode-breathe {
+          0%, 100% { opacity: 0.7; }
+          50% { opacity: 1; }
+        }
+        @keyframes prism-mode-breathe-ring {
+          0%, 100% { opacity: 0.15; transform: scale(1); }
+          50% { opacity: 0.4; transform: scale(1.18); }
+        }
       `}</style>
 
       {/* Mode segment (mouse/hand icon) */}
@@ -157,6 +165,10 @@ export default function InputModeIndicator({
             color: `rgb(${hue})`,
             position: "relative",
             transition: "all 240ms cubic-bezier(0.34,1.56,0.64,1)",
+            animation:
+              gesture === "idle"
+                ? "prism-mode-breathe 3.5s ease-in-out infinite"
+                : undefined,
           }}
         >
           {/* Pulsing ring for active gestures */}
@@ -168,6 +180,18 @@ export default function InputModeIndicator({
                 borderRadius: "50%",
                 border: `1px solid rgba(${hue}, 0.45)`,
                 animation: "prism-mode-pulse 1.6s ease-in-out infinite",
+              }}
+            />
+          )}
+          {/* Slow breathing ring for idle state (so it doesn't look frozen) */}
+          {gesture === "idle" && (
+            <span
+              style={{
+                position: "absolute",
+                inset: -2,
+                borderRadius: "50%",
+                border: `1px solid rgba(${hue}, 0.18)`,
+                animation: "prism-mode-breathe-ring 3.5s ease-in-out infinite",
               }}
             />
           )}

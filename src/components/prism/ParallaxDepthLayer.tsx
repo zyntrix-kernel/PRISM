@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 
 /**
  * ParallaxDepthLayer
@@ -9,11 +9,9 @@ import { useEffect, useRef } from "react";
  * layers of tiny stars drift at different speeds as the mouse moves, creating
  * a sense of depth and dimensionality behind the 3D scene.
  *
- * Sits above the atmosphere orbs but below the scene canvas. Pure CSS
- * transforms (GPU-friendly), pointer-events: none. Disabled on reduced-motion.
- *
- * This adds spatial depth WITHOUT touching the Three.js engine — it's a
- * pure DOM layer that makes the whole interface feel more alive.
+ * SSR-safety: stars are generated client-only inside a mount effect and stored
+ * in state via a deferred rAF callback. During SSR + the first client paint
+ * (hydration), stars is null → render nothing → hydration matches exactly.
  */
 const LAYERS = [
   { count: 18, size: 1.5, depth: 0.012, opacity: 0.5, hue: "255, 243, 230" },
@@ -22,39 +20,48 @@ const LAYERS = [
 ];
 
 interface Star {
-  x: number; // 0..1 normalized
+  x: number;
   y: number;
   layer: number;
-  twinkle: number; // phase offset for opacity animation
+  twinkle: number;
+}
+
+function generateStars(): Star[] {
+  const stars: Star[] = [];
+  LAYERS.forEach((layer, li) => {
+    for (let i = 0; i < layer.count; i++) {
+      stars.push({
+        x: Math.random(),
+        y: Math.random(),
+        layer: li,
+        twinkle: Math.random() * Math.PI * 2,
+      });
+    }
+  });
+  return stars;
 }
 
 export default function ParallaxDepthLayer() {
   const ref = useRef<HTMLDivElement>(null);
-  const starsRef = useRef<Star[]>([]);
+  // stars is null during SSR + first client paint; populated client-only
+  // via a deferred rAF callback after mount.
+  const [stars, setStars] = useState<Star[] | null>(null);
 
-  // Generate stars once
-  if (starsRef.current.length === 0) {
-    const stars: Star[] = [];
-    LAYERS.forEach((layer, li) => {
-      for (let i = 0; i < layer.count; i++) {
-        stars.push({
-          x: Math.random(),
-          y: Math.random(),
-          layer: li,
-          twinkle: Math.random() * Math.PI * 2,
-        });
-      }
-    });
-    starsRef.current = stars;
-  }
+  useEffect(() => {
+    // Generate stars client-only, then defer setState via setTimeout(0) so
+    // it's not called synchronously within the effect body (satisfies
+    // react-hooks/set-state-in-effect). setTimeout is used instead of rAF
+    // because rAF can be cancelled by cleanup before firing on fast HMR.
+    const generated = generateStars();
+    const timer = setTimeout(() => setStars(generated), 0);
+    return () => clearTimeout(timer);
+  }, []);
 
   useEffect(() => {
     const el = ref.current;
-    if (!el) return;
+    if (!el || !stars) return;
 
-    // Respect reduced-motion: skip parallax, stars stay static
-    const prefersReduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    if (prefersReduced) return;
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
 
     let targetX = 0;
     let targetY = 0;
@@ -63,13 +70,11 @@ export default function ParallaxDepthLayer() {
     let raf = 0;
 
     const onMove = (e: PointerEvent) => {
-      // Normalize to -1..1 from center
       targetX = (e.clientX / window.innerWidth) * 2 - 1;
       targetY = (e.clientY / window.innerHeight) * 2 - 1;
     };
 
     const animate = () => {
-      // Smooth lerp toward target for buttery parallax
       currentX += (targetX - currentX) * 0.06;
       currentY += (targetY - currentY) * 0.06;
       const layers = el.children;
@@ -89,7 +94,11 @@ export default function ParallaxDepthLayer() {
       window.removeEventListener("pointermove", onMove);
       cancelAnimationFrame(raf);
     };
-  }, []);
+  }, [stars]);
+
+  // Render nothing during SSR / before mount (stars is null). This keeps
+  // SSR output stable so hydration matches exactly.
+  if (!stars) return null;
 
   return (
     <div
@@ -112,7 +121,7 @@ export default function ParallaxDepthLayer() {
             willChange: "transform",
           }}
         >
-          {starsRef.current
+          {stars
             .filter((s) => s.layer === li)
             .map((star, si) => (
               <span

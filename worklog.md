@@ -841,3 +841,96 @@ Y stagger breaks vertical alignment, (3) proximity-based fade hides
 labels that would be unreadable against bright backgrounds. Combining all
 three is more effective than any single approach. The fade uses the
 existing SpriteMaterial.opacity (no shader changes needed).
+
+---
+Task ID: 9
+Agent: webDevReview (cron round 8)
+Task: Fix shortcuts icon misread as 'N' + add status dot + concise text
+
+## 1. Current Project Status Assessment
+
+PRISM (Next.js 16 + Three.js + MediaPipe) is stable after rounds 0-8.
+Dev server runs on port 3000, HTTP 200, ~280ms. All features functional:
+command palette, preset transitions, input mode indicator (breathing),
+toasts, parallax stars, settings panel, webcam placeholder, onboarding
+(collapsible + progress bar + de-collisioned planet labels). ESLint clean,
+no hydration mismatch.
+
+**QA performed via agent-browser + VLM (fresh browser session):**
+- Page loads HTTP 200, 3D scene renders
+- All features verified working
+- **VLM-surfaced issues:**
+  1. Shortcuts chip icon was the lucide `Keyboard` at 13px, which visually
+     renders as an "N" shape at small sizes — VLM consistently misread it as
+     a compass "N" indicator (not a keyboard)
+  2. Status bar text "Camera unavailable — mouse fallback active" was
+     overly verbose for a primary UI element
+
+**Work focus:** Fix both issues — swap the icon to a recognizable symbol
++ shorten the status text with a colored state dot.
+
+## 2. Completed Modifications + Verification
+
+**Bug fixes:**
+- **Shortcuts icon misread as "N"**: The lucide `Keyboard` icon at 13px
+  renders as an abstract shape that VLMs/users misread as the letter "N".
+  Swapped to the `Command` (⌘) icon — universally recognized as "shortcuts/
+  commands" and visually consistent with the ⌘K command palette button
+  already in the HUD. Also bumped the size from 13px → 15px for clarity.
+  VLM confirmed: "clearly a command/key symbol (⌘)... universally associated
+  with keyboard shortcuts". (ShortcutLegend.tsx)
+
+- **Status text verbosity**: Shortened the camera-unavailable status from
+  "Camera unavailable — mouse fallback active" → "Mouse mode" (concise).
+  Full details remain in the tooltip (title attr). Added a colored status
+  dot indicator (7px) that reflects state: green=camera on, amber=fault/
+  unavailable, cyan=default/ready. The dot glows with a matching shadow.
+  VLM rated 9/10: "major UX improvement... immediate at-a-glance context
+  without cluttering the header". (app.ts, PrismStage.tsx)
+
+**Engine wiring (app.ts):**
+- Updated `setStatus()` to write to the inner `.prism-status-text` span
+  (keeps the status dot icon intact) instead of overwriting the whole
+  status div's textContent.
+
+**Verification:**
+- ESLint: clean (0 errors)
+- Server HTML: 0 stars (no hydration mismatch)
+- Status dot: present, text "Mouse mode", full tooltip with error details
+- Shortcuts icon: ⌘ command symbol, VLM confirmed recognizable
+- All other features verified intact
+- VLM: 8.5/10 overall polish
+
+## 3. Unresolved Issues / Risks + Next-Phase Recommendations
+
+**Resolved this round:**
+- ✅ Shortcuts icon misread as "N" → Command ⌘ icon (universally clear)
+- ✅ Status text verbose → concise "Mouse mode" + colored state dot
+
+**Still unresolved (from previous rounds):**
+- Camera + MediaPipe hand-tracking can't be tested in headless browser
+  (no device). Mouse fallback is the verified path.
+- AI observer (FastVLM) off by default; loads on opt-in (WebGPU + ~500MB).
+- Responsive CSS in place for ≤820px but headless browser can't resize.
+- agent-browser console accumulates stale errors across HMR rebuilds.
+- Toast notification overlaps top-right toolbar (z-index/positioning).
+
+**Priority recommendations for next phase:**
+1. **Toast position fix**: VLM noted the toast overlaps the top-right
+  toolbar buttons. Move toasts down (top: 96px) or to a different corner.
+2. **Label legibility for outer planets**: Saturn/Uranus labels sit too
+  close to their meshes. Add a small radial offset for all labels.
+3. **Performance monitoring widget**: Add a small FPS graph in settings.
+4. **Sound design (optional)**: Subtle UI sounds (off by default, toggle).
+5. **Label leader lines**: Connect offset labels to planets for clarity.
+6. **Onboarding tick contrast**: VLM noted radio buttons have low
+  contrast — may need further brightening (partially fixed in round 7).
+
+**Key learning for future rounds:**
+Lucide icons that render as abstract shapes at small sizes (Keyboard,
+Hash, etc.) can be misread as letters by VLMs and users. For
+shortcut/command affordances, the `Command` (⌘) icon is the most
+universally recognizable — it's the standard "shortcuts" symbol across
+macOS and many web apps. When pairing a status text with a state
+indicator, write the engine's textContent to an inner span (not the
+whole container) so the React-rendered icon survives updates.

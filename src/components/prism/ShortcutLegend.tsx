@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Keyboard, X } from "lucide-react";
+import { Command, X } from "lucide-react";
 
 interface Props {
   onPickPreset?: (n: number) => void;
@@ -90,7 +90,7 @@ export default function ShortcutLegend({ onPickPreset }: Props) {
           (e.currentTarget as HTMLElement).style.borderColor = "var(--glass-line)";
         }}
       >
-        <Keyboard size={13} style={{ color: "var(--accent)", flex: "none" }} />
+        <Command size={15} style={{ color: "var(--accent)", flex: "none" }} />
         <span style={{ fontWeight: 500, whiteSpace: "nowrap", flex: "none" }}>
           Shortcuts
         </span>
@@ -141,7 +141,7 @@ export default function ShortcutLegend({ onPickPreset }: Props) {
                   fontWeight: 700,
                 }}
               >
-                <Keyboard size={13} />
+                <Command size={13} />
                 Shortcuts
               </div>
               <button

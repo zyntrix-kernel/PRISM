@@ -242,7 +242,10 @@ export class PrismApp {
   // ---- UI binding -------------------------------------------------------
 
   private setStatus(msg: string, full?: string): void {
-    this.el.status.textContent = msg;
+    // Write to the inner .prism-status-text span if present (keeps the
+    // status dot icon intact); otherwise write to the whole element.
+    const textEl = this.el.status.querySelector('.prism-status-text') ?? this.el.status;
+    textEl.textContent = msg;
     this.el.status.title = full ?? msg; // hover reveals the full text
     this.emit();
   }
@@ -399,7 +402,7 @@ export class PrismApp {
       return true;
     } catch (err) {
       const full = err instanceof Error ? err.message : String(err);
-      this.setStatus('Camera unavailable — mouse fallback active', full);
+      this.setStatus('Mouse mode', full);
       this.toast('Camera unavailable — using mouse fallback', 'warn');
       cameraBtn.classList.remove('active');
       video.classList.remove('live');

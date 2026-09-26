@@ -176,8 +176,33 @@ export default function PrismStage() {
           <span className="prism-mark" aria-hidden="true" />
           PRISM <span>hand-controlled 3D lab</span>
         </div>
-        <div id="prism-hud-status" ref={setEl("status")} role="status" aria-live="polite">
-          Starting…
+        <div
+          id="prism-hud-status"
+          ref={setEl("status")}
+          role="status"
+          aria-live="polite"
+          style={{ display: "flex", alignItems: "center", gap: 7 }}
+        >
+          <span
+            className="prism-status-dot"
+            aria-hidden="true"
+            style={{
+              width: 7,
+              height: 7,
+              borderRadius: "50%",
+              flex: "none",
+              background: state?.cameraOn
+                ? "var(--ok)"
+                : state?.status && /fault|unavailable/i.test(state.status)
+                  ? "var(--warn)"
+                  : "var(--accent)",
+              boxShadow: state?.cameraOn
+                ? "0 0 8px rgba(143,245,180,0.8)"
+                : "0 0 8px rgba(154,220,255,0.5)",
+              transition: "all 200ms cubic-bezier(0.2,0,0,1)",
+            }}
+          />
+          <span className="prism-status-text">Starting…</span>
         </div>
         <div id="prism-hud-controls">
           <button

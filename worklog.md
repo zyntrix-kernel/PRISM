@@ -1027,3 +1027,94 @@ pushes samples at its UI update rate (4Hz), and React reads the fresh
 array each emit. Copy the array (`[...this.fpsHistory]`) in the snapshot
 so React sees a new reference and re-renders. SVG sparklines are cheap
 to render and look dreamy with gradient fills + animated dots.
+
+---
+Task ID: 11
+Agent: webDevReview (cron round 10)
+Task: Fix outer planet label offset + add modal backdrop dim
+
+## 1. Current Project Status Assessment
+
+PRISM (Next.js 16 + Three.js + MediaPipe) is stable after rounds 0-10.
+Dev server runs on port 3000, HTTP 200, ~370ms. All features functional:
+command palette, preset transitions, input mode indicator (breathing),
+toasts, parallax stars, settings panel (with FPS sparkline), webcam
+placeholder, onboarding (collapsible + progress + de-collisioned labels),
+status dot + concise text, ⌘ shortcuts icon. ESLint clean, no hydration
+mismatch.
+
+**QA performed via agent-browser + VLM (fresh browser session):**
+- Page loads HTTP 200, 3D scene renders
+- All features verified working
+- **VLM-surfaced issue:** Neptune's label was too close to its mesh
+  (only Neptune among outer planets — Jupiter/Saturn/Uranus were fine)
+
+**Work focus:** Fix the Neptune label clearance (round 10 priority #1)
++ add the ambient backdrop dim feature (round 10 priority #4).
+
+## 2. Completed Modifications + Verification
+
+**Bug fix:**
+- **Outer planet label offset** (presets/solar.ts): The outer-planet
+  label lift was `size + 0.3` — too tight for larger bodies. Changed to
+  a size-aware lift: `size + 0.6` for bodies > 0.6 radius (Saturn with
+  rings, Neptune, Jupiter), `size + 0.4` for smaller. VLM confirmed
+  Neptune's label is now "clearly separated... no overlapping or
+  touching", 8/10 clearance.
+
+**New feature:**
+- **Ambient modal backdrop dim** (PrismStage.tsx + prism.css): When any
+  modal (command palette, settings drawer, help card) is open, a subtle
+  darkening + blur overlay appears above the 3D scene (z-index 28) to
+  focus attention on the modal. Features:
+  - 42% darkening + 3px blur + 70% saturation reduction
+  - Smooth opacity transition (240ms ease)
+  - Polls modal state every 200ms (cmd palette, settings aria-expanded,
+    help hidden class)
+  - pointer-events: none so it never blocks interaction
+  VLM rated 8/10: "significantly dimmed... strong visual hierarchy...
+  makes the command palette pop... highly functional and professional".
+
+**Verification:**
+- ESLint: clean (0 errors)
+- Server HTML: 0 stars (no hydration mismatch)
+- Neptune label: VLM confirmed "clearly separated", 8/10 clearance
+- Modal backdrop dim: VLM confirmed "significantly dimmed... makes the
+  palette pop", 8/10
+- All other features verified intact
+
+## 3. Unresolved Issues / Risks + Next-Phase Recommendations
+
+**Resolved this round:**
+- ✅ Neptune label too close to mesh → size-aware lift (0.6 for large)
+- ✅ No focus management for modals → ambient backdrop dim + blur
+
+**Still unresolved (from previous rounds):**
+- Camera + MediaPipe hand-tracking can't be tested in headless browser
+  (no device). Mouse fallback is the verified path.
+- AI observer (FastVLM) off by default; loads on opt-in (WebGPU + ~500MB).
+- Responsive CSS in place for ≤820px but headless browser can't resize.
+- agent-browser console accumulates stale errors across HMR rebuilds.
+
+**Priority recommendations for next phase:**
+1. **Sound design (optional)**: Subtle UI sounds for preset switch, grab,
+  release (off by default, toggle in settings). Would add tactile feedback.
+2. **Label leader lines**: Connect offset labels to planets with thin
+  leader lines for clarity (especially the radially-offset inner labels).
+3. **Onboarding tick contrast**: VLM noted radio buttons still have low
+  contrast — may need further brightening.
+4. **Preset-specific label tuning**: Atom/drive presets may benefit from
+  label polish similar to the solar system fix.
+5. **Settings drawer settings**: The backdrop dim polling (200ms) could
+  be replaced with a shared modal-state context for cleaner reactivity.
+6. **Keyboard shortcut for settings**: Add a shortcut (e.g. comma or S)
+  to toggle the settings drawer.
+
+**Key learning for future rounds:**
+For modal focus management, a CSS-driven backdrop overlay (position:
+absolute, backdrop-filter blur+saturation) is simpler than a context-
+based approach and doesn't require refactoring modal state ownership.
+Polling DOM state every 200ms is pragmatic for detecting modal open
+state across multiple independent components (command palette, settings,
+help) that don't share a parent. The backdrop sits at z-index 28 (above
+scene, below modals at 30+) so modals remain crisp while the scene dims.

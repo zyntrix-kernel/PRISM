@@ -1240,6 +1240,20 @@ video#prism-webcam.live + #prism-webcam-frame .prism-webcam-placeholder {
   display: none !important;
 }
 
+/* Ambient backdrop dim when a modal (cmd palette, settings, help) is open.
+ * Sits above the 3D scene but below modal layers. Subtle blur + darkening
+ * focuses attention on the modal without hiding the scene. */
+.prism-modal-backdrop {
+  position: absolute;
+  inset: 0;
+  z-index: 28;
+  background: rgba(6, 4, 13, 0.42);
+  backdrop-filter: blur(3px) saturate(70%);
+  -webkit-backdrop-filter: blur(3px) saturate(70%);
+  transition: opacity var(--motion-med) var(--motion-ease);
+  pointer-events: none;
+}
+
 /* Engine-owned elements toggle the bare `hidden` class — support it here. */
 .prism-root .hidden {
   display: none !important;

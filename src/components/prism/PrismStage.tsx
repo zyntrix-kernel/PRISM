@@ -125,10 +125,34 @@ export default function PrismStage() {
   const preset = state?.preset ?? "space";
   const quality = state?.quality ?? "auto";
 
+  // Track whether any modal is open → dim the 3D scene for focus.
+  // cmdOpen is local state; settings/help are checked via DOM query.
+  const [modalOpen, setModalOpen] = useState(false);
+  useEffect(() => {
+    const check = () => {
+      const helpOpen = !document.querySelector("#prism-help")?.classList.contains("hidden");
+      const settingsOpen = !!document.querySelector('[aria-label="Settings"]')?.getAttribute("aria-expanded") === "true";
+      setModalOpen(cmdOpen || helpOpen || settingsOpen);
+    };
+    check();
+    const interval = setInterval(check, 200);
+    return () => clearInterval(interval);
+  }, [cmdOpen]);
+
   return (
     <div className="prism-root" ref={rootRef}>
       {/* Preset-switch transition overlay (dreamy radial flash on world change) */}
       <PresetTransitionOverlay key={preset} preset={preset} />
+
+      {/* Ambient backdrop dim when a modal is open (focus management) */}
+      <div
+        className="prism-modal-backdrop"
+        aria-hidden="true"
+        style={{
+          opacity: modalOpen ? 1 : 0,
+          pointerEvents: modalOpen ? "auto" : "none",
+        }}
+      />
 
       {/* Toast notifications (action feedback) */}
       <PrismToast />

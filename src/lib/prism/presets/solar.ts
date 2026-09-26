@@ -324,7 +324,10 @@ export function buildSolar(ctx: BuilderCtx): WorldAPI {
           // Fade labels very close to the sun (unreadable against the corona).
           mat.opacity = THREE.MathUtils.clamp((distFromSun - 1.0) / 1.8, 0.12, 1);
         } else {
-          labels[i].position.set(tmp.x, tmp.y + size + 0.3, tmp.z);
+          // Outer planet: lift the label clear of the mesh + rings. Larger
+          // bodies (Saturn with rings, Neptune) get extra clearance.
+          const lift = size > 0.6 ? size + 0.6 : size + 0.4;
+          labels[i].position.set(tmp.x, tmp.y + lift, tmp.z);
           mat.opacity = 1;
         }
       }

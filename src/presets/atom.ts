@@ -178,16 +178,6 @@ export function buildAtom(ctx: BuilderCtx): WorldAPI {
         labels[i].position.set(tmp.x, tmp.y + 0.45, tmp.z);
       }
     },
-    reset(): void {
-      orbits.reset();
-      for (const electron of orbits.bodies) {
-        const s = orbits.get(electron);
-        if (s) lastShell.set(electron, shellOfRadius(s.home.radius));
-      }
-      lastEmission = null;
-      flashT = 1e9;
-      flash.visible = false;
-    },
     setOrbitFromPoint(mesh: THREE.Mesh, localPoint: THREE.Vector3): void {
       // Magnetic shells: snap live to the nearest shell while dragging.
       const s = orbits.get(mesh);

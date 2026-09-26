@@ -65,14 +65,6 @@ export class OrbitSystem {
       body.position.set(Math.cos(s.angle) * s.radius, 0, Math.sin(s.angle) * s.radius);
     }
   }
-
-  reset(): void {
-    for (const s of this.state.values()) {
-      s.radius = s.home.radius;
-      s.angle = s.home.angle;
-      s.periodDays = s.home.periodDays;
-    }
-  }
 }
 
 interface DebrisSpec {

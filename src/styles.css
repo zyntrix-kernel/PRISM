@@ -1,7 +1,52 @@
+/* PRISM design tokens: Material 3 foundations with a spatial-lab identity.
+ * All component styling below references these tokens — no stray literals.
+ * Identity: deep-space surfaces, signal-cyan primary, violet science accent.
+ */
 :root {
-  --hud-bg: rgba(8, 12, 24, 0.72);
+  /* Color */
+  --prism-bg: #04060d;
+  --prism-surface: rgba(8, 12, 24, 0.72);
+  --prism-surface-solid: #0a0f1e;
+  --prism-surface-high: rgba(0, 0, 0, 0.65);
+  --prism-card: rgba(6, 10, 22, 0.94);
   --hud-fg: #d7e6ff;
+  --hud-fg-dim: rgba(215, 230, 255, 0.72);
   --accent: #00f0ff;
+  --accent-ink: #001318;
+  --violet: #b46bff;
+  --warn: #ffcf5c;
+  --error: #ff7a7a;
+  --line-accent: rgba(0, 240, 255, 0.45);
+  --line-violet: rgba(180, 107, 255, 0.5);
+
+  /* Typography */
+  --font-ui: "Segoe UI", system-ui, -apple-system, sans-serif;
+  --font-mono: Consolas, "Cascadia Mono", monospace;
+  --text-title: 15px;
+  --text-body: 14px;
+  --text-small: 12px;
+  --text-debug: 12px;
+
+  /* Spacing */
+  --space-xs: 4px;
+  --space-sm: 6px;
+  --space-md: 10px;
+  --space-lg: 14px;
+  --space-xl: 20px;
+
+  /* Shape (M3 scale, compact lab variant) */
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+
+  /* Elevation */
+  --elev-1: 0 1px 3px rgba(0, 0, 0, 0.5);
+  --elev-2: 0 4px 14px rgba(0, 0, 0, 0.55);
+
+  /* Motion: quick + purposeful; every transition signals state. */
+  --motion-fast: 120ms;
+  --motion-med: 200ms;
+  --motion-ease: cubic-bezier(0.2, 0, 0, 1);
 }
 
 * {
@@ -15,9 +60,10 @@ body {
   width: 100%;
   height: 100%;
   overflow: hidden;
-  background: #04060d;
+  background: var(--prism-bg);
   color: var(--hud-fg);
-  font-family: "Segoe UI", system-ui, sans-serif;
+  font-family: var(--font-ui);
+  font-size: var(--text-body);
 }
 
 #app {
@@ -44,8 +90,8 @@ body {
   aspect-ratio: 16 / 9;
   object-fit: cover;
   transform: scaleX(-1); /* mirror: selfie view */
-  border: 1px solid rgba(0, 240, 255, 0.5);
-  border-radius: 8px;
+  border: 1px solid var(--line-accent);
+  border-radius: var(--radius-md);
   background: #000;
   z-index: 5;
 }
@@ -69,14 +115,16 @@ body {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 10px 14px;
-  background: var(--hud-bg);
+  padding: var(--space-md) var(--space-lg);
+  background: var(--prism-surface);
   backdrop-filter: blur(6px);
+  box-shadow: var(--elev-1);
   z-index: 10;
 }
 
 #hud-title {
   font-weight: 700;
+  font-size: var(--text-title);
   letter-spacing: 2px;
   color: var(--accent);
   white-space: nowrap;
@@ -92,7 +140,7 @@ body {
 #hud-status {
   flex: 1;
   font-size: 0.9em;
-  opacity: 0.9;
+  color: var(--hud-fg-dim);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -107,22 +155,44 @@ body {
 #hud-controls select {
   background: rgba(0, 240, 255, 0.12);
   color: var(--hud-fg);
-  border: 1px solid rgba(0, 240, 255, 0.45);
-  border-radius: 6px;
+  border: 1px solid var(--line-accent);
+  border-radius: var(--radius-sm);
   padding: 6px 10px;
+  min-height: 32px;
   font-size: 0.85em;
+  font-family: inherit;
   cursor: pointer;
+  transition: background var(--motion-fast) var(--motion-ease),
+    transform var(--motion-fast) var(--motion-ease);
 }
 
 #hud-controls button:hover,
 #hud-controls select:hover {
-  background: rgba(0, 240, 255, 0.25);
+  background: rgba(0, 240, 255, 0.25); /* M3 hover state layer */
+}
+
+#hud-controls button:active {
+  transform: scale(0.97); /* press acknowledges instantly */
 }
 
 #hud-controls button.active {
   background: var(--accent);
-  color: #001318;
+  color: var(--accent-ink);
   font-weight: 700;
+}
+
+#hud-controls button:disabled {
+  opacity: 0.45;
+  cursor: wait;
+  transform: none;
+}
+
+#hud-controls button:focus-visible,
+#hud-controls select:focus-visible,
+#voxel-palette button:focus-visible,
+#help button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
 
 #debug {
@@ -130,19 +200,19 @@ body {
   left: 12px;
   bottom: 12px;
   min-width: 230px;
-  padding: 10px 12px;
-  background: rgba(0, 0, 0, 0.65);
+  padding: var(--space-md) 12px;
+  background: var(--prism-surface-high);
   border: 1px solid rgba(0, 240, 255, 0.35);
-  border-radius: 8px;
-  font-family: Consolas, monospace;
-  font-size: 12px;
+  border-radius: var(--radius-md);
+  font-family: var(--font-mono);
+  font-size: var(--text-debug);
   line-height: 1.6;
   z-index: 10;
   pointer-events: none;
 }
 
 #debug .warn {
-  color: #ffcf5c;
+  color: var(--warn);
 }
 
 #planet-info {
@@ -150,10 +220,11 @@ body {
   right: 12px;
   top: 64px;
   max-width: 280px;
-  padding: 10px 12px;
-  background: rgba(0, 0, 0, 0.65);
-  border: 1px solid rgba(180, 107, 255, 0.5);
-  border-radius: 8px;
+  padding: var(--space-md) 12px;
+  background: var(--prism-surface-high);
+  border: 1px solid var(--line-violet);
+  border-radius: var(--radius-md);
+  box-shadow: var(--elev-1);
   font-size: 13px;
   line-height: 1.5;
   z-index: 10;
@@ -171,6 +242,7 @@ body {
   background: rgba(0, 0, 0, 0.6);
   border: 1px solid rgba(0, 240, 255, 0.35);
   border-radius: 10px;
+  box-shadow: var(--elev-2);
   z-index: 10;
 }
 
@@ -178,10 +250,18 @@ body {
   background: rgba(255, 255, 255, 0.06);
   color: var(--hud-fg);
   border: 2px solid #888;
-  border-radius: 6px;
-  padding: 5px 9px;
-  font-size: 12px;
+  border-radius: var(--radius-sm);
+  padding: 8px 12px;
+  min-height: 36px;
+  font-size: var(--text-small);
+  font-family: inherit;
   cursor: pointer;
+  transition: background var(--motion-fast) var(--motion-ease),
+    transform var(--motion-fast) var(--motion-ease);
+}
+
+#voxel-palette button:active {
+  transform: scale(0.95);
 }
 
 #voxel-palette button.active {
@@ -193,19 +273,41 @@ body {
   position: absolute;
   top: 50%;
   left: 50%;
-  transform: translate(-50%, -50%);
+  transform: translate(-50%, -50%) scale(1);
   max-width: 420px;
+  width: min(420px, calc(100vw - 32px));
+  max-height: calc(100vh - 120px);
+  overflow-y: auto;
   padding: 18px 22px;
-  background: rgba(6, 10, 22, 0.94);
+  background: var(--prism-card);
   border: 1px solid var(--accent);
-  border-radius: 12px;
+  border-radius: var(--radius-lg);
+  box-shadow: var(--elev-2);
   z-index: 20;
+  animation: help-in var(--motion-med) var(--motion-ease);
+}
+
+@keyframes help-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -48%) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
 }
 
 #help h2 {
   margin: 0 0 8px;
   color: var(--accent);
   font-size: 1.1em;
+}
+
+#help h2:not(:first-child) {
+  margin-top: 14px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(0, 240, 255, 0.2);
 }
 
 #help ul {
@@ -216,6 +318,18 @@ body {
 
 #help li {
   margin: 4px 0;
+}
+
+#help button {
+  background: var(--accent);
+  color: var(--accent-ink);
+  border: none;
+  border-radius: var(--radius-sm);
+  padding: 8px 16px;
+  min-height: 36px;
+  font-weight: 700;
+  font-family: inherit;
+  cursor: pointer;
 }
 
 .hidden {
@@ -253,6 +367,12 @@ body {
     font-size: 12px;
   }
 
+  #voxel-palette {
+    bottom: 8px;
+    max-width: calc(100vw - 16px);
+    overflow-x: auto;
+  }
+
   #debug {
     display: none;
   }
@@ -260,7 +380,19 @@ body {
 
 @media (pointer: coarse) {
   #hud-controls button,
-  #hud-controls select {
+  #hud-controls select,
+  #voxel-palette button,
+  #help button {
     min-height: 44px;
+  }
+}
+
+/* Reduced motion: state changes stay instant, no decorative animation. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
   }
 }

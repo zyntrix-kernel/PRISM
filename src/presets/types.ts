@@ -46,8 +46,8 @@ export interface WorldAPI {
   stars?: boolean;
   /** Camera framing on preset load. */
   view: WorldView;
+  /** Advance the world simulation (called every frame). */
   update(dt: number, elapsed: number): void;
-  reset(): void;
   /** Optional: orbit retargeting (solar system, black-hole probes). */
   setOrbitFromPoint?(mesh: THREE.Mesh, localPoint: THREE.Vector3): void;
   /** Optional: one-line HUD science info. */

@@ -651,19 +651,6 @@ export function buildVoxel(ctx: BuilderCtx): WorldAPI {
         (highlight.material as THREE.LineBasicMaterial).color.copy(hlWhite).lerp(hlRed, Math.min(1, progress));
       }
     },
-    reset(): void {
-      const fresh = new VoxelStore(store.seed);
-      fresh.generate();
-      // Swap contents chunk by chunk, then rebuild every mesh.
-      for (let cx = 0; cx < WORLD_CHUNKS; cx++) {
-        for (let cz = 0; cz < WORLD_CHUNKS; cz++) {
-          const src = fresh.ensureChunk(cx, cz);
-          store.ensureChunk(cx, cz).set(src);
-          rebuildChunk(cx, cz);
-        }
-      }
-      anchor = null;
-    },
     bodyInfo(): string | null {
       const def = BLOCK_BY_ID.get(PLACEABLE[selected]);
       return `Voxel — ${def?.name ?? '?'} · tap pinch = place · hold = break · Q/E block`;

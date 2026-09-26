@@ -52,6 +52,10 @@ export class InteractionController {
   private readonly tmpSmoothed = { x: 0, y: 0, z: 0 };
   private readonly tmpNdc = new THREE.Vector2();
   private readonly tmpProj = new THREE.Vector3();
+  /** Per-frame pick memo: hover, grab, and cursor share one raycast. */
+  private frameCount = 0;
+  private pickFrame = -1;
+  private cachedPick: THREE.Mesh | null = null;
   // Orbit-drag temporaries: the pointer ray is converted into world-local
   // space so two-hand zoom/rotation doesn't skew the ecliptic plane.
   private readonly eclipticPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
@@ -286,6 +290,11 @@ export class InteractionController {
     return this.pointerNdc.x;
   }
 
+  /** Smoothed pointer NDC (read-only view for overlays). */
+  get pointerNDC(): THREE.Vector2 {
+    return this.pointerNdc;
+  }
+
   /** Analog gas pedal: 0 at the exit threshold, 1 at full touch. */
   get pinchCloseness(): number {
     if (this.pinchValue === null) return 0;
@@ -316,6 +325,7 @@ export class InteractionController {
 
   update(dt: number, frame: HandFrame | null): void {
     const dtMs = dt * 1000;
+    this.frameCount += 1;
     const hasHands = !!frame && frame.hands.length > 0;
 
     if (hasHands && frame) {
@@ -473,9 +483,14 @@ export class InteractionController {
   // ---- shared mechanics ---------------------------------------------------
 
   private pick(): THREE.Mesh | null {
+    if (this.pickFrame === this.frameCount) return this.cachedPick;
+    this.pickFrame = this.frameCount;
     const hits = this.raycaster.intersectObjects(this.prism.grabbables, false);
     const direct = (hits[0]?.object as THREE.Mesh | undefined) ?? null;
-    if (direct) return direct;
+    if (direct) {
+      this.cachedPick = direct;
+      return direct;
+    }
     // Grab assist: a near-miss within a small screen radius snaps to the
     // nearest body center (tiny Mercury would otherwise be unhittable).
     let best: THREE.Mesh | null = null;
@@ -490,6 +505,7 @@ export class InteractionController {
         best = mesh;
       }
     }
+    this.cachedPick = best;
     return best;
   }
 

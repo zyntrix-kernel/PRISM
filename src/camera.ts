@@ -60,9 +60,14 @@ export async function startCamera(video: HTMLVideoElement): Promise<CameraHandle
       audio: false,
     });
   } catch (err) {
-    throw new Error(
-      `Camera unavailable: ${describeMediaError(err)}. You can still try the mouse fallback (move = point, hold = grab).`,
-    );
+    // Permission denial gets actionable guidance (the #1 expo failure);
+    // everything else keeps the generic fallback path.
+    const name = (err as { name?: unknown })?.name;
+    const hint =
+      name === 'NotAllowedError' || name === 'SecurityError'
+        ? 'Camera blocked: click the camera icon in the address bar, choose Allow, then press Enable camera again. Until then the mouse works fully.'
+        : 'You can still try the mouse fallback (move = point, hold = grab).';
+    throw new Error(`Camera unavailable: ${describeMediaError(err)}. ${hint}`);
   }
 
   video.srcObject = stream;

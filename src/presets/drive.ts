@@ -425,15 +425,6 @@ export function buildDrive(ctx: BuilderCtx): WorldAPI {
       for (const w of wheels) w.rotation.x += (car.speed * dt) / 0.21;
       for (const f of frontWheels) f.rotation.y = input.steer * 0.45;
     },
-    reset(): void {
-      car.x = TRACK_A;
-      car.z = 0;
-      car.heading = 0;
-      car.speed = 0;
-      selected = null;
-      driving = false;
-      laps.reset(elapsed);
-    },
     bodyInfo(): string | null {
       const kmh = Math.round(Math.abs(car.speed) * 7.2);
       const lapLine = `Lap ${laps.laps + 1} · ${formatTime(laps.currentLapTime(elapsed))}` +

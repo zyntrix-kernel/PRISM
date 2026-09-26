@@ -65,9 +65,6 @@ export function buildSingularity(ctx: BuilderCtx): WorldAPI {
       orbits.update(dt * 20); // probes run hot: 20 days/sec for visible motion
       for (const probe of orbits.bodies) probe.rotation.y += dt;
     },
-    reset(): void {
-      orbits.reset();
-    },
     setOrbitFromPoint(mesh: THREE.Mesh, localPoint: THREE.Vector3): void {
       // Keep probes outside the photon ring but inside the debris field.
       orbits.setFromPoint(mesh, localPoint, 2.4, 7.4);

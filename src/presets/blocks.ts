@@ -18,7 +18,6 @@ const VOXELS: Array<{ name: string; color: number; pos: [number, number, number]
 export function buildBlocks(ctx: BuilderCtx): WorldAPI {
   const { world } = ctx;
   const grabbables: THREE.Object3D[] = [];
-  const homes = new Map<THREE.Mesh, THREE.Vector3>();
   const geo = new THREE.BoxGeometry(0.6, 0.6, 0.6);
 
   const plate = new THREE.Mesh(
@@ -59,7 +58,6 @@ export function buildBlocks(ctx: BuilderCtx): WorldAPI {
     cube.userData.gridSnap = true;
     world.add(cube);
     grabbables.push(cube);
-    homes.set(cube, cube.position.clone());
   }
 
   return {
@@ -68,9 +66,6 @@ export function buildBlocks(ctx: BuilderCtx): WorldAPI {
     view: { distance: 8.5, pitch: 0.62, yaw: 0.5 },
     update(): void {
       // Static world: cubes rest exactly where left (stacking friendly).
-    },
-    reset(): void {
-      for (const [cube, home] of homes) cube.position.copy(home);
     },
     bodyInfo(name: string | null): string | null {
       if (!name) return null;

@@ -186,6 +186,7 @@ async function main(): Promise<void> {
     if (cameraHandle || cameraStarting) return;
     cameraStarting = true;
     cameraBtn.classList.add('active');
+    cameraBtn.disabled = true; // busy state: double-taps can't stack requests
     try {
       setStatus('Requesting camera…');
       cameraHandle = await startCamera(video);
@@ -198,6 +199,7 @@ async function main(): Promise<void> {
       cameraBtn.classList.remove('active');
     } finally {
       cameraStarting = false;
+      cameraBtn.disabled = false;
     }
   };
 

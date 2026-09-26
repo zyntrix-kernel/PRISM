@@ -70,7 +70,7 @@ export class DebugOverlay {
   ): void {
     if (!this.visible || now - this.lastPaint < 250) return;
     this.lastPaint = now;
-    const px = interaction as unknown as { pointerNdc: { x: number; y: number } };
+    const px = interaction.pointerNDC;
     const warn = (cond: boolean): string => (cond ? ' class="warn"' : '');
     const g = PrismConfig.gestures;
     this.el.innerHTML =
@@ -80,7 +80,7 @@ export class DebugOverlay {
         ? `<div class="warn">tracking faults ×${tracker.pumpErrorCount}: ${(tracker.lastPumpError || '').slice(0, 90)}</div>`
         : '') +
       `<div>gesture <b>${interaction.gesture}</b>${interaction.isPinching ? ' (pinch)' : ''}${interaction.twoHandActive ? ' · TWO-HAND' : ''}${interaction.pinchValue !== null ? ` · d=${interaction.pinchValue.toFixed(2)} ≤${g.pinchEnter.toFixed(2)}/${g.pinchExit.toFixed(2)}` : ''}</div>` +
-      `<div>pointer (${px.pointerNdc.x.toFixed(2)}, ${px.pointerNdc.y.toFixed(2)})</div>` +
+      `<div>pointer (${px.x.toFixed(2)}, ${px.y.toFixed(2)})</div>` +
       `<div>hover <b>${interaction.hoveredName ?? '—'}</b> · grab <b>${interaction.grabbedName ?? '—'}</b></div>` +
       `<div>draw calls <b>${drawCalls}</b> · tris ${triangles} · objs ${objectCount}</div>` +
       `<div>${stats.deviceLine}</div>` +

@@ -13,7 +13,6 @@ const ORBS = [
 export function buildTest(ctx: BuilderCtx): WorldAPI {
   const { world } = ctx;
   const grabbables: THREE.Object3D[] = [];
-  const homes = new Map<THREE.Mesh, { p: THREE.Vector3; s: THREE.Vector3 }>();
   const geo = new THREE.SphereGeometry(0.42, 48, 32);
   let elapsed = 0;
 
@@ -32,7 +31,6 @@ export function buildTest(ctx: BuilderCtx): WorldAPI {
     orb.name = def.name;
     world.add(orb);
     grabbables.push(orb);
-    homes.set(orb, { p: def.pos.clone(), s: new THREE.Vector3(scale, scale, scale) });
   }
 
   const grid = new THREE.GridHelper(12, 24, 0x0e3a4a, 0x0a1c2a);
@@ -49,12 +47,6 @@ export function buildTest(ctx: BuilderCtx): WorldAPI {
         if (orb.userData.grabbed) continue;
         orb.position.y += Math.sin(elapsed * 1.2 + orb.position.x * 1.7) * 0.0009;
         orb.rotation.y += dt * 0.25;
-      }
-    },
-    reset(): void {
-      for (const [orb, home] of homes) {
-        orb.position.copy(home.p);
-        orb.scale.copy(home.s);
       }
     },
     bodyInfo(name: string | null): string | null {

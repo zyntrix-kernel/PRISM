@@ -234,11 +234,6 @@ export function buildSolar(ctx: BuilderCtx): WorldAPI {
         labels[i].position.set(tmp.x, tmp.y + size + 0.3, tmp.z);
       }
     },
-    reset(): void {
-      orbits.reset();
-      moonAngle = 1.2;
-      cometAngle = 0.4;
-    },
     setOrbitFromPoint(mesh: THREE.Mesh, localPoint: THREE.Vector3): void {
       orbits.setFromPoint(mesh, localPoint, MIN_ORBIT_RADIUS, MAX_ORBIT_RADIUS);
     },

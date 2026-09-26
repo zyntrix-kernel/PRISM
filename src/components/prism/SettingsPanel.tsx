@@ -162,6 +162,9 @@ export default function SettingsPanel({ state, app }: Props) {
 
             {/* Drawer content — scrollable */}
             <div style={{ flex: 1, overflowY: "auto", padding: "16px 20px" }}>
+              {/* Performance sparkline */}
+              <FpsSparkline history={state?.fpsHistory ?? []} />
+
               {/* Quality section */}
               <SectionHeader icon={Gauge} label="Render Quality" />
               <div
@@ -403,5 +406,93 @@ function ToggleRow({
         />
       </span>
     </button>
+  );
+}
+
+/**
+ * FpsSparkline — a dreamy live FPS history graph.
+ * Renders the last 40 FPS samples as a smooth sparkline with a gradient
+ * fill, current FPS readout, and a 60fps reference line.
+ */
+function FpsSparkline({ history }: { history: number[] }) {
+  const W = 280;
+  const H = 44;
+  const samples = history.length > 1 ? history : [60, 60];
+  const max = Math.max(70, ...samples);
+  const min = 0;
+  const range = max - min || 1;
+  const step = W / Math.max(1, samples.length - 1);
+
+  // Build the sparkline path
+  const pts = samples.map((v, i) => {
+    const x = i * step;
+    const y = H - ((v - min) / range) * (H - 6) - 3;
+    return [x, y] as const;
+  });
+  const linePath = pts.map((p, i) => `${i === 0 ? "M" : "L"}${p[0].toFixed(1)},${p[1].toFixed(1)}`).join(" ");
+  const fillPath = `${linePath} L${W},${H} L0,${H} Z`;
+  const current = samples[samples.length - 1] ?? 0;
+  const avg = samples.reduce((a, b) => a + b, 0) / samples.length;
+  const hue = current >= 50 ? "143, 245, 180" : current >= 30 ? "255, 207, 92" : "255, 154, 165";
+
+  return (
+    <div
+      style={{
+        marginBottom: 18,
+        padding: "12px 14px",
+        background: "rgba(255,255,255,0.03)",
+        border: "1px solid var(--glass-line)",
+        borderRadius: "var(--radius-sm)",
+      }}
+    >
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
+          <Activity size={12} style={{ color: `rgb(${hue})` }} />
+          <span
+            style={{
+              fontSize: 10,
+              letterSpacing: 1.6,
+              textTransform: "uppercase",
+              color: "var(--hud-fg-faint)",
+              fontWeight: 600,
+            }}
+          >
+            Performance
+          </span>
+        </div>
+        <div style={{ display: "flex", alignItems: "baseline", gap: 4 }}>
+          <span style={{ fontSize: 16, fontWeight: 700, color: `rgb(${hue})`, fontVariantNumeric: "tabular-nums" }}>
+            {current.toFixed(0)}
+          </span>
+          <span style={{ fontSize: 9, color: "var(--hud-fg-faint)", letterSpacing: 0.4 }}>fps</span>
+          <span style={{ fontSize: 9, color: "var(--hud-fg-faint)", marginLeft: 8 }}>
+            avg {avg.toFixed(0)}
+          </span>
+        </div>
+      </div>
+      <svg width="100%" height={H} viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" style={{ display: "block" }}>
+        <defs>
+          <linearGradient id="prism-fps-fill" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor={`rgba(${hue}, 0.4)`} />
+            <stop offset="100%" stopColor={`rgba(${hue}, 0)`} />
+          </linearGradient>
+        </defs>
+        {/* 60fps reference line */}
+        {(() => {
+          const y60 = H - (60 / range) * (H - 6) - 3;
+          return y60 > 0 && y60 < H ? (
+            <line x1={0} y1={y60} x2={W} y2={y60} stroke="rgba(255,255,255,0.08)" strokeWidth={1} strokeDasharray="3,3" />
+          ) : null;
+        })()}
+        <path d={fillPath} fill="url(#prism-fps-fill)" />
+        <path d={linePath} fill="none" stroke={`rgb(${hue})`} strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" />
+        {/* Current point dot */}
+        {pts.length > 0 && (
+          <circle cx={pts[pts.length - 1][0]} cy={pts[pts.length - 1][1]} r={2.5} fill={`rgb(${hue})`}>
+            <animate attributeName="r" values="2.5;4;2.5" dur="2s" repeatCount="indefinite" />
+          </circle>
+        )}
+      </svg>
+    </div>
   );
 }

@@ -934,3 +934,96 @@ universally recognizable — it's the standard "shortcuts" symbol across
 macOS and many web apps. When pairing a status text with a state
 indicator, write the engine's textContent to an inner span (not the
 whole container) so the React-rendered icon survives updates.
+
+---
+Task ID: 10
+Agent: webDevReview (cron round 9)
+Task: Add live FPS sparkline widget to settings panel
+
+## 1. Current Project Status Assessment
+
+PRISM (Next.js 16 + Three.js + MediaPipe) is stable after rounds 0-9.
+Dev server runs on port 3000, HTTP 200, ~120ms. All features functional:
+command palette, preset transitions, input mode indicator (breathing),
+toasts, parallax stars, settings panel, webcam placeholder, onboarding
+(collapsible + progress + de-collisioned labels), status dot + concise
+text, ⌘ shortcuts icon. ESLint clean, no hydration mismatch.
+
+**QA performed via agent-browser + VLM (fresh browser session):**
+- Page loads HTTP 200, 3D scene renders
+- All features verified working
+- Toast position at top:64 is acceptable (clear gap below toolbar)
+- VLM suggested depth-layering microinteractions + a perf widget
+
+**Work focus selected:** Build the FPS sparkline widget in the settings
+panel (round 8 priority recommendation #3 — "Performance monitoring
+widget: Add a small FPS graph in settings"). This is a concrete, high-
+value feature that makes the settings panel feel more like a real
+instrument.
+
+## 2. Completed Modifications + Verification
+
+**New feature:**
+- **FPS sparkline widget** (SettingsPanel.tsx + app.ts): A dreamy live
+  FPS history graph at the top of the settings drawer. Features:
+  - Live sparkline rendering the last 40 FPS samples as a smooth SVG
+    path with gradient fill
+  - Current FPS readout (large, color-coded: green ≥50, amber ≥30, red <30)
+  - Average FPS label
+  - 60fps reference dashed line
+  - Pulsing dot at the current sample point (SVG <animate>)
+  - "PERFORMANCE" section header with Activity icon
+  - Color hue dynamically matches the current FPS tier
+  The engine (app.ts) now maintains a `fpsHistory: number[]` (capped at
+  40 samples, pushed at 4Hz in updateRailAndCoach) and exposes it via
+  the `PrismState.fpsHistory` field. The snapshot copies the array so
+  React reads fresh data each emit.
+
+**Engine changes (app.ts):**
+- Added `fpsHistory: number[]` to PrismState interface + class field
+- Push FPS sample (capped at 40) in updateRailAndCoach
+- Expose `[...this.fpsHistory]` in the snapshot
+
+**Verification:**
+- ESLint: clean (0 errors)
+- Server HTML: 0 stars (no hydration mismatch)
+- Settings drawer: opens, Performance section present (80 SVG paths
+  confirm the sparkline renders), "10 fps" readout visible (headless
+  browser is slow but the graph works)
+- VLM confirmed: "PERFORMANCE header with 10 fps + sparkline line graph"
+- All other features verified intact
+
+## 3. Unresolved Issues / Risks + Next-Phase Recommendations
+
+**Resolved this round:**
+- ✅ No perf visualization → live FPS sparkline in settings drawer
+
+**Still unresolved (from previous rounds):**
+- Camera + MediaPipe hand-tracking can't be tested in headless browser
+  (no device). Mouse fallback is the verified path.
+- AI observer (FastVLM) off by default; loads on opt-in (WebGPU + ~500MB).
+- Responsive CSS in place for ≤820px but headless browser can't resize.
+- agent-browser console accumulates stale errors across HMR rebuilds.
+- Outer planet labels (Saturn/Uranus) sit close to their mesh.
+
+**Priority recommendations for next phase:**
+1. **Outer planet label offset**: Saturn/Uranus labels are too close to
+  their mesh. Add a small radial offset for all labels (not just inner).
+2. **Sound design (optional)**: Subtle UI sounds for preset switch, grab,
+  release (off by default, toggle in settings).
+3. **Label leader lines**: Connect offset labels to planets with thin
+  leader lines for clarity.
+4. **Ambient backdrop dim when modals open**: Dim/desaturate the 3D scene
+  when command palette / settings / help are open (focus management).
+5. **Onboarding tick contrast**: VLM noted radio buttons still have low
+  contrast — may need further brightening.
+6. **Preset-specific label tuning**: Atom/drive presets may benefit from
+  label polish similar to the solar system fix.
+
+**Key learning for future rounds:**
+For live data widgets (sparklines, graphs), expose the raw data array
+through the engine's state snapshot (not just a text string). The engine
+pushes samples at its UI update rate (4Hz), and React reads the fresh
+array each emit. Copy the array (`[...this.fpsHistory]`) in the snapshot
+so React sees a new reference and re-renders. SVG sparklines are cheap
+to render and look dreamy with gradient fills + animated dots.

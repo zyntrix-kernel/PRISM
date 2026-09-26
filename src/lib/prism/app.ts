@@ -51,6 +51,8 @@ export interface PrismState {
   debugVisible: boolean;
   aiEnabled: boolean;
   rail: { cam: string; hands: string; gesture: string; fps: string };
+  /** Recent FPS samples (newest last) for sparkline visualization. */
+  fpsHistory: number[];
   coach: string | null;
   planetInfo: string | null;
   palette: Array<{ name: string; color: string; active: boolean }> | null;
@@ -92,6 +94,7 @@ export class PrismApp {
   private last = 0;
   private elapsed = 0;
   private renderFps = 60;
+  private fpsHistory: number[] = [];
   private lastUiAt = 0;
   private lastCoachText = '\0';
   private cachedCandidates: string[] = [];
@@ -530,6 +533,9 @@ export class PrismApp {
       this.interaction.mode === 'none' ? '—' : this.interaction.gesture,
     );
     this.setRail('fps', this.renderFps >= 30 ? 'on' : 'warn', `${this.renderFps.toFixed(0)} fps`);
+    // Push a sample into the sparkline history (capped at 40 points).
+    this.fpsHistory.push(this.renderFps);
+    if (this.fpsHistory.length > 40) this.fpsHistory.shift();
 
     const hint =
       this.scene.currentWorld?.coachHint?.() ??
@@ -598,6 +604,7 @@ export class PrismApp {
         gesture: this.el.rail.gesture?.querySelector('.txt')?.textContent ?? '',
         fps: this.el.rail.fps?.querySelector('.txt')?.textContent ?? '',
       },
+      fpsHistory: [...this.fpsHistory],
       coach: this.el.coach.classList.contains('hidden') ? null : this.el.coach.textContent,
       planetInfo: this.el.planetInfo.classList.contains('hidden') ? null : this.el.planetInfo.textContent,
       palette: paletteList

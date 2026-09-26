@@ -39,11 +39,31 @@ export class HandTracker {
   private lastFrameAt = 0;
   modelOffline = false;
   delegateUsed = 'GPU';
+  /** Consecutive detectForVideo failures (surfaced in debug; never silent). */
+  pumpErrorCount = 0;
+  lastPumpError = '';
 
   /** Loads wasm + model. Must be called before start(). */
   async init(onProgress: (msg: string) => void): Promise<void> {
     onProgress('Loading vision runtime…');
-    const vision = await FilesetResolver.forVisionTasks(PrismConfig.tracking.wasmUrl);
+    const wasmUrls = [PrismConfig.tracking.wasmUrl, PrismConfig.tracking.cdnWasmUrl].filter(
+      (u, i, all) => u && all.indexOf(u) === i,
+    );
+    let lastError: unknown = null;
+    for (const wasmUrl of wasmUrls) {
+      try {
+        await this.initWithWasm(wasmUrl, onProgress);
+        lastError = null;
+        break;
+      } catch (err) {
+        lastError = err; // e.g. unvendored public/wasm → try the CDN next
+      }
+    }
+    if (!this.landmarker) throw lastError instanceof Error ? lastError : new Error(String(lastError));
+  }
+
+  private async initWithWasm(wasmUrl: string, onProgress: (msg: string) => void): Promise<void> {
+    const vision = await FilesetResolver.forVisionTasks(wasmUrl);
     const { url, offline } = await resolveModelUrl();
     this.modelOffline = offline;
     // GPU first for speed; fall back to CPU for headless browsers, VMs, and
@@ -69,7 +89,7 @@ export class HandTracker {
         lastError = err;
       }
     }
-    if (!this.landmarker) throw lastError instanceof Error ? lastError : new Error(String(lastError));
+    if (!this.landmarker) throw lastError;
   }
 
   get isReady(): boolean {
@@ -128,9 +148,14 @@ export class HandTracker {
     let result;
     try {
       result = this.landmarker.detectForVideo(video, now);
-    } catch {
-      return; // transient GPU/delegate hiccup: keep last frame, try next tick
+    } catch (err) {
+      // Count, don't just swallow: a permanently failing delegate used to
+      // look exactly like "no hands" with zero diagnostics.
+      this.pumpErrorCount += 1;
+      this.lastPumpError = err instanceof Error ? err.message : String(err);
+      return;
     }
+    this.pumpErrorCount = 0;
     const elapsed = performance.now() - t0;
 
     // Rolling average over the last ~30 detections.
@@ -152,6 +177,15 @@ export class HandTracker {
 }
 
 /** Draws hand skeletons onto a 2D canvas sized to the preview element. */
+const SKELETON: Array<readonly [number, number]> = [
+  [0, 1], [1, 2], [2, 3], [3, 4],
+  [0, 5], [5, 6], [6, 7], [7, 8],
+  [0, 9], [9, 10], [10, 11], [11, 12],
+  [0, 13], [13, 14], [14, 15], [15, 16],
+  [0, 17], [17, 18], [18, 19], [19, 20],
+  [5, 9], [9, 13], [13, 17],
+];
+
 export function drawLandmarkOverlay(
   ctx: CanvasRenderingContext2D,
   frame: HandFrame | null,
@@ -161,21 +195,12 @@ export function drawLandmarkOverlay(
   if (!frame) return;
 
   // Note: the canvas element itself is CSS-mirrored, so raw coords are correct.
-  const CONNECTIONS: Array<[number, number]> = [
-    [0, 1], [1, 2], [2, 3], [3, 4],
-    [0, 5], [5, 6], [6, 7], [7, 8],
-    [0, 9], [9, 10], [10, 11], [11, 12],
-    [0, 13], [13, 14], [14, 15], [15, 16],
-    [0, 17], [17, 18], [18, 19], [19, 20],
-    [5, 9], [9, 13], [13, 17],
-  ];
-
   frame.hands.forEach((hand, handIndex) => {
     const color = handIndex === 0 ? '#00f0ff' : '#7CFF6b';
     ctx.strokeStyle = color;
     ctx.lineWidth = 2;
     ctx.fillStyle = color;
-    for (const [a, b] of CONNECTIONS) {
+    for (const [a, b] of SKELETON) {
       const p = hand.landmarks[a];
       const q = hand.landmarks[b];
       ctx.beginPath();

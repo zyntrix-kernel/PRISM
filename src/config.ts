@@ -6,12 +6,14 @@ import type { PresetId } from './presets/types';
 export const PrismConfig = {
   tracking: {
     // Fully offline-capable: the wasm runtime and model ship in
-    // public/wasm and public/models (copied from the npm package and the
-    // MediaPipe model hub at build time). CDN is a legacy fallback only.
+    // public/wasm and public/models (via `npm run vendor:offline`).
+    // Every local URL has a CDN fallback so a missing vendor step degrades
+    // to online mode instead of killing hand tracking outright.
     localModelUrl: './models/hand_landmarker.task',
     cdnModelUrl:
       'https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task',
     wasmUrl: './wasm',
+    cdnWasmUrl: 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@1.0.1/wasm',
     numHands: 2,
     minHandDetectionConfidence: 0.5,
     minHandPresenceConfidence: 0.5,

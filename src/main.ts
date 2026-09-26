@@ -218,6 +218,9 @@ async function main(): Promise<void> {
   let last = performance.now();
   let elapsed = 0;
   let renderFps = 60;
+  // Observer candidates only change on preset switch: never rebuild per frame.
+  let cachedCandidates: string[] = [];
+  let cachedCandidatePreset = '';
   const tick = (now: number): void => {
     requestAnimationFrame(tick); // re-arm FIRST: one bad frame can never freeze the app
     try {
@@ -228,26 +231,32 @@ async function main(): Promise<void> {
 
       const frame = tracker.getFrame();
       interaction.update(dt, frame);
+      const world = scene.currentWorld;
       // FPS governor watches real frame times (auto mode only).
       if (qualitySel.value === 'auto') governor.update(dt);
+      if (world && cachedCandidatePreset !== scene.currentPreset) {
+        cachedCandidatePreset = scene.currentPreset;
+        cachedCandidates = scene.grabbables
+          .map((o) => o.name)
+          .filter((n): n is string => n.length > 0);
+      }
       // AI observer: one frame every few seconds, readout only (never drives).
-      observer.tick(
-        now,
-        scene.grabbables.map((o) => o.name).filter((n): n is string => n.length > 0),
-        interaction.gesture,
-      );
+      observer.tick(now, cachedCandidates, interaction.gesture);
       // Feed unified hand/mouse input to worlds that drive (drive preset).
       // Hands get an analog gas pedal from pinch closeness; mouse is binary.
       // Pinch = gas, release = coast, Space = brake. Nothing else.
-      scene.currentWorld?.setDriveInput?.({
-        steer: interaction.mode === 'none' ? 0 : applySteerCurve(interaction.pointerNX),
-        throttle: interaction.actionHeld ? (interaction.mode === 'hand' ? interaction.pinchCloseness : 1) : 0,
-        brake: interaction.spaceDown,
-        actionPressed: interaction.actionPressed,
-        ground: interaction.groundXZ(),
-      });
+      // (groundXZ only runs when a world actually consumes drive input.)
+      if (world?.setDriveInput) {
+        world.setDriveInput({
+          steer: interaction.mode === 'none' ? 0 : applySteerCurve(interaction.pointerNX),
+          throttle: interaction.actionHeld ? (interaction.mode === 'hand' ? interaction.pinchCloseness : 1) : 0,
+          brake: interaction.spaceDown,
+          actionPressed: interaction.actionPressed,
+          ground: interaction.groundXZ(),
+        });
+      }
       // Tap/hold/release edges for worlds with their own targets (voxel).
-      scene.currentWorld?.setPointerAction?.(
+      world?.setPointerAction?.(
         interaction.actionPressed,
         interaction.actionHeld,
         interaction.actionReleased,

@@ -14,6 +14,11 @@ export interface DebugStats {
   deviceLine: string;
 }
 
+/** Escape model/network strings before innerHTML (expo-machine safety). */
+function esc(s: string): string {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
 /** One-line AI observer readout for the overlay (diagnostics only). */
 function formatAi(ai: ObserverSnapshot | null): string {
   if (!ai || ai.status === 'off') return 'AI off (AI button or ?ai=1)';
@@ -23,11 +28,11 @@ function formatAi(ai: ObserverSnapshot | null): string {
   }
   if (ai.status === 'no-camera') return 'AI idle · needs camera';
   if (ai.status === 'no-webgpu' || ai.status === 'error') {
-    return `AI fault: ${ai.error ?? ai.status}`;
+    return `AI fault: ${esc(ai.error ?? ai.status)}`;
   }
   if (!ai.reading) return 'AI ready · awaiting first read';
   const age = ai.ageMs !== null ? ` · ${(ai.ageMs / 1000).toFixed(0)}s ago` : '';
-  const target = ai.reading.target ? ` → ${ai.reading.target}` : '';
+  const target = ai.reading.target ? ` → ${esc(ai.reading.target)}` : '';
   return `AI ${ai.reading.intent}${target} ${ai.reading.confidence.toFixed(2)}${age}`;
 }
 
@@ -71,6 +76,9 @@ export class DebugOverlay {
     this.el.innerHTML =
       `<div>FPS render <b>${stats.renderFps.toFixed(0)}</b> · track <b>${tracker.trackingFps.toFixed(0)}</b> (${tracker.averageInferenceMs.toFixed(1)} ms)</div>` +
       `<div${warn(stats.hands === 0)}>hands <b>${stats.hands}</b> · conf ${stats.confidence.toFixed(2)} · mode ${interaction.mode}</div>` +
+      (tracker.pumpErrorCount > 0
+        ? `<div class="warn">tracking faults ×${tracker.pumpErrorCount}: ${(tracker.lastPumpError || '').slice(0, 90)}</div>`
+        : '') +
       `<div>gesture <b>${interaction.gesture}</b>${interaction.isPinching ? ' (pinch)' : ''}${interaction.twoHandActive ? ' · TWO-HAND' : ''}${interaction.pinchValue !== null ? ` · d=${interaction.pinchValue.toFixed(2)} ≤${g.pinchEnter.toFixed(2)}/${g.pinchExit.toFixed(2)}` : ''}</div>` +
       `<div>pointer (${px.pointerNdc.x.toFixed(2)}, ${px.pointerNdc.y.toFixed(2)})</div>` +
       `<div>hover <b>${interaction.hoveredName ?? '—'}</b> · grab <b>${interaction.grabbedName ?? '—'}</b></div>` +

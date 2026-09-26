@@ -32,6 +32,7 @@ function makeCtx(): BuilderCtx {
     shakeCamera: () => {},
     nebulaTex: tex,
     planetTex: {} as PlanetTextureSet,
+    quality: 'medium' as const,
   };
 }
 

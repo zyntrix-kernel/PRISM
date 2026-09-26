@@ -5,7 +5,7 @@
 
 import type { QualityTier } from './config';
 
-const ORDER: QualityTier[] = ['low', 'medium', 'high'];
+const ORDER: QualityTier[] = ['low', 'medium', 'high', 'ultra'];
 
 export class PerfGovernor {
   private ema = 60;

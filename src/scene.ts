@@ -293,6 +293,7 @@ export class PrismScene {
       nebulaTex: this.nebulaTex,
       planetTex: this.planetTex,
       shakeCamera: (amount: number) => this.shakeCamera(amount),
+      quality: this.quality,
     });
     const bg = this.api.background;
     if (bg === 'nebula') {
@@ -329,9 +330,9 @@ export class PrismScene {
     this.composer?.setPixelRatio(Math.min(window.devicePixelRatio || 1, ratio));
   }
 
-  /** High tier gets procedural planet maps; lower tiers use flat colors. */
+  /** High+ tier gets procedural planet maps; low/med use flat colors. */
   private applyTextureMaps(): void {
-    const on = this.quality === 'high';
+    const on = this.quality === 'high' || this.quality === 'ultra';
     this.world.traverse((obj) => {
       const mesh = obj as THREE.Mesh;
       const mat = mesh.material as (THREE.MeshStandardMaterial | THREE.MeshBasicMaterial) | undefined;
@@ -444,7 +445,7 @@ export class PrismScene {
   }
 
   render(): void {
-    if (this.quality === 'high') {
+    if (this.quality === 'high' || this.quality === 'ultra') {
       this.composer.render();
     } else {
       this.renderer.render(this.scene, this.camera);

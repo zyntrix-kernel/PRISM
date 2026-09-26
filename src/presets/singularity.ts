@@ -5,6 +5,7 @@ import * as THREE from 'three';
 import { buildBlackHole, type BlackHole } from './blackhole';
 import { OrbitingDebris, OrbitSystem } from './orbits';
 import { disposeGroup, type BuilderCtx, type WorldAPI } from './types';
+import { buildGalaxy } from './galaxy';
 
 const PROBES = [
   { name: 'Probe I', color: 0x00f0ff, radius: 3.1, periodDays: 46 },
@@ -37,6 +38,12 @@ export function buildSingularity(ctx: BuilderCtx): WorldAPI {
   const debris = new OrbitingDebris(500, 2.6, 7.2, 0.05, 0xd8a06a, 99);
   world.add(debris.mesh);
 
+  // Galaxy for the grand finale
+  const galaxy = buildGalaxy(ctx.quality);
+  galaxy.visible = false;
+  galaxy.scale.setScalar(0.1);
+  world.add(galaxy);
+
   // Detonation kit: drag a grabbed probe inside r 2.6 and hold 0.5 s to
   // push the hole EXTREME — disk flares, jets roar, debris spins up, probes
   // fling outward while the world pulls back, then everything reforms.
@@ -63,6 +70,7 @@ export function buildSingularity(ctx: BuilderCtx): WorldAPI {
     shocks.push(ring);
   }
   let deto: { t: number } | null = null;
+  let galaState: 'hidden' | 'revealing' | 'exploding' | 'done' = 'hidden';
 
   const probeGeo = new THREE.SphereGeometry(0.14, 24, 18);
   PROBES.forEach((p, i) => {
@@ -137,15 +145,40 @@ export function buildSingularity(ctx: BuilderCtx): WorldAPI {
           shock.visible = k < 1;
         });
         if (t >= 4.5) {
-          deto = null;
-          debris.spinBoost = 1;
-          world.scale.setScalar(1);
-          flash.visible = false;
-          for (const probe of orbits.bodies) {
-            const s = orbits.get(probe);
-            if (s) {
-              s.radius = s.home.radius;
-              s.periodDays = s.home.periodDays;
+          if (galaState === 'hidden') {
+            galaState = 'revealing';
+            galaxy.visible = true;
+          }
+          if (galaState === 'revealing') {
+            const revealT = t - 4.5;
+            const s = 0.1 + (revealT / 3) * 19;
+            galaxy.scale.setScalar(s);
+            if (revealT >= 3) galaState = 'exploding';
+          }
+          if (galaState === 'exploding') {
+            const expT = t - 7.5;
+            const s = 20 * (1 + expT * 2);
+            galaxy.scale.setScalar(s);
+            galaxy.material.opacity = Math.max(0, 1 - expT / 1.5);
+            if (expT >= 1.5) {
+              galaState = 'done';
+              galaxy.visible = false;
+              if (typeof window !== 'undefined') {
+                window.dispatchEvent(new CustomEvent('prism-reset-world'));
+              }
+            }
+          }
+          if (galaState === 'done') {
+            deto = null;
+            debris.spinBoost = 1;
+            world.scale.setScalar(1);
+            flash.visible = false;
+            for (const probe of orbits.bodies) {
+              const s = orbits.get(probe);
+              if (s) {
+                s.radius = s.home.radius;
+                s.periodDays = s.home.periodDays;
+              }
             }
           }
         }

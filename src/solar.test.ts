@@ -54,6 +54,7 @@ describe('solar sun-crash integration', () => {
       nebulaTex: tex,
       planetTex: {} as PlanetTextureSet,
       shakeCamera: () => {},
+      quality: 'medium' as const,
     };
     const world: WorldAPI = buildSolar(ctx);
     const mercury = world.grabbables.find((o) => o.name === 'Mercury') as THREE.Mesh;

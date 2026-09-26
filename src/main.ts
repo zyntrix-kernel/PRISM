@@ -54,7 +54,7 @@ async function main(): Promise<void> {
   };
 
   const initialQuality = queryParam('quality');
-  if (initialQuality === 'high' || initialQuality === 'low' || initialQuality === 'medium') {
+  if (initialQuality === 'ultra' || initialQuality === 'high' || initialQuality === 'low' || initialQuality === 'medium') {
     qualitySel.value = initialQuality;
   } else {
     qualitySel.value = 'auto';

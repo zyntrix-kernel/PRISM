@@ -4,6 +4,7 @@
 
 import * as THREE from 'three';
 import type { PlanetTextureSet } from '../textures';
+import type { QualityTier } from '../config';
 
 export type PresetId = 'space' | 'blocks' | 'test' | 'singularity' | 'drive' | 'atom' | 'voxel';
 
@@ -37,6 +38,8 @@ export interface BuilderCtx {
   planetTex: PlanetTextureSet;
   /** Rattle the camera (impacts, detonations). Worlds call, rig owns decay. */
   shakeCamera: (amount: number) => void;
+  /** Current render quality tier for scaling visual complexity. */
+  quality: QualityTier;
 }
 
 export interface WorldAPI {

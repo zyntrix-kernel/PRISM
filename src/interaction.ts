@@ -12,8 +12,9 @@
 import * as THREE from 'three';
 import { PrismConfig } from './config';
 import { GestureTracker, PinchCalibrator, TwoHandGesture, pinchRatio, type PoseKind } from './gestures';
+import { AdaptivePointerFilter } from './pointer';
 import { PRESET_ORDER } from './presets/types';
-import { OneEuroSmoother, Vec3Smoother } from './smoothing';
+import { Vec3Smoother } from './smoothing';
 import type { CursorMode, PrismScene } from './scene';
 import type { HandFrame, Landmark, Point2D } from './types';
 
@@ -32,11 +33,11 @@ function pinchPoint2D(landmarks: Landmark[]): Point2D {
 export class InteractionController {
   private readonly raycaster = new THREE.Raycaster();
   private readonly pointerNdc = new THREE.Vector2(0, 0);
-  private readonly pointerSmoother = new OneEuroSmoother(
-    PrismConfig.interaction.pointerMinCutoff,
-    PrismConfig.interaction.pointerBeta,
-    PrismConfig.interaction.pointerDcutoff,
-  );
+  // Adaptive pointer: self-retunes to any camera on earth (5–120 fps),
+  // outlier-gates spikes, and predicts ~2 frames ahead to hide latency.
+  private readonly pointerFilter = new AdaptivePointerFilter({
+    ...PrismConfig.interaction.pointerAdaptive,
+  });
   private readonly grabSmoother = new Vec3Smoother(PrismConfig.interaction.grabSmoothing);
   private readonly trackers = [new GestureTracker(), new GestureTracker()];
   private readonly twoHand = new TwoHandGesture();
@@ -79,7 +80,7 @@ export class InteractionController {
   private primaryFirst = true;
   private anchorA: { x: number; y: number } | null = null;
   private anchorB: { x: number; y: number } | null = null;
-  private lastRaw: { x: number; y: number } | null = null;
+  private readonly lastRaw: { x: number; y: number } = { x: 0, y: 0 };
 
   // Mouse fallback + camera-control state
   private mouseNdc: THREE.Vector2 | null = null;
@@ -298,7 +299,8 @@ export class InteractionController {
     this.primaryFirst = true;
     this.anchorA = null;
     this.anchorB = null;
-    this.lastRaw = null;
+    this.lastRaw.x = 0;
+    this.lastRaw.y = 0;
     this.calibrator.reset();
   }
 
@@ -457,28 +459,29 @@ export class InteractionController {
       // toward stale data is what "teleport streaks" are made of.
       this.tmpNdcSample.x = raw.x;
       this.tmpNdcSample.y = raw.y;
-      this.tmpNdcSample.z = 0;
-      this.pointerSmoother.reset(this.tmpNdcSample);
-      this.lastRaw = { x: raw.x, y: raw.y };
+      this.pointerFilter.reset(this.tmpNdcSample);
+      this.lastRaw.x = raw.x;
+      this.lastRaw.y = raw.y;
     } else {
-      // Micro-deadzone: sub-pixel tremor never enters the filter. The bound
-      // (~1px) is far below deliberate motion, so precision work is untouched.
-      if (
-        this.lastRaw &&
-        Math.hypot(raw.x - this.lastRaw.x, raw.y - this.lastRaw.y) < 0.0015
-      ) {
+      // Adaptive micro-deadzone: sub-pixel tremor never enters the filter.
+      // It breathes with measured noise (old cameras get a wider floor)
+      // and vanishes the moment the hand genuinely moves.
+      const dead =
+        this.pointerFilter.pointerSpeed < 0.3
+          ? 0.0015 + Math.min(this.pointerFilter.noisePerSample * 0.3, 0.004)
+          : 0;
+      if (dead > 0 && Math.hypot(raw.x - this.lastRaw.x, raw.y - this.lastRaw.y) < dead) {
         raw.x = this.lastRaw.x;
         raw.y = this.lastRaw.y;
       }
-      this.lastRaw = { x: raw.x, y: raw.y };
+      this.lastRaw.x = raw.x;
+      this.lastRaw.y = raw.y;
     }
     this.tmpNdcSample.x = raw.x;
     this.tmpNdcSample.y = raw.y;
-    this.tmpNdcSample.z = 0;
-    // Tracking-clock step (NOT render dt): the One Euro filter's velocity
-    // estimate stays honest whether frames arrive at 10 Hz or 120 Hz.
-    const trackDtSec = Math.min(Math.max(trackDtMs / 1000, 1 / 240), 0.25);
-    this.pointerSmoother.update(this.tmpNdcSample, trackDtSec, this.tmpSmoothed);
+    // Tracking-clock step (NOT render dt) + sensor confidence: the filter
+    // stays honest whether frames arrive at 10 Hz or 120 Hz, clean or noisy.
+    this.pointerFilter.update(this.tmpNdcSample, trackDtMs, primaryHand.confidence, this.tmpSmoothed);
     this.pointerNdc.set(this.tmpSmoothed.x, this.tmpSmoothed.y);
 
     // Two-hand transform takes precedence over single-hand dragging.
@@ -545,8 +548,10 @@ export class InteractionController {
     }
     this.tmpNdcSample.x = ndc.x;
     this.tmpNdcSample.y = ndc.y;
-    this.tmpNdcSample.z = 0;
-    this.pointerSmoother.update(this.tmpNdcSample, dt, this.tmpSmoothed);
+    // Mouse rides the same adaptive filter at full confidence: at 60+ Hz
+    // render polling it stays wide open, and its spike gate still eats
+    // single-frame glitches (alt-tab jumps, resolution snaps).
+    this.pointerFilter.update(this.tmpNdcSample, dt * 1000, 1, this.tmpSmoothed);
     this.pointerNdc.set(this.tmpSmoothed.x, this.tmpSmoothed.y);
     this.raycaster.setFromCamera(this.pointerNdc, this.prism.camera);
     this.prism.trackPointer(this.pointerNdc.x, this.pointerNdc.y);

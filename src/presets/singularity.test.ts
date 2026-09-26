@@ -16,6 +16,7 @@ function makeCtx(): BuilderCtx {
     nebulaTex: tex,
     planetTex: {} as PlanetTextureSet,
     shakeCamera: () => {},
+    quality: 'medium' as const,
   };
 }
 
@@ -41,8 +42,8 @@ describe('singularity detonation integration', () => {
     expect(world.bodyInfo?.('Probe I')).toContain('DETONATION');
     expect(ctx.world.scale.x).toBeLessThan(0.95); // pulled back wide shot
 
-    // Let the 4.5 s sequence play out: scale, spin, and probes restore.
-    for (let i = 0; i < 300; i++) {
+    // Let the full ~9 s cinematic play out: detonation + galaxy reveal + explosion + reset.
+    for (let i = 0; i < 560; i++) {
       t += 1 / 60;
       world.update?.(1 / 60, t);
     }

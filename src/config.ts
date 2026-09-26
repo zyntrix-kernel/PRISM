@@ -44,12 +44,18 @@ export const PrismConfig = {
   },
 
   interaction: {
-    // One Euro adaptive pointer filter: heavy smoothing at rest (no jitter),
-    // wide open during fast motion (no lag). Tuned for hand tremor: the
-    // rest cutoff sits below typical tremor energy, beta opens it fast.
-    pointerMinCutoff: 0.8,
-    pointerBeta: 0.045,
-    pointerDcutoff: 1.2,
+    // Adaptive hand pointer (see pointer.ts): the filter measures tracking
+    // fps + undirected noise online and retunes itself, so a 10 fps noisy
+    // feed holds still while a 120 fps clean feed stays wide open.
+    pointerAdaptive: {
+      maxSpeed: 3.5, // fastest plausible fingertip travel, NDC/sec
+      slowCutoff: 0.42, // rest smoothing at very low tracking rates
+      fastCutoff: 2.8, // rest smoothing at 60+ fps tracking
+      betaBase: 0.09, // speed-opening base (lively fast motion)
+      betaRate: 0.08, // extra opening that fades out on slow cameras
+      maxLeadSec: 0.12, // latency-hiding prediction horizon cap
+      maxLeadDist: 0.05, // prediction travel cap (can never fling)
+    },
     // Smoothing factor for grabbed-object motion (lower = floatier).
     grabSmoothing: 0.3,
     // Two-hand zoom sensitivity.
@@ -96,10 +102,11 @@ export const PrismConfig = {
   },
 
   quality: {
+    ultra: { pixelRatio: 3.0 },
     high: { pixelRatio: 2.0 },
     medium: { pixelRatio: 1.5 },
     low: { pixelRatio: 1.0 },
   } as Record<string, { pixelRatio: number }>,
 };
 
-export type QualityTier = 'high' | 'medium' | 'low';
+export type QualityTier = 'ultra' | 'high' | 'medium' | 'low';

@@ -6,7 +6,6 @@
 //   pinch held -> drag grabbed orb along the grab plane (smoothed)
 //   pinch falling edge -> release
 //   two simultaneous pinches -> world zoom + rotate
-//   sustained open palm -> scene reset
 //
 // All transient math uses preallocated temporaries (no hot-loop garbage).
 

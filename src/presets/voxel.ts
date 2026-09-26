@@ -42,7 +42,7 @@ export interface BlockDef {
   tiles: { side: number; top: number; bottom: number }; // atlas columns
 }
 
-export const BLOCKS: BlockDef[] = [
+const BLOCKS: BlockDef[] = [
   { id: GRASS, name: 'Grass', color: '#5fae3f', tiles: { side: 0, top: 0, bottom: 1 } },
   { id: DIRT, name: 'Dirt', color: '#8a5f3c', tiles: { side: 1, top: 1, bottom: 1 } },
   { id: STONE, name: 'Stone', color: '#8d8d94', tiles: { side: 2, top: 2, bottom: 2 } },

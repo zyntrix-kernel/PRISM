@@ -10,48 +10,15 @@ export interface Vec3Like {
 }
 
 /** Frame-rate independent exponential smoothing factor. */
-export function dampFactor(smoothing: number, dtSeconds: number): number {
-  const clamped = Math.min(0.999, Math.max(0.001, smoothing));
+export function dampFactor(smoothing: number, dtSeconds: number): number {  const clamped = Math.min(0.999, Math.max(0.001, smoothing));
   // Convert a per-frame-at-60fps factor into a dt-independent alpha.
   return 1 - Math.pow(1 - clamped, dtSeconds * 60);
 }
 
-/** Smooths a scalar stream toward incoming samples. */
-export class ScalarSmoother {
-  private value: number;
-  private initialized = false;
-
-  constructor(
-    private smoothing: number,
-    initialValue = 0,
-  ) {
-    this.value = initialValue;
-  }
-
-  reset(value: number): void {
-    this.value = value;
-    this.initialized = true;
-  }
-
-  update(sample: number, dtSeconds: number): number {
-    if (!this.initialized) {
-      this.value = sample;
-      this.initialized = true;
-      return this.value;
-    }
-    const alpha = dampFactor(this.smoothing, dtSeconds);
-    this.value += (sample - this.value) * alpha;
-    return this.value;
-  }
-
-  get current(): number {
-    return this.value;
-  }
-}
-
 /** Smooths a 3D stream (pointer positions, drag targets) without allocations
  *  in the hot loop: callers pass a reusable target object. */
-export class Vec3Smoother {  private x = 0;
+export class Vec3Smoother {
+  private x = 0;
   private y = 0;
   private z = 0;
   private initialized = false;

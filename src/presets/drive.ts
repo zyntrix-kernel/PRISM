@@ -2,7 +2,7 @@
 //
 // Two driving modes:
 // - MANUAL: screen-relative steering (pointer right = nose goes right on
-//   screen), pinch-hold = gas, open palm / Space = brake.
+//   screen), pinch-hold = gas, release = coast, Space = brake.
 // - EASY (point-and-go): point at the ground, pinch once to drop a pin,
 //   pinch again to send the car (pure-pursuit autopilot), pinch once more
 //   to cancel. A ghost marker previews where the pin will land.
@@ -15,8 +15,8 @@ import * as THREE from 'three';
 import { disposeGroup, type BuilderCtx, type DriveFrameInput, type WorldAPI } from './types';
 import { ParticlePool } from './particles';
 
-export const TRACK_A = 9;
-export const TRACK_B = 6;
+const TRACK_A = 9;
+const TRACK_B = 6;
 const ARENA_RADIUS = 16;
 
 const ACCEL = 9;

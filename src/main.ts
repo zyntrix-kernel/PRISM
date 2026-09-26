@@ -6,7 +6,7 @@ import { PrismConfig, type QualityTier } from './config';
 import { DebugOverlay } from './debug';
 import { detectDevice } from './device';
 import { InteractionController } from './interaction';
-import { PRESET_ORDER, type PresetId } from './presets/types';
+import { PRESET_LABELS, PRESET_ORDER, type PresetId } from './presets/types';
 import { AiObserver, captureVideoFrame } from './ai/observer';
 import { PerfGovernor } from './perf';
 import { PrismScene } from './scene';
@@ -60,8 +60,10 @@ async function main(): Promise<void> {
     `device ${device.isMobile ? 'mobile' : 'desktop'}${device.isWeakGpu ? ' · weak-gpu' : ''}${
       device.hasTouch && !device.isMobile ? ' · touch' : ''
     } · tier ${qualitySel.value === 'auto' ? `auto→${governor.tier}` : governor.tier}`;
-  const initialPreset = (queryParam('preset') as PresetId) || PrismConfig.preset;
-  presetSel.value = PRESET_ORDER.includes(initialPreset) ? initialPreset : PrismConfig.preset;
+  const requestedPreset = queryParam('preset') as PresetId | null;
+  const initialPreset =
+    requestedPreset && PRESET_ORDER.includes(requestedPreset) ? requestedPreset : PrismConfig.preset;
+  presetSel.value = initialPreset;
   const debug = new DebugOverlay(debugEl, queryParam('debug') !== '0');
   debugBtn.classList.toggle('active', debug.isVisible);
 
@@ -138,6 +140,16 @@ async function main(): Promise<void> {
   /** Mirrors a user-triggered preset switch for the boot-loaded preset. */
   const syncPresetUI = (): void => {
     const id = scene.currentPreset;
+    // Dropdown options are built from the registry (single source of truth).
+    if (presetSel.options.length !== PRESET_ORDER.length) {
+      presetSel.innerHTML = '';
+      for (const pid of PRESET_ORDER) {
+        const opt = document.createElement('option');
+        opt.value = pid;
+        opt.textContent = PRESET_LABELS[pid];
+        presetSel.appendChild(opt);
+      }
+    }
     presetSel.value = id;
     easyBtn.classList.toggle('hidden', id !== 'drive');
     // Shareable link support: ?preset=drive&easy=1 boots into easy mode.

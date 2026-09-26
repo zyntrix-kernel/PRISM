@@ -26,7 +26,7 @@ const RING_TIP = 16;
 const PINKY_PIP = 18;
 const PINKY_TIP = 20;
 
-export function dist3(a: Landmark, b: Landmark): number {
+function dist3(a: Landmark, b: Landmark): number {
   const dx = a.x - b.x;
   const dy = a.y - b.y;
   const dz = a.z - b.z;
@@ -34,7 +34,7 @@ export function dist3(a: Landmark, b: Landmark): number {
 }
 
 /** Hand size in normalized units; guards against degenerate input. */
-export function handScale(landmarks: Landmark[]): number {
+function handScale(landmarks: Landmark[]): number {
   if (landmarks.length < MIDDLE_MCP + 1) return 1e-6;
   return Math.max(1e-6, dist3(landmarks[WRIST], landmarks[MIDDLE_MCP]));
 }
@@ -46,7 +46,7 @@ export function pinchRatio(landmarks: Landmark[]): number {
 }
 
 /** Raw (non-debounced) pinch test using the strict enter threshold. */
-export function detectPinchRaw(landmarks: Landmark[]): boolean {
+function detectPinchRaw(landmarks: Landmark[]): boolean {
   return pinchRatio(landmarks) <= PrismConfig.gestures.pinchEnter;
 }
 

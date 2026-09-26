@@ -84,7 +84,7 @@ Touch screens get two-finger pinch-zoom, larger controls, and a compact HUD.
 - **Presets** → keys `1`–`7` or the dropdown: Space / Block game / Test / Black hole / Drive / Atom / Voxel
 - **Voxel preset** → tap pinch = place block, hold pinch = break (sliding off cancels); palette buttons or `Q`/`E` pick blocks
 - **AI observer** (off by default) → FastVLM-0.5B watches the camera in a Web Worker and reports `{intent, target, confidence}` into the debug overlay; enable with the AI button or `?ai=1`. Readout only — it never drives anything.
-- **Drive preset** → pointer steers, pinch-hold = gas, open palm / Space = brake; Easy mode (button or `E`): point + pinch drops a pin, pinch again sends the car, pinch once more stops it
+- **Drive preset** → pointer steers, analog pinch = gas pedal, release to coast, Space = brake; Easy mode (button or `E`): point + pinch drops a pin, pinch again sends the car, pinch once more stops it
 
 ## Worlds (presets)
 
@@ -94,7 +94,7 @@ Touch screens get two-finger pinch-zoom, larger controls, and a compact HUD.
 | Block game | Voxel stacking on a baseplate with grid snap |
 | Test | Original 3-orb calibration rig |
 | Black hole | Close-up hole with accretion disk, jets, debris + 3 grabbable survey probes |
-| Drive | Arcade car on a neon circuit: pinch = gas, palm/Space = brake, easy point-and-go autopilot, lap timer, tire smoke |
+| Drive | Arcade car on a neon circuit: pinch = gas, release to coast, Space = brake, easy point-and-go autopilot, lap timer, tire smoke |
 | Atom | Interactive Bohr model: drag electrons between shells, drops emit true-wavelength photon flashes |
 | Voxel | Minecraft-like builder (original textures): tap pinch = place, hold = break, 6-block palette, chunked terrain |
 

@@ -29,6 +29,7 @@ function makeCtx(): BuilderCtx {
     world: new THREE.Group(),
     labelLayer: new THREE.Group(),
     glowTex: tex,
+    shakeCamera: () => {},
     nebulaTex: tex,
     planetTex: {} as PlanetTextureSet,
   };

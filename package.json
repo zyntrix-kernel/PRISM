@@ -12,6 +12,7 @@
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
     "test": "vitest run",
+    "lint": "oxlint",
     "vendor:offline": "node scripts/vendor-offline.mjs",
     "package:usb": "npm run vendor:offline && npm run build"
   },
@@ -22,6 +23,7 @@
   },
   "devDependencies": {
     "@types/three": "^0.186.0",
+    "oxlint": "^1.85.0",
     "typescript": "7.0.2",
     "vite": "8.3.0",
     "vitest": "5.0.1"

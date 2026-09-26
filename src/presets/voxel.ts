@@ -535,11 +535,11 @@ export function buildVoxel(ctx: BuilderCtx): WorldAPI {
   let releaseEdge = false;
   let elapsed = 0;
   const tmpOrigin = new THREE.Vector3();
-  const tmpDir = new THREE.Vector3();
   const tmpNdc = new THREE.Vector3();
   const tmpRay = new THREE.Ray();
   const tmpMat = new THREE.Matrix4();
   const tmpWorld = new THREE.Vector3();
+  const tmpHl = new THREE.Vector3();
 
   const raycast = (): RayHit | null => {
     if (!ndc || !cam) return null;
@@ -644,10 +644,16 @@ export function buildVoxel(ctx: BuilderCtx): WorldAPI {
       pressEdge = false;
       releaseEdge = false;
       // Highlight follows the anchor while charging, else the live target.
+      // Smoothed (snap on teleports) so low tracking rates glide, not jump.
       const show = anchor ?? target;
       highlight.visible = !!show;
       if (show) {
-        highlight.position.set(show.cell[0] + 0.5, show.cell[1] + 0.5, show.cell[2] + 0.5);
+        tmpHl.set(show.cell[0] + 0.5, show.cell[1] + 0.5, show.cell[2] + 0.5);
+        if (highlight.position.distanceToSquared(tmpHl) > 4) {
+          highlight.position.copy(tmpHl);
+        } else {
+          highlight.position.lerp(tmpHl, 1 - Math.exp(-dt * 20));
+        }
         (highlight.material as THREE.LineBasicMaterial).color.copy(hlWhite).lerp(hlRed, Math.min(1, progress));
       }
     },

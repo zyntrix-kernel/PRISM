@@ -3,17 +3,22 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#04060d" />
+    <meta name="description" content="PRISM: hand-controlled 3D science lab. Point to move the cursor, pinch to grab — no controller needed." />
     <link rel="icon" href="data:," />
     <title>PRISM — Projected Reality Interaction &amp; Spatial Manipulation</title>
     <link rel="stylesheet" href="/src/styles.css" />
   </head>
   <body>
     <div id="app">
+      <div class="orb" id="orb-a" aria-hidden="true"></div>
+      <div class="orb" id="orb-b" aria-hidden="true"></div>
+      <div class="orb" id="orb-c" aria-hidden="true"></div>
       <!-- 3D scene renders here -->
-      <div id="scene-container"></div>
+      <main id="scene-container" aria-label="Interactive 3D scene"></main>
 
       <!-- Small mirrored webcam preview (helps users frame their hands) -->
-      <video id="webcam" autoplay playsinline muted></video>
+      <video id="webcam" autoplay playsinline muted aria-label="Webcam preview for hand tracking"></video>
 
       <!-- Hand skeleton overlay aligned with the webcam preview -->
       <canvas id="landmark-overlay"></canvas>
@@ -49,6 +54,32 @@
       <!-- Voxel block palette (only visible in the voxel preset) -->
       <div id="voxel-palette" class="hidden"></div>
 
+      <!-- Live system rail: what PRISM sees, at a glance (details in debug) -->
+      <aside id="sys-rail" aria-label="System status">
+        <div class="rail-item" id="rail-cam"><span class="dot" data-state="off"></span><span class="txt">Camera off</span></div>
+        <div class="rail-item" id="rail-hands"><span class="dot" data-state="off"></span><span class="txt">No hands</span></div>
+        <div class="rail-item" id="rail-gesture"><span class="dot" data-state="off"></span><span class="txt">—</span></div>
+        <div class="rail-item" id="rail-fps"><span class="dot" data-state="on"></span><span class="txt">— fps</span></div>
+      </aside>
+
+      <!-- Contextual coach: the single next action, always one line -->
+      <div id="coach" class="hidden" role="status"></div>
+
+      <!-- First-run companion: three steps that tick off live -->
+      <aside id="onboard" class="hidden" aria-label="Getting started">
+        <h2>First flight</h2>
+        <ol>
+          <li data-step="camera"><span class="tick">✓</span><span>Enable the camera</span></li>
+          <li data-step="hand"><span class="tick">✓</span><span>Show your hand</span></li>
+          <li data-step="grab"><span class="tick">✓</span><span>Pinch to grab</span></li>
+        </ol>
+        <div class="row">
+          <button id="btn-onboard-close" type="button">Skip tour</button>
+          <button id="btn-onboard-help" type="button">Full guide</button>
+        </div>
+        <div class="celebrate hidden">Ready to explore ✓</div>
+      </aside>
+
       <!-- Help card -->
       <div id="help" class="hidden">
         <h2>How to interact — point + pinch, nothing else</h2>
@@ -62,7 +93,7 @@
         <h2>Camera (mouse / keys)</h2>
         <ul>
           <li><b>Drag empty space</b> to orbit · <b>wheel</b> to zoom toward the cursor · <b>right-drag</b> to pan.</li>
-          <li><b>Arrows</b> orbit · <b>+/-</b> zoom · <b>R</b> reset view · <b>T</b> top · <b>F</b> edge · <b>V</b> overview · <b>O</b> auto-orbit.</li>
+          <li><b>Arrows</b> orbit · <b>+/-</b> zoom · <b>R</b> reset view · <b>X</b> reset world · <b>T</b> top · <b>F</b> edge · <b>V</b> overview · <b>O</b> auto-orbit · <b>H</b> this help.</li>
           <li><b>1–7</b> switch presets (Space / Blocks / Test / Black hole / Drive / Atom / Voxel).</li>
           <li><b>High</b> quality adds procedural planet textures + bloom glow.</li>
         </ul>

@@ -71,27 +71,44 @@ function makeHandAt(thumbX: number, indexX: number): Landmark[] {
 }
 
 function handFrame(pinched: boolean): HandFrame {
+  // Synthetic tracking clock: every produced frame advances 16.7 ms, like a
+  // real 60 fps camera. Tests needing other rates pass explicit timestamps.
+  fakeNow += 1000 / 60;
   return {
     hands: [{ landmarks: makeLandmarks(pinched), handedness: 'Right', confidence: 0.9 }],
-    timestampMs: performance.now(),
+    timestampMs: fakeNow,
   };
 }
 
+let fakeNow = 1000;
+
 const DT = 1 / 60;
+const dispatched: Array<{ type: string; detail?: unknown }> = [];
 
 describe('interaction action pipeline', () => {
   beforeEach(() => {
     elListeners.clear();
     winListeners.clear();
+    dispatched.length = 0;
+    fakeNow = 1000; // restart the synthetic tracking clock per test
     vi.stubGlobal('window', {
       addEventListener: (type: string, fn: Listener) => {
         const list = winListeners.get(type) ?? [];
         list.push(fn);
         winListeners.set(type, list);
       },
-      dispatchEvent: () => true,
+      dispatchEvent: (e: { type: string; detail?: unknown }) => {
+        dispatched.push({ type: e.type, detail: e.detail });
+        return true;
+      },
     });
   });
+
+  function fireKey(key: string): void {
+    for (const fn of winListeners.get('keydown') ?? []) {
+      fn({ key, target: { tagName: 'DIV' } } as never);
+    }
+  }
 
   it('fires one pinch rising edge from a real hand frame sequence', () => {
     const ic = new InteractionController(stubPrism());
@@ -172,14 +189,26 @@ describe('interaction action pipeline', () => {
     expect(ic.actionPressed).toBe(false);
   });
 
-  it('survives tracking loss mid-pinch without throwing', () => {
-    const ic = new InteractionController(stubPrism());
+  it('survives tracking loss mid-pinch without throwing', () => {    const ic = new InteractionController(stubPrism());
     for (let i = 0; i < 5; i++) ic.update(DT, handFrame(true));
     expect(ic.actionHeld).toBe(true);
     ic.update(DT, null);
     ic.update(DT, null);
     expect(ic.actionHeld).toBe(false);
     expect(ic.mode).toBe('none');
+  });
+
+  it('never latches from re-reading one stale frame (render rate ≠ tracking rate)', () => {
+    const ic = new InteractionController(stubPrism());
+    // Same frame polled 30 times (one 60 fps render storm, zero new tracking).
+    const stale = handFrame(true);
+    for (let i = 0; i < 30; i++) ic.update(DT, stale);
+    expect(ic.actionHeld).toBe(false);
+    // The next genuinely new frames may then latch normally (3×16.7 ms).
+    ic.update(DT, handFrame(true));
+    ic.update(DT, handFrame(true));
+    ic.update(DT, handFrame(true));
+    expect(ic.actionHeld).toBe(true);
   });
 
   it('reports analog pinch closeness (gas pedal), not just binary pinch', () => {
@@ -234,13 +263,13 @@ describe('interaction action pipeline', () => {
     fireEl('pointermove', { clientX, clientY });
     ic.update(DT, null);
     expect(ic.hoveredName).toBe('Pea');
-    // Point at empty sky: highlight survives 2 missed frames…
+    // Point at empty sky: highlight survives brief misses (120 ms window)…
     fireEl('pointermove', { clientX: 780, clientY: 20 });
     ic.update(DT, null);
     ic.update(DT, null);
     expect(ic.hoveredName).toBe('Pea');
-    // …and clears on the 3rd.
-    ic.update(DT, null);
+    // …and clears once the window elapses.
+    for (let i = 0; i < 8; i++) ic.update(DT, null);
     expect(ic.hoveredName).toBeNull();
   });
 
@@ -254,15 +283,15 @@ describe('interaction action pipeline', () => {
       ],
       timestampMs: t,
     });
-    // Latch both pinches, then spread the hands: world grows.
-    for (let i = 0; i < 3; i++) ic.update(DT, two(0.26, 0.76, i));
+    // Latch both pinches (100 ms tracking steps), then spread: world grows.
+    for (let i = 0; i < 3; i++) ic.update(DT, two(0.26, 0.76, 1000 + i * 100));
     expect(prism.world.scale.x).toBe(1);
-    ic.update(DT, two(0.26, 0.96, 3));
+    ic.update(DT, two(0.26, 0.96, 1300));
     const grown = prism.world.scale.x;
     expect(grown).toBeGreaterThan(1.2);
     // Drop both hands, then re-enter at the ORIGINAL spread: no jump.
     ic.update(DT, null);
-    for (let i = 0; i < 3; i++) ic.update(DT, two(0.26, 0.76, 10 + i));
+    for (let i = 0; i < 3; i++) ic.update(DT, two(0.26, 0.76, 2000 + i * 100));
     expect(prism.world.scale.x).toBe(grown);
   });
 
@@ -305,5 +334,76 @@ describe('interaction action pipeline', () => {
     fireWin('pointerup', { pointerId: 7, clientX, clientY });
     ic.update(DT, null);
     expect(ic.grabbedName).toBeNull();
+  });
+
+  it('requests a world rebuild on X and presets on digits', () => {
+    new InteractionController(stubPrism()); // registers key bindings
+    fireKey('x');
+    expect(dispatched).toContainEqual({ type: 'prism-reset-world', detail: null });
+    fireKey('3');
+    expect(dispatched).toContainEqual({ type: 'prism-preset', detail: 'test' });
+  });
+
+  it('ignores keys typed into form controls', () => {
+    new InteractionController(stubPrism()); // registers key bindings
+    for (const fn of winListeners.get('keydown') ?? []) {
+      fn({ key: 'x', target: { tagName: 'SELECT' } } as never);
+    }
+    expect(dispatched.length).toBe(0);
+  });
+
+  /** Open hand at horizontal wrist, index tip above it (POINT, no pinch). */
+  function handAt(wx: number): { landmarks: Landmark[]; handedness: string; confidence: number } {
+    const at = (dx: number, y: number): Landmark => ({ x: wx + dx, y, z: 0 });
+    const lm: Landmark[] = Array.from({ length: 21 }, () => at(0, 0.6));
+    lm[0] = at(0, 0.9);
+    lm[9] = at(0, 0.55);
+    lm[4] = at(-0.25, 0.6);
+    lm[8] = at(0, 0.4);
+    lm[6] = at(0, 0.55);
+    return { landmarks: lm, handedness: 'Right', confidence: 0.9 };
+  }
+
+  function pairFrame(ax: number, bx: number, t: number, swapped: boolean): HandFrame {
+    const a = handAt(ax);
+    const b = handAt(bx);
+    return { hands: swapped ? [b, a] : [a, b], timestampMs: t };
+  }
+
+  it('keeps the pointer on the same physical hand when MediaPipe reorders', () => {
+    const ic = new InteractionController(stubPrism());
+    // Left hand (NDC ≈ +0.4) settles as primary over 15 frames…
+    for (let i = 0; i < 15; i++) ic.update(DT, pairFrame(0.3, 0.7, 1000 + i * 16.7, false));
+    const settled = ic.pointerNX;
+    expect(settled).toBeGreaterThan(0.2);
+    // …then the tracker swaps the array order: pointer must NOT teleport.
+    for (let i = 0; i < 5; i++) ic.update(DT, pairFrame(0.3, 0.7, 2000 + i * 16.7, true));
+    expect(Math.abs(ic.pointerNX - settled)).toBeLessThan(0.2);
+  });
+
+  it('snaps (not streaks) on a genuine hand jump', () => {
+    const ic = new InteractionController(stubPrism());
+    for (let i = 0; i < 12; i++) {
+      ic.update(DT, { hands: [handAt(0.3)], timestampMs: 1000 + i * 16.7 });
+    }
+    expect(ic.pointerNX).toBeGreaterThan(0.2);
+    // Same stream reappears across the screen: honest snap within 2 frames.
+    ic.update(DT, { hands: [handAt(0.7)], timestampMs: 1200 });
+    ic.update(DT, { hands: [handAt(0.7)], timestampMs: 1216.7 });
+    expect(ic.pointerNX).toBeLessThan(-0.2);
+  });
+
+  it('absorbs sub-pixel tremor without diverging', () => {
+    const still = new InteractionController(stubPrism());
+    const jittery = new InteractionController(stubPrism());
+    for (let i = 0; i < 20; i++) {
+      const t = 1000 + i * 16.7;
+      still.update(DT, { hands: [handAt(0.5)], timestampMs: t });
+      const wobble = i % 2 === 0 ? 0.0008 : -0.0008;
+      const lm = handAt(0.5).landmarks.map((p) => ({ ...p }));
+      lm[8] = { x: 0.5 + wobble, y: 0.4, z: 0 };
+      jittery.update(DT, { hands: [{ landmarks: lm, handedness: 'Right', confidence: 0.9 }], timestampMs: t });
+    }
+    expect(Math.abs(jittery.pointerNX - still.pointerNX)).toBeLessThan(0.003);
   });
 });

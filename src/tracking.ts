@@ -196,7 +196,7 @@ export function drawLandmarkOverlay(
 
   // Note: the canvas element itself is CSS-mirrored, so raw coords are correct.
   frame.hands.forEach((hand, handIndex) => {
-    const color = handIndex === 0 ? '#00f0ff' : '#7CFF6b';
+    const color = handIndex === 0 ? '#9adcff' : '#a8ffc9';
     ctx.strokeStyle = color;
     ctx.lineWidth = 2;
     ctx.fillStyle = color;

@@ -21,26 +21,22 @@ function mulberry32(seed: number): () => number {
   };
 }
 
-type PixelFn = (u: number, v: number, rand: () => number) => [number, number, number];
+type PixelFn = (u: number, v: number) => [number, number, number];
 
-function paintCanvas(w: number, h: number, seed: number, fn: PixelFn): HTMLCanvasElement {
+function paintCanvas(w: number, h: number, fn: PixelFn): HTMLCanvasElement {
   const canvas = document.createElement('canvas');
   canvas.width = w;
   canvas.height = h;
   const ctx = canvas.getContext('2d');
   if (!ctx) return canvas;
   const img = ctx.createImageData(w, h);
-  const rand = mulberry32(seed);
-  // Pre-roll so u/v loops stay deterministic regardless of call order.
-  const jitter = new Float32Array(w * h);
-  for (let i = 0; i < jitter.length; i++) jitter[i] = rand();
   let p = 0;
   for (let y = 0; y < h; y++) {
     const v = y / (h - 1);
     for (let x = 0; x < w; x++, p++) {
       // Wrap u so the texture has no visible seam at the date line.
       const u = x / w;
-      const [r, g, b] = fn(u, v, () => jitter[p]);
+      const [r, g, b] = fn(u, v);
       const o = p * 4;
       img.data[o] = r;
       img.data[o + 1] = g;
@@ -52,7 +48,8 @@ function paintCanvas(w: number, h: number, seed: number, fn: PixelFn): HTMLCanva
   return canvas;
 }
 
-/** Smooth grid noise with seamless horizontal wrapping. */
+/** Smooth grid noise with seamless horizontal wrapping. Built ONCE per
+ *  (seed, cells) — the returned sampler is cheap; never rebuild per pixel. */
 function makeNoise2D(seed: number, cells: number): (u: number, v: number) => number {
   const rand = mulberry32(seed);
   const perm = new Float32Array(cells * cells);
@@ -79,17 +76,25 @@ function makeNoise2D(seed: number, cells: number): (u: number, v: number) => num
   };
 }
 
-/** Fractal Brownian motion from stacked noise octaves (doubling wrap cells). */
-function fbm(seed: number, u: number, v: number, octaves: number): number {
-  let sum = 0;
+/**
+ * Fractal Brownian motion with prebuilt octave tables. Build once per
+ * texture, sample per pixel — the previous per-pixel rebuild cost ~650M ops
+ * across the planet set (≈9 s of boot on software GL, noticeable everywhere).
+ */
+function makeFbm(seed: number, octaves: number): (u: number, v: number) => number {
+  const layers: Array<{ noise: (u: number, v: number) => number; amp: number }> = [];
   let amp = 0.5;
   let cells = 4;
   for (let o = 0; o < octaves; o++) {
-    sum += amp * makeNoise2D(seed + o * 101, cells)(u, v);
+    layers.push({ noise: makeNoise2D(seed + o * 101, cells), amp });
     amp *= 0.5;
     cells *= 2;
   }
-  return sum;
+  return (u: number, v: number) => {
+    let sum = 0;
+    for (const layer of layers) sum += layer.amp * layer.noise(u, v);
+    return sum;
+  };
 }
 
 function toTex(canvas: HTMLCanvasElement): THREE.CanvasTexture {
@@ -112,9 +117,11 @@ export interface PlanetTextureSet {
 }
 
 function rocky(base: [number, number, number], dark: [number, number, number], seed: number): PixelFn {
+  const base_ = makeFbm(seed, 4);
+  const blotch_ = makeFbm(seed + 7, 3);
   return (u, v) => {
-    const n = fbm(seed, u, v, 4);
-    const blotch = fbm(seed + 7, u * 2, v * 2, 3);
+    const n = base_(u, v);
+    const blotch = blotch_(u * 2, v * 2);
     const t = Math.min(1, Math.max(0, (n - 0.35) * 2.2 + (blotch - 0.5) * 0.5));
     // Sparse bright crater specks.
     const crater = blotch > 0.78 ? 26 : 0;
@@ -131,14 +138,16 @@ function gasGiant(
   seed: number,
   spot?: { u: number; v: number; r: number; color: [number, number, number] },
 ): PixelFn {
+  const warp_ = makeFbm(seed, 4);
+  const turb_ = makeFbm(seed + 31, 3);
   return (u, v) => {
-    const warp = (fbm(seed, u, v, 4) - 0.5) * 0.16;
+    const warp = (warp_(u, v) - 0.5) * 0.16;
     const bandPos = (v + warp) * bands.length;
     const i0 = Math.min(bands.length - 1, Math.max(0, Math.floor(bandPos)));
     const i1 = Math.min(bands.length - 1, i0 + 1);
     const f = bandPos - Math.floor(bandPos);
     const s = f * f * (3 - 2 * f);
-    const turbulence = (fbm(seed + 31, u * 3, v * 6, 3) - 0.5) * 22;
+    const turbulence = (turb_(u * 3, v * 6) - 0.5) * 22;
     let r = bands[i0][0] + (bands[i1][0] - bands[i0][0]) * s + turbulence;
     let g = bands[i0][1] + (bands[i1][1] - bands[i0][1]) * s + turbulence;
     let b = bands[i0][2] + (bands[i1][2] - bands[i0][2]) * s + turbulence;
@@ -170,19 +179,27 @@ export function buildPlanetTextures(): PlanetTextureSet {
     [216, 198, 160], [232, 218, 186], [206, 188, 150], [228, 214, 182],
     [212, 194, 156], [226, 212, 180],
   ];
+  // Noise tables are built once here, then sampled per pixel (never rebuilt).
+  const venusN = makeFbm(22, 4);
+  const earthLand = makeFbm(33, 5);
+  const earthDetail = makeFbm(77, 3);
+  const marsN = makeFbm(44, 4);
+  const uranusN = makeFbm(77, 3);
+  const neptuneN = makeFbm(88, 4);
+  const sunN = makeFbm(111, 4);
   return {
-    mercury: toTex(paintCanvas(W, H, 11, rocky([150, 138, 126], [88, 80, 74], 11))),
+    mercury: toTex(paintCanvas(W, H, rocky([150, 138, 126], [88, 80, 74], 11))),
     venus: toTex(
-      paintCanvas(W, H, 22, (u, v) => {
-        const n = fbm(22, u, v, 4);
+      paintCanvas(W, H, (u, v) => {
+        const n = venusN(u, v);
         const t = 200 + (n - 0.5) * 44;
         return [t, t * 0.82, t * 0.58];
       }),
     ),
     earth: toTex(
-      paintCanvas(W, H, 33, (u, v) => {
-        const land = fbm(33, u, v, 5);
-        const detail = fbm(77, u * 2, v * 2, 3);
+      paintCanvas(W, H, (u, v) => {
+        const land = earthLand(u, v);
+        const detail = earthDetail(u * 2, v * 2);
         const ice = Math.abs(v - 0.5) * 2; // 0 equator → 1 poles
         if (ice > 0.86 - detail * 0.06) return [235, 242, 248]; // ice caps
         if (land > 0.52) {
@@ -197,8 +214,8 @@ export function buildPlanetTextures(): PlanetTextureSet {
       }),
     ),
     mars: toTex(
-      paintCanvas(W, H, 44, (u, v) => {
-        const n = fbm(44, u, v, 4);
+      paintCanvas(W, H, (u, v) => {
+        const n = marsN(u, v);
         const t = 0.75 + n * 0.5;
         const ice = Math.abs(v - 0.5) * 2;
         if (ice > 0.93) return [238, 232, 226]; // polar cap
@@ -206,28 +223,28 @@ export function buildPlanetTextures(): PlanetTextureSet {
       }),
     ),
     jupiter: toTex(
-      paintCanvas(W, H, 55, gasGiant(jupiterBands, 55, { u: 0.68, v: 0.62, r: 0.09, color: [196, 92, 60] })),
+      paintCanvas(W, H, gasGiant(jupiterBands, 55, { u: 0.68, v: 0.62, r: 0.09, color: [196, 92, 60] })),
     ),
-    saturn: toTex(paintCanvas(W, H, 66, gasGiant(saturnBands, 66))),
+    saturn: toTex(paintCanvas(W, H, gasGiant(saturnBands, 66))),
     uranus: toTex(
-      paintCanvas(W, H, 77, (u, v) => {
-        const n = fbm(77, u, v, 3);
+      paintCanvas(W, H, (u, v) => {
+        const n = uranusN(u, v);
         const t = 0.92 + (n - 0.5) * 0.12;
         return [146 * t, 216 * t, 214 * t];
       }),
     ),
     neptune: toTex(
-      paintCanvas(W, H, 88, (u, v) => {
-        const n = fbm(88, u, v, 4);
+      paintCanvas(W, H, (u, v) => {
+        const n = neptuneN(u, v);
         const warp = (n - 0.5) * 0.1;
         const band = 0.9 + Math.sin((v + warp) * 18) * 0.08 + (n - 0.5) * 0.2;
         return [58 * band, 92 * band, 205 * band];
       }),
     ),
-    moon: toTex(paintCanvas(128, 64, 99, rocky([168, 168, 172], [110, 110, 116], 99))),
+    moon: toTex(paintCanvas(128, 64, rocky([168, 168, 172], [110, 110, 116], 99))),
     sun: toTex(
-      paintCanvas(W, H, 111, (u, v) => {
-        const granulation = fbm(111, u * 2, v * 2, 4);
+      paintCanvas(W, H, (u, v) => {
+        const granulation = sunN(u * 2, v * 2);
         const t = 0.85 + granulation * 0.3;
         return [255 * t, 178 * t, 92 * t];
       }),

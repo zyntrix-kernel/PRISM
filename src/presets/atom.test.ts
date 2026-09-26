@@ -13,6 +13,7 @@ function makeCtx(): BuilderCtx {
     world: new THREE.Group(),
     labelLayer: new THREE.Group(),
     glowTex: tex,
+    shakeCamera: () => {},
     nebulaTex: tex,
     planetTex: {} as PlanetTextureSet,
   };
@@ -66,5 +67,33 @@ describe('atom world integration', () => {
     const info = world.bodyInfo?.(e1.name) ?? '';
     expect(info).toContain('nm'); // emission recorded
     expect(world.bodyInfo?.(null)).toContain('nm'); // idle panel shows it too
+  });
+
+  it('detonates on core ram, then reforms the electron', () => {
+    const ctx = makeCtx();
+    const world: WorldAPI = buildAtom(ctx);
+    const electrons = world.grabbables.filter(
+      (o) => (o as THREE.Mesh).userData.orbitBody,
+    ) as THREE.Mesh[];
+    const e2 = electrons[1];
+    // Aim the grabbed electron at the nucleus through the real drag path
+    // (shell snapping keeps the body out — intent is read from the pointer).
+    e2.userData.grabbed = true;
+    let t = 0;
+    for (let i = 0; i < 30; i++) {
+      t += 1 / 60;
+      world.setOrbitFromPoint?.(e2, new THREE.Vector3(0.2, 0, 0.1));
+      world.update?.(1 / 60, t);
+    }
+    expect(e2.scale.x).toBeLessThan(0.1); // vaporized
+    expect(world.bodyInfo?.(e2.name)).toContain('CORE BREACH');
+    // Blast plays out (~2.6 s), then the electron reforms on its shell.
+    for (let i = 0; i < 200; i++) {
+      t += 1 / 60;
+      world.update?.(1 / 60, t);
+    }
+    expect(e2.scale.x).toBe(1);
+    expect(world.bodyInfo?.(e2.name)).not.toContain('CORE BREACH');
+    expect(e2.userData.grabbed).toBe(false); // hand-off released cleanly
   });
 });

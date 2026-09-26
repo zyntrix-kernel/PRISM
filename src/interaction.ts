@@ -70,6 +70,16 @@ export class InteractionController {
   private prevTwoHand = false;
   /** Self-tuning pinch thresholds for this user's hand and camera. */
   private readonly calibrator = new PinchCalibrator();
+  /** Last tracking timestamp: resumed streams prime without a fake jump. */
+  private lastTrackT = 0;
+  // Stable hand identity: MediaPipe reorders hands frame-to-frame, so blindly
+  // taking hands[0] teleports the pointer whenever hands cross or re-enter.
+  // Wrists are matched by least movement (with a stickiness margin), and a
+  // genuine jump (>0.25) snaps the pointer filter instead of streaking.
+  private primaryFirst = true;
+  private anchorA: { x: number; y: number } | null = null;
+  private anchorB: { x: number; y: number } | null = null;
+  private lastRaw: { x: number; y: number } | null = null;
 
   // Mouse fallback + camera-control state
   private mouseNdc: THREE.Vector2 | null = null;
@@ -108,7 +118,7 @@ export class InteractionController {
   cursorWorld: THREE.Vector3 | null = null;
   private readonly cursorWorldVec = new THREE.Vector3();
   private displayedHover: THREE.Mesh | null = null;
-  private hoverMiss = 0;
+  private hoverMissMs = 0;
   private lastSeenAt = 0;
   hoveredName: string | null = null;
   grabbedName: string | null = null;
@@ -237,6 +247,9 @@ export class InteractionController {
         case '+': case '=': prism.rig.dolly(0.9); break;
         case '-': case '_': prism.rig.dolly(1.1); break;
         case 'r': case 'R': prism.rig.resetToHome(); break;
+        case 'x': case 'X':
+          window.dispatchEvent(new CustomEvent('prism-reset-world'));
+          break;
         case 't': case 'T': prism.rig.setView('top'); break;
         case 'f': case 'F': prism.rig.setView('edge'); break;
         case 'v': case 'V': prism.rig.setView('overview'); break;
@@ -278,10 +291,14 @@ export class InteractionController {
     this.mouseClicked = false;
     this.spaceDown = false;
     this.displayedHover = null;
-    this.hoverMiss = 0;
+    this.hoverMissMs = 0;
     this.cursorWorld = null;
     this.activePointers.clear();
     this.pinchMode = false;
+    this.primaryFirst = true;
+    this.anchorA = null;
+    this.anchorB = null;
+    this.lastRaw = null;
     this.calibrator.reset();
   }
 
@@ -347,10 +364,12 @@ export class InteractionController {
       // Let stale per-hand state decay so re-entry starts clean.
       this.trackers[0].update(null, dtMs);
       this.trackers[1].update(null, dtMs);
+      // Tracking clock restarts on resume: no fake time jump into the latch.
+      this.lastTrackT = 0;
       // Coast: keep the last cursor/hover briefly instead of blinking out.
       if (performance.now() - this.lastSeenAt > PrismConfig.interaction.coastMs) {
-        this.hoverMiss = PrismConfig.interaction.hoverMissFrames;
-        this.applyHover(null);
+        this.hoverMissMs = PrismConfig.interaction.hoverClearMs;
+        this.applyHover(null, 0);
         this.prism.setCursor(null, 'hidden');
         this.cursorWorld = null;
       }
@@ -374,30 +393,98 @@ export class InteractionController {
 
   private updateFromHands(dt: number, dtMs: number, frame: HandFrame): void {
     const hands = frame.hands;
-    this.trackers[0].update(hands[0]?.landmarks ?? null, dtMs);
-    this.trackers[1].update(hands[1]?.landmarks ?? null, dtMs);
-    const primary = this.trackers[0];
-    this.gesture = primary.pose;
-    this.isPinching = primary.pinch.isPinching;
-    this.pinchValue = pinchRatio(hands[0].landmarks);
+    // Tracking-clock delta (NOT render dt): at 10 fps frames arrive 100 ms
+    // apart, and the pinch latch + pointer filter must see true time or
+    // slow cameras feel either twitchy or dead. Crucially, repeated polls
+    // of the SAME stale frame contribute ZERO (first sighting advances the
+    // clock; re-reads don't), so render rate never inflates tracking time.
+    // First frame after tracking loss primes with zero: no fake jump.
+    let trackDtMs = 0;
+    if (this.lastTrackT > 0 && frame.timestampMs > this.lastTrackT) {
+      trackDtMs = Math.min(frame.timestampMs - this.lastTrackT, 500);
+    }
+    this.lastTrackT = frame.timestampMs;
+
+    // Stable hand identity: MediaPipe reorders hands frame-to-frame, so
+    // blindly taking hands[0] teleports the pointer whenever hands cross,
+    // leave, or re-enter. Match by least wrist movement with a stickiness
+    // margin; a genuine jump snaps the filter instead of streaking.
+    const wrists = hands.map((h) => h.landmarks[0]);
+    const wristDist = (a: { x: number; y: number }, b: { x: number; y: number }): number =>
+      Math.hypot(a.x - b.x, a.y - b.y);
+    let primaryHand = hands[0];
+    let secondaryHand: (typeof hands)[number] | null = null;
+    if (hands.length > 1 && this.anchorA) {
+      const d0A = wristDist(wrists[0], this.anchorA);
+      const d1A = wristDist(wrists[1], this.anchorA);
+      const d0B = this.anchorB ? wristDist(wrists[0], this.anchorB) : 0;
+      const d1B = this.anchorB ? wristDist(wrists[1], this.anchorB) : 0;
+      const costX = d0A + d1B;
+      const costY = d1A + d0B;
+      // Hysteresis margin: keep the current assignment unless the swap is
+      // decisively better — kills flicker when wrists pass each other.
+      const takeX = this.primaryFirst ? costX <= costY + 0.04 : costX + 0.04 < costY;
+      primaryHand = takeX ? hands[0] : hands[1];
+      secondaryHand = takeX ? hands[1] : hands[0];
+      this.primaryFirst = takeX;
+    } else {
+      if (hands.length > 1) secondaryHand = hands[1];
+      this.primaryFirst = true;
+    }
+    const jumped = this.anchorA !== null && wristDist(primaryHand.landmarks[0], this.anchorA) > 0.25;
+    this.anchorA = { x: primaryHand.landmarks[0].x, y: primaryHand.landmarks[0].y };
+    this.anchorB = secondaryHand
+      ? { x: secondaryHand.landmarks[0].x, y: secondaryHand.landmarks[0].y }
+      : null;
+
+    this.trackers[0].update(primaryHand.landmarks, trackDtMs);
+    this.trackers[1].update(secondaryHand ? secondaryHand.landmarks : null, trackDtMs);
+    const prime = this.trackers[0];
+    this.gesture = prime.pose;
+    this.isPinching = prime.pinch.isPinching;
+    this.pinchValue = pinchRatio(primaryHand.landmarks);
     // Feed the self-calibration with clearly-open hands (never pinches).
     this.calibrator.observe(
       this.pinchValue,
-      primary.pose === 'POINT' || primary.pose === 'OPEN_PALM',
+      prime.pose === 'POINT' || prime.pose === 'OPEN_PALM',
     );
 
     // Smoothed pointer from the primary index fingertip.
-    const tip = hands[0].landmarks[INDEX_TIP];
+    const tip = primaryHand.landmarks[INDEX_TIP];
     const raw = this.toNdc(tip);
+    if (jumped) {
+      // True discontinuity (re-entry elsewhere): snap honestly. Slewing
+      // toward stale data is what "teleport streaks" are made of.
+      this.tmpNdcSample.x = raw.x;
+      this.tmpNdcSample.y = raw.y;
+      this.tmpNdcSample.z = 0;
+      this.pointerSmoother.reset(this.tmpNdcSample);
+      this.lastRaw = { x: raw.x, y: raw.y };
+    } else {
+      // Micro-deadzone: sub-pixel tremor never enters the filter. The bound
+      // (~1px) is far below deliberate motion, so precision work is untouched.
+      if (
+        this.lastRaw &&
+        Math.hypot(raw.x - this.lastRaw.x, raw.y - this.lastRaw.y) < 0.0015
+      ) {
+        raw.x = this.lastRaw.x;
+        raw.y = this.lastRaw.y;
+      }
+      this.lastRaw = { x: raw.x, y: raw.y };
+    }
     this.tmpNdcSample.x = raw.x;
     this.tmpNdcSample.y = raw.y;
     this.tmpNdcSample.z = 0;
-    this.pointerSmoother.update(this.tmpNdcSample, dt, this.tmpSmoothed);
+    // Tracking-clock step (NOT render dt): the One Euro filter's velocity
+    // estimate stays honest whether frames arrive at 10 Hz or 120 Hz.
+    const trackDtSec = Math.min(Math.max(trackDtMs / 1000, 1 / 240), 0.25);
+    this.pointerSmoother.update(this.tmpNdcSample, trackDtSec, this.tmpSmoothed);
     this.pointerNdc.set(this.tmpSmoothed.x, this.tmpSmoothed.y);
 
     // Two-hand transform takes precedence over single-hand dragging.
-    const bothPinching = primary.pinch.isPinching && this.trackers[1].pinch.isPinching && hands.length > 1;
-    if (bothPinching) {
+    const bothPinching =
+      prime.pinch.isPinching && this.trackers[1].pinch.isPinching && secondaryHand !== null;
+    if (bothPinching && secondaryHand) {
       // Fresh baseline on entry: stale ratios from a previous gesture would
       // otherwise teleport the world scale on the first frame.
       if (!this.prevTwoHand) {
@@ -405,11 +492,14 @@ export class InteractionController {
         this.lastAngleDelta = 0;
       }
       this.prevTwoHand = true;
-      const delta = this.twoHand.update(pinchPoint2D(hands[0].landmarks), pinchPoint2D(hands[1].landmarks));
+      const delta = this.twoHand.update(
+        pinchPoint2D(primaryHand.landmarks),
+        pinchPoint2D(secondaryHand.landmarks),
+      );
       this.twoHandActive = true;
       if (delta) this.applyTwoHandDelta(delta.scaleRatio, delta.angleDelta);
       if (this.grabbed) this.release(); // two-hand mode owns the world, not an orb
-      this.applyHover(null);
+      this.applyHover(null, dtMs);
       this.updateCursor();
       return;
     }
@@ -422,14 +512,14 @@ export class InteractionController {
 
     // Rising edge: grab whatever is hovered.
     const hovered = this.pick();
-    if (primary.pinch.isPinching) {
+    if (prime.pinch.isPinching) {
       if (!this.grabbed && hovered) this.grab(hovered);
       if (this.grabbed) this.drag(dt);
     } else if (this.grabbed) {
       this.release();
     }
 
-    this.applyHover(hovered);
+    this.applyHover(hovered, dtMs);
     this.grabbedName = this.grabbed?.name ?? null;
     this.lastSeenAt = performance.now();
     this.updateCursor();
@@ -447,7 +537,7 @@ export class InteractionController {
       this.isPinching = false;
       this.prevTwoHand = false;
       if (this.grabbed) this.release();
-      this.applyHover(null);
+      this.applyHover(null, dt * 1000);
       this.lastSeenAt = performance.now();
       this.updateCursor();
       this.prevMouseDown = this.mouseDown;
@@ -474,7 +564,7 @@ export class InteractionController {
     if (!pinching && this.grabbed) this.release();
     this.prevMouseDown = this.mouseDown;
 
-    this.applyHover(hovered);
+    this.applyHover(hovered, dt * 1000);
     this.grabbedName = this.grabbed?.name ?? null;
     this.lastSeenAt = performance.now();
     this.updateCursor();
@@ -511,17 +601,21 @@ export class InteractionController {
 
   /**
    * Hover with flicker guard: highlights switch instantly, but clearing
-   * waits out a few missed frames so edge-grazing never strobes.
+   * waits out a time window (not frames) so edge-grazing never strobes at
+   * any render rate.
    */
-  private applyHover(candidate: THREE.Mesh | null): void {
+  private applyHover(candidate: THREE.Mesh | null, dtMs: number): void {
     const target = this.grabbed ?? candidate;
     if (target) {
-      this.hoverMiss = 0;
+      this.hoverMissMs = 0;
       this.displayedHover = target;
       this.prism.setHover(target);
-    } else if (++this.hoverMiss >= PrismConfig.interaction.hoverMissFrames) {
-      this.displayedHover = null;
-      this.prism.setHover(null);
+    } else {
+      this.hoverMissMs += dtMs;
+      if (this.hoverMissMs >= PrismConfig.interaction.hoverClearMs) {
+        this.displayedHover = null;
+        this.prism.setHover(null);
+      }
     }
     this.hoveredName = this.displayedHover?.name ?? null;
   }

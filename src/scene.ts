@@ -91,6 +91,19 @@ export class CameraRig {
     }
   }
 
+  /** Impact shake 0..1 (decays exponentially, squared falloff settles soft). */
+  private trauma = 0;
+  /** Accessibility gate: reduced-motion users get a whisper of shake. */
+  shakeScale = 1;
+
+  addShake(amount: number): void {
+    this.trauma = Math.min(1, this.trauma + Math.max(0, amount));
+  }
+
+  get traumaLevel(): number {
+    return this.trauma;
+  }
+
   update(dt: number, camera: THREE.PerspectiveCamera): void {
     if (this.autoRotate) this.yaw += dt * PrismConfig.cameraRig.autoRotateSpeed;
     const cp = Math.cos(this.pitch);
@@ -99,6 +112,14 @@ export class CameraRig {
       this.target.y + this.distance * Math.sin(this.pitch),
       this.target.z + this.distance * cp * Math.cos(this.yaw),
     );
+    if (this.trauma > 0) {
+      const s = this.trauma * this.trauma * 0.4 * this.shakeScale;
+      camera.position.x += (Math.random() - 0.5) * 2 * s;
+      camera.position.y += (Math.random() - 0.5) * 2 * s;
+      camera.position.z += (Math.random() - 0.5) * 2 * s;
+      this.trauma *= Math.exp(-dt * 2.2);
+      if (this.trauma <= 0.003) this.trauma = 0;
+    }
     camera.lookAt(this.target);
   }
 }
@@ -118,8 +139,8 @@ export class PrismScene {
   private readonly cursorMat: THREE.MeshBasicMaterial;
   private readonly cursorRing: THREE.Mesh;
   private readonly cursorRingMat: THREE.MeshBasicMaterial;
-  private readonly ringCyan = new THREE.Color(0x00f0ff);
-  private readonly ringMagenta = new THREE.Color(0xff5ce1);
+  private readonly ringCyan = new THREE.Color(0x9adcff);
+  private readonly ringMagenta = new THREE.Color(0xffa8d8);
   private readonly rayLine: THREE.Line;
   private readonly rayPositions: Float32Array;
   private readonly nebula: THREE.Mesh;
@@ -139,6 +160,12 @@ export class PrismScene {
     this.renderer.toneMappingExposure = 1.1;
     this.applyPixelRatio();
     container.appendChild(this.renderer.domElement);
+    // Screen readers get a labeled image role instead of a silent canvas.
+    this.renderer.domElement.setAttribute('role', 'img');
+    this.renderer.domElement.setAttribute(
+      'aria-label',
+      'Interactive 3D scene. Move the mouse to point, hold to grab, or enable the camera for hand control. Press H for all controls.',
+    );
 
     this.scene.background = new THREE.Color(0x04060d);
     this.scene.fog = new THREE.Fog(0x04060d, 20, 70);
@@ -170,7 +197,7 @@ export class PrismScene {
     this.scene.add(this.nebula);
 
     // Hand cursor + pointer ray.
-    this.cursorMat = new THREE.MeshBasicMaterial({ color: 0x00f0ff, transparent: true, opacity: 0.95 });
+    this.cursorMat = new THREE.MeshBasicMaterial({ color: 0x9adcff, transparent: true, opacity: 0.95 });
     this.cursor = new THREE.Mesh(new THREE.OctahedronGeometry(0.09), this.cursorMat);
     this.cursor.visible = false;
     this.scene.add(this.cursor);
@@ -178,7 +205,7 @@ export class PrismScene {
     // Pinch progress ring: wide/faint when open, cinching onto the cursor
     // as the pinch closes. Billboards toward the camera every frame.
     this.cursorRingMat = new THREE.MeshBasicMaterial({
-      color: 0x00f0ff,
+      color: 0x9adcff,
       transparent: true,
       opacity: 0.25,
       side: THREE.DoubleSide,
@@ -194,7 +221,7 @@ export class PrismScene {
     rayGeo.setAttribute('position', new THREE.BufferAttribute(this.rayPositions, 3));
     this.rayLine = new THREE.Line(
       rayGeo,
-      new THREE.LineBasicMaterial({ color: 0x00f0ff, transparent: true, opacity: 0.35 }),
+      new THREE.LineBasicMaterial({ color: 0x9adcff, transparent: true, opacity: 0.35 }),
     );
     this.rayLine.visible = false;
     this.rayLine.frustumCulled = false;
@@ -259,7 +286,14 @@ export class PrismScene {
     this.world.rotation.set(0, 0, 0);
     this.world.position.set(0, 0, 0);
     const builder = BUILDERS[id];
-    this.api = builder({ world: this.world, labelLayer: this.labelLayer, glowTex: this.glowTex, nebulaTex: this.nebulaTex, planetTex: this.planetTex });
+    this.api = builder({
+      world: this.world,
+      labelLayer: this.labelLayer,
+      glowTex: this.glowTex,
+      nebulaTex: this.nebulaTex,
+      planetTex: this.planetTex,
+      shakeCamera: (amount: number) => this.shakeCamera(amount),
+    });
     const bg = this.api.background;
     if (bg === 'nebula') {
       this.scene.background = null;
@@ -280,6 +314,11 @@ export class PrismScene {
 
   bodyInfo(name: string | null): string | null {
     return this.api?.bodyInfo?.(name) ?? null;
+  }
+
+  /** Rattle the camera (impacts, detonations). Worlds call, rig owns decay. */
+  shakeCamera(amount: number): void {
+    this.rig.addShake(amount);
   }
 
   // ---- quality ----------------------------------------------------------
@@ -378,11 +417,11 @@ export class PrismScene {
     this.cursorRingMat.opacity = 0.22 + 0.68 * c;
     this.cursorRingMat.color.copy(this.ringCyan).lerp(this.ringMagenta, c);
     const colors: Record<CursorMode, number> = {
-      hidden: 0x00f0ff,
-      point: 0x00f0ff,
-      hover: 0x7cff6b,
-      pinch: 0xff5ce1,
-      grab: 0xffb347,
+      hidden: 0x9adcff,
+      point: 0x9adcff,
+      hover: 0xa8ffc9,
+      pinch: 0xffa8d8,
+      grab: 0xffd2a8,
     };
     this.cursorMat.color.setHex(colors[mode]);
     (this.rayLine.material as THREE.LineBasicMaterial).color.setHex(colors[mode]);

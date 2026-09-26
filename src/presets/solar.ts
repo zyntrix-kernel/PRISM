@@ -5,6 +5,7 @@
 import * as THREE from 'three';
 import { buildBlackHole, type BlackHole } from './blackhole';
 import { MAX_ORBIT_RADIUS, MIN_ORBIT_RADIUS, OrbitingDebris, OrbitSystem, TIME_DAYS_PER_SECOND } from './orbits';
+import { ParticlePool } from './particles';
 import { disposeGroup, type BuilderCtx, type WorldAPI } from './types';
 import { makeLabel } from './labels';
 
@@ -69,7 +70,7 @@ function makeAtmosphere(size: number, color: number): THREE.Mesh {
 }
 
 export function buildSolar(ctx: BuilderCtx): WorldAPI {
-  const { world, labelLayer } = ctx;
+  const { world, labelLayer, shakeCamera } = ctx;
   const grabbables: THREE.Object3D[] = [];
   const orbits = new OrbitSystem();
   const facts = new Map<string, string>();
@@ -203,6 +204,21 @@ export function buildSolar(ctx: BuilderCtx): WorldAPI {
   grid.position.y = -3;
   world.add(grid);
 
+  // Sun-crash kit: ramming a grabbed planet sunward (< 1.35 held 0.6 s)
+  // vaporizes it — flash, debris, shake, then it reforms at home.
+  const impactFlash = new THREE.Sprite(
+    new THREE.SpriteMaterial({
+      map: ctx.glowTex, color: 0xfff2c8, transparent: true, opacity: 0,
+      blending: THREE.AdditiveBlending, depthWrite: false,
+    }),
+  );
+  impactFlash.visible = false;
+  world.add(impactFlash);
+  let impactT = 1e9;
+  const impactDebris = new ParticlePool(160, 0xffb347, 0.09);
+  world.add(impactDebris.points);
+  const vaporized = new Map<THREE.Mesh, number>(); // planet → respawn countdown
+
   return {
     grabbables,
     background: 'nebula',
@@ -213,6 +229,62 @@ export function buildSolar(ctx: BuilderCtx): WorldAPI {
       sun.rotation.y += dt * 0.05;
       belt.update(dt);
       hole?.update(dt, elapsed);
+      impactDebris.update(dt);
+      // Sun dives: a grabbed planet pushed inside r 1.35 charges 0.6 s, then
+      // vaporizes (shrinks, flashes, scatters) and reforms at home in 4 s.
+      // Mercury's home (1.5) is safely outside the trigger zone.
+      for (const planet of orbits.bodies) {
+        const st = orbits.get(planet);
+        if (!st) continue;
+        const left = vaporized.get(planet);
+        if (left !== undefined) {
+          const rest = left - dt;
+          if (rest <= 0) {
+            vaporized.delete(planet);
+            st.radius = st.home.radius;
+            st.periodDays = st.home.periodDays;
+            planet.scale.setScalar(planet.userData.homeScale as number);
+          } else {
+            vaporized.set(planet, rest);
+          }
+          continue;
+        }
+        if (planet.userData.grabbed && st.radius < 1.35) {
+          const charge = (planet.userData.diveT as number | undefined ?? 0) + dt;
+          planet.userData.diveT = charge;
+          if (charge >= 0.6) {
+            planet.userData.diveT = 0;
+            planet.userData.homeScale = planet.scale.x;
+            planet.scale.setScalar(0.01);
+            planet.getWorldPosition(tmp);
+            impactFlash.position.copy(tmp);
+            impactFlash.visible = true;
+            impactT = 0;
+            for (let i = 0; i < 90; i++) {
+              const a = Math.random() * Math.PI * 2;
+              const sp = 2 + Math.random() * 4;
+              impactDebris.spawn(
+                tmp.x, tmp.y, tmp.z,
+                Math.cos(a) * sp, 1 + Math.random() * 2, Math.sin(a) * sp,
+              );
+            }
+            shakeCamera(0.5);
+            vaporized.set(planet, 4.0);
+          }
+        } else {
+          planet.userData.diveT = 0;
+        }
+      }
+      if (impactT < 1.0) {
+        impactT += dt;
+        const k = Math.min(1, impactT / 1.0);
+        impactFlash.visible = true;
+        (impactFlash.material as THREE.SpriteMaterial).opacity = 0.95 * (1 - k);
+        const sc = 1.5 + k * 5;
+        impactFlash.scale.set(sc, sc, 1);
+      } else {
+        impactFlash.visible = false;
+      }
       if (earth) {
         moonAngle += ((dt * TIME_DAYS_PER_SECOND * Math.PI * 2) / 27.3) % (Math.PI * 2);
         moon.position.set(
@@ -243,6 +315,10 @@ export function buildSolar(ctx: BuilderCtx): WorldAPI {
       if (!f) return null;
       const body = orbits.bodies.find((b) => b.name === name);
       if (body) {
+        if (vaporized.has(body)) {
+          const left = vaporized.get(body) ?? 0;
+          return `${name} — vaporized in the sun! Reforming in ${left.toFixed(1)} s…`;
+        }
         const s = orbits.get(body);
         if (s) return `${name} — ${f} · r ${s.radius.toFixed(2)} · year ${s.periodDays.toFixed(0)} d`;
       }

@@ -6,6 +6,7 @@
 import * as THREE from 'three';
 import { makeLabel } from './labels';
 import { OrbitSystem } from './orbits';
+import { ParticlePool } from './particles';
 import { disposeGroup, type BuilderCtx, type WorldAPI } from './types';
 
 export interface Shell {
@@ -51,7 +52,7 @@ export function photonColorName(nm: number): string {
 }
 
 export function buildAtom(ctx: BuilderCtx): WorldAPI {
-  const { world, labelLayer, glowTex } = ctx;
+  const { world, labelLayer, glowTex, shakeCamera } = ctx;
   const grabbables: THREE.Object3D[] = [];
   const orbits = new OrbitSystem();
   const facts = new Map<string, string>();
@@ -113,6 +114,7 @@ export function buildAtom(ctx: BuilderCtx): WorldAPI {
     const electron = new THREE.Mesh(electronGeo, mat);
     electron.name = `Electron n=${shell.n}`;
     electron.userData.orbitBody = true;
+    electron.userData.homeShell = si;
     const angle = (si / SHELLS.length) * Math.PI * 2 + 0.4;
     world.add(electron);
     grabbables.push(electron);
@@ -132,6 +134,26 @@ export function buildAtom(ctx: BuilderCtx): WorldAPI {
   world.add(flash);
   let flashT = 1e9;
 
+  // Core-breach kit: shockwave ring + debris burst. Dragging an electron
+  // into the nucleus (< 1.0) detonates it — flash, shake, scatter, reform.
+  const shock = new THREE.Mesh(
+    new THREE.RingGeometry(0.85, 1.0, 64),
+    new THREE.MeshBasicMaterial({
+      color: 0xffd9ec, transparent: true, opacity: 0,
+      blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide,
+    }),
+  );
+  shock.rotation.x = -Math.PI / 2;
+  shock.visible = false;
+  world.add(shock);
+  const debris = new ParticlePool(220, 0xffd9ec, 0.12);
+  world.add(debris.points);
+  let blast: { t: number; electron: THREE.Mesh } | null = null;
+  // Ram intent: shells snap the electron's orbit (min r 1.6), so "into the
+  // nucleus" can only be read from the POINTER, not the body. Dwell there.
+  let aimR = Number.POSITIVE_INFINITY;
+  let ramDwell = 0;
+
   const shellName = (mesh: THREE.Mesh): string => {
     const s = orbits.get(mesh);
     return s ? `n=${SHELLS[shellOfRadius(s.radius)].n}` : '';
@@ -144,11 +166,70 @@ export function buildAtom(ctx: BuilderCtx): WorldAPI {
     update(dt: number, elapsed: number): void {
       void elapsed;
       orbits.update(dt); // periods registered in seconds
+      // Core breach: a grabbed electron aimed at the nucleus (< 1.0) and
+      // held 0.4 s detonates. Pointer-based: shell snapping keeps the body
+      // itself outside r 1.6, so the hand's intent is the only true signal.
+      const rammer = orbits.bodies.find((b) => b.userData.grabbed);
+      if (!blast) {
+        if (rammer && aimR < 1.0) {
+          ramDwell += dt;
+        } else {
+          ramDwell = 0;
+        }
+        if (rammer && ramDwell >= 0.4) {
+          const electron = rammer;
+          blast = { t: 0, electron };
+          electron.scale.setScalar(0.01); // vaporized (stays pickable-safe)
+          electron.userData.grabbed = false; // hand off: interaction releases clean
+          flashT = 1e9;
+          flash.visible = true;
+          flash.position.set(0, 0, 0);
+          shock.visible = true;
+          nucleus.visible = false;
+          for (let i = 0; i < 130; i++) {
+            const a = Math.random() * Math.PI * 2;
+            const sp = 2.5 + Math.random() * 4.5;
+            debris.spawn(
+              (Math.random() - 0.5) * 0.4, (Math.random() - 0.5) * 0.4, (Math.random() - 0.5) * 0.4,
+              Math.cos(a) * sp, 1.5 + Math.random() * 2.5, Math.sin(a) * sp,
+            );
+          }
+          shakeCamera(0.7);
+          lastEmission = 'CORE BREACH — atomic blast!';
+        }
+      } else {
+        blast.t += dt;
+        const t = blast.t;
+        const flashMat = flash.material as THREE.SpriteMaterial;
+        flashMat.opacity = Math.max(0, 1 - t / 1.2);
+        const fsc = 1 + t * 6;
+        flash.scale.set(fsc, fsc, 1);
+        const shockMat = shock.material as THREE.MeshBasicMaterial;
+        shockMat.opacity = Math.max(0, 0.9 * (1 - t / 1.4));
+        const ssc = 1 + t * 6.5;
+        shock.scale.set(ssc, ssc, 1);
+        if (t > 2.6) {
+          // Reform: electron back on its home shell, nucleus restored.
+          const s = orbits.get(blast.electron);
+          if (s) {
+            const hs = SHELLS[(blast.electron.userData.homeShell as number) ?? 0] ?? SHELLS[0];
+            s.radius = hs.radius;
+            s.periodDays = hs.period;
+          }
+          blast.electron.scale.setScalar(1);
+          nucleus.visible = true;
+          flash.visible = false;
+          shock.visible = false;
+          blast = null;
+        }
+      }
+      debris.update(dt);
       for (const electron of orbits.bodies) {
         electron.rotation.y += dt * 3;
         // Emission check: settled shell dropped below the last recorded one.
+        // Suppressed during a blast (chaos, not physics).
         const s = orbits.get(electron);
-        if (!s || electron.userData.grabbed) continue;
+        if (blast || !s || electron.userData.grabbed) continue;
         const now = shellOfRadius(s.radius);
         const prev = lastShell.get(electron) ?? now;
         if (now < prev) {
@@ -161,14 +242,14 @@ export function buildAtom(ctx: BuilderCtx): WorldAPI {
         }
         lastShell.set(electron, now);
       }
-      if (flashT < 0.8) {
+      if (!blast && flashT < 0.8) {
         flashT += dt;
         const k = Math.min(1, flashT / 0.8);
         flash.visible = true;
         (flash.material as THREE.SpriteMaterial).opacity = 0.9 * (1 - k);
         const sc = 0.6 + k * 2.4;
         flash.scale.set(sc, sc, 1);
-      } else {
+      } else if (!blast) {
         flash.visible = false;
       }
       nucleus.rotation.y += dt * 0.3;
@@ -180,6 +261,8 @@ export function buildAtom(ctx: BuilderCtx): WorldAPI {
     },
     setOrbitFromPoint(mesh: THREE.Mesh, localPoint: THREE.Vector3): void {
       // Magnetic shells: snap live to the nearest shell while dragging.
+      // The raw pointer radius feeds the core-breach ram detector.
+      aimR = Math.hypot(localPoint.x, localPoint.z);
       const s = orbits.get(mesh);
       if (!s) return;
       const snapped = SHELLS[shellOfRadius(Math.hypot(localPoint.x, localPoint.z))];
@@ -188,6 +271,7 @@ export function buildAtom(ctx: BuilderCtx): WorldAPI {
       s.periodDays = snapped.period;
     },
     bodyInfo(name: string | null): string | null {
+      if (blast) return 'CORE BREACH — atomic blast! Ram an electron home to rebuild.';
       if (!name) return lastEmission ? `Atom (Bohr model) · last event: ${lastEmission}` : null;
       const factsLine = facts.get(name);
       if (!factsLine) return null;

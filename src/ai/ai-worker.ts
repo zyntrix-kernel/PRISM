@@ -27,12 +27,31 @@ async function ensureLoaded(modelId: string): Promise<void> {
   if (loaded) return;
   if (!loading) {
     loading = (async () => {
-      const processor = await AutoProcessor.from_pretrained(modelId, {
-        progress_callback: (info: { status?: string; file?: string; progress?: number }) => {
-          if (info?.status === 'progress') {
-            post({ type: 'progress', file: info.file, progress: info.progress ?? 0 });
+      // Byte-aggregate progress across ALL files: per-file percentages lie
+      // (each file hits "100%" while gigabytes may remain). Unknown sizes
+      // fall back to file counting so the bar never stalls at a fake 100%.
+      const files = new Map<string, { loaded: number; total: number }>();
+      const report = (info: { status?: string; file?: string; progress?: number; loaded?: number; total?: number }): void => {
+        if (info?.status !== 'progress') return;
+        const name = info.file ?? 'model';
+        const total = Number(info.total) || 0;
+        const done = Number(info.loaded) || 0;
+        if (total > 0) {
+          files.set(name, { loaded: Math.min(done, total), total });
+          let sumL = 0;
+          let sumT = 0;
+          for (const f of files.values()) {
+            sumL += f.loaded;
+            sumT += f.total;
           }
-        },
+          post({ type: 'progress', file: name, progress: sumT > 0 ? sumL / sumT : 0 });
+        } else {
+          const raw = Number(info.progress) || 0;
+          post({ type: 'progress', file: name, progress: raw > 1 ? raw / 100 : raw });
+        }
+      };
+      const processor = await AutoProcessor.from_pretrained(modelId, {
+        progress_callback: report,
       });
       const fast = {
         device: 'webgpu',
@@ -44,7 +63,7 @@ async function ensureLoaded(modelId: string): Promise<void> {
       } as const;
       let model;
       try {
-        model = await AutoModelForImageTextToText.from_pretrained(modelId, fast);
+        model = await AutoModelForImageTextToText.from_pretrained(modelId, { ...fast, progress_callback: report });
       } catch (err) {
         // Weak iGPUs / software GL (and some mobiles) lack fp16: retry fully
         // quantized rather than dying. Any other error still propagates.
@@ -52,6 +71,7 @@ async function ensureLoaded(modelId: string): Promise<void> {
         model = await AutoModelForImageTextToText.from_pretrained(modelId, {
           device: 'webgpu',
           dtype: 'q4',
+          progress_callback: report,
         });
       }
       loaded = { processor, model };

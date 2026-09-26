@@ -82,6 +82,8 @@ export class OrbitingDebris {
   readonly mesh: THREE.InstancedMesh;
   private readonly specs: DebrisSpec[] = [];
   private readonly dummy = new THREE.Object3D();
+  /** Spin multiplier (detonations spin the field up, then ease off). */
+  spinBoost = 1;
 
   constructor(
     count: number,
@@ -115,7 +117,7 @@ export class OrbitingDebris {
   update(dt: number): void {
     for (let i = 0; i < this.specs.length; i++) {
       const d = this.specs[i];
-      d.angle += d.speed * dt;
+      d.angle += d.speed * this.spinBoost * dt;
       this.dummy.position.set(
         Math.cos(d.angle) * d.radius,
         Math.sin(d.angle * 2 + i) * d.tilt,

@@ -75,35 +75,47 @@ export function classifyPose(landmarks: Landmark[]): PoseKind {
 }
 
 /**
- * Debounced pinch latch with hysteresis: enters on the strict threshold
- * after N consecutive frames, exits past the looser threshold after M
- * consecutive frames. Prevents grab flicker during noisy tracking.
+ * Time-based debounced pinch latch with hysteresis. Frame COUNT used to be
+ * the debounce unit, which made grabs rate-dependent (50 ms at 60 fps,
+ * 300 ms at 10 fps — and sub-frame taps vanished entirely on slow cameras).
+ * Now the latch needs BOTH a minimum frame count (noise rejection) AND a
+ * minimum held time (rate invariance), fed with tracking-clock deltas:
+ * identical feel from sluggish to high-speed cameras.
  */
 export class PinchState {
   private pinching = false;
-  private run = 0;
+  private runFrames = 0;
+  private runMs = 0;
 
-  update(rawPinch: boolean): boolean {
+  update(rawPinch: boolean, dtMs: number): boolean {
+    const cfg = PrismConfig.gestures;
+    const dt = Math.min(Math.max(0, dtMs), 250);
     if (!this.pinching) {
       if (rawPinch) {
-        this.run += 1;
-        if (this.run >= PrismConfig.gestures.pinchEnterFrames) {
+        this.runFrames += 1;
+        this.runMs += dt;
+        if (this.runFrames >= cfg.pinchMinFrames && this.runMs >= cfg.pinchEnterMs) {
           this.pinching = true;
-          this.run = 0;
+          this.runFrames = 0;
+          this.runMs = 0;
         }
       } else {
-        this.run = 0;
+        this.runFrames = 0;
+        this.runMs = 0;
       }
     } else {
       // While pinching, use the looser exit threshold via pinchRatio check
       // done by the caller: pass `stillPinching` computed with pinchExit.
       if (rawPinch) {
-        this.run = 0;
+        this.runFrames = 0;
+        this.runMs = 0;
       } else {
-        this.run += 1;
-        if (this.run >= PrismConfig.gestures.pinchExitFrames) {
+        this.runFrames += 1;
+        this.runMs += dt;
+        if (this.runFrames >= cfg.pinchMinFrames && this.runMs >= cfg.pinchExitMs) {
           this.pinching = false;
-          this.run = 0;
+          this.runFrames = 0;
+          this.runMs = 0;
         }
       }
     }
@@ -111,15 +123,16 @@ export class PinchState {
   }
 
   /** Convenience: feeds landmarks directly, applying the exit threshold while latched. */
-  updateFromLandmarks(landmarks: Landmark[]): boolean {
-    if (!this.pinching) return this.update(detectPinchRaw(landmarks));
+  updateFromLandmarks(landmarks: Landmark[], dtMs = 16.7): boolean {
+    if (!this.pinching) return this.update(detectPinchRaw(landmarks), dtMs);
     const stillPinching = pinchRatio(landmarks) <= PrismConfig.gestures.pinchExit;
-    return this.update(stillPinching);
+    return this.update(stillPinching, dtMs);
   }
 
   reset(): void {
     this.pinching = false;
-    this.run = 0;
+    this.runFrames = 0;
+    this.runMs = 0;
   }
 
   get isPinching(): boolean {
@@ -178,7 +191,7 @@ export class GestureTracker {  readonly pinch = new PinchState();
       this.pose = 'NONE';
       return;
     }
-    this.pinch.updateFromLandmarks(landmarks);
+    this.pinch.updateFromLandmarks(landmarks, dtMs);
     // A latched pinch overrides the raw pose so grab survives finger noise.
     this.pose = this.pinch.isPinching ? 'PINCH' : classifyPose(landmarks);
   }

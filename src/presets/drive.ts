@@ -303,6 +303,12 @@ export function buildDrive(ctx: BuilderCtx): WorldAPI {
     isEasyMode(): boolean {
       return easy;
     },
+    coachHint(): string | null {
+      if (!easy) return null; // base manual line covers gas/coast/brake
+      if (driving) return 'Autopilot flying — pinch to STOP';
+      if (selected) return 'Pin locked — pinch again to GO';
+      return 'Point at the ground, pinch to drop a pin';
+    },
     update(dt: number): void {
       // Sanitize: a NaN anywhere must degrade to a parked car, never poison
       // the simulation (NaN headings would silently strand every mesh).

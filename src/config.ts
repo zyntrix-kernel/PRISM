@@ -33,9 +33,11 @@ export const PrismConfig = {
     // the debug overlay for verification.
     pinchEnter: 0.22,
     pinchExit: 0.32,
-    // Consecutive-frame debounce guards against single-frame flicker.
-    pinchEnterFrames: 3,
-    pinchExitFrames: 3,
+    // Time-based debounce: minimum frames (noise rejection) AND minimum
+    // held time (rate invariance from 10 Hz to high-speed cameras).
+    pinchMinFrames: 2,
+    pinchEnterMs: 50,
+    pinchExitMs: 50,
     // A finger counts as extended when tip is clearly farther from the
     // wrist than its PIP joint.
     extendedRatio: 1.12,
@@ -43,10 +45,11 @@ export const PrismConfig = {
 
   interaction: {
     // One Euro adaptive pointer filter: heavy smoothing at rest (no jitter),
-    // wide open during fast motion (no lag).
-    pointerMinCutoff: 1.1,
-    pointerBeta: 0.03,
-    pointerDcutoff: 1.0,
+    // wide open during fast motion (no lag). Tuned for hand tremor: the
+    // rest cutoff sits below typical tremor energy, beta opens it fast.
+    pointerMinCutoff: 0.8,
+    pointerBeta: 0.045,
+    pointerDcutoff: 1.2,
     // Smoothing factor for grabbed-object motion (lower = floatier).
     grabSmoothing: 0.3,
     // Two-hand zoom sensitivity.
@@ -59,8 +62,8 @@ export const PrismConfig = {
     gridSnap: 0.6,
     // Grab assist: near-misses within this NDC radius snap to the body.
     hoverRadius: 0.07,
-    // Hover must miss this many consecutive frames before un-highlighting.
-    hoverMissFrames: 3,
+    // Hover must miss this long before un-highlighting (rate-independent).
+    hoverClearMs: 120,
     // After tracking loss, keep the cursor alive this long (ms) instead of
     // blinking out instantly.
     coastMs: 350,

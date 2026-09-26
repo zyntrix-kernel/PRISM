@@ -19,7 +19,7 @@ const MIDDLE_MCP: Landmark = { x: 0.5, y: 0.55, z: 0 };
 
 /** Builds 21 landmarks; default pose is a curled fist. */
 function makeHand(overrides: Partial<Record<number, Landmark>> = {}): Landmark[] {
-  const lm: Landmark[] = Array.from({ length: 21 }, (_, i) => ({ x: 0.5, y: 0.7, z: 0 }));
+  const lm: Landmark[] = Array.from({ length: 21 }, () => ({ x: 0.5, y: 0.7, z: 0 }));
   lm[0] = { ...WRIST };
   // Thumb (1-4): curled default
   lm[1] = { x: 0.46, y: 0.8, z: 0 };
@@ -112,20 +112,33 @@ describe('classifyPose', () => {
 });
 
 describe('PinchState', () => {
-  it('debounces entry over consecutive frames', () => {
+  // Time-based latch: minimum frames (noise rejection) AND minimum held
+  // time (rate invariance). Steps use exact ms to avoid float edge cases.
+  it('latches after minimum frames AND hold time', () => {
     const s = new PinchState();
-    expect(s.update(true)).toBe(false);
-    expect(s.update(true)).toBe(false);
-    expect(s.update(true)).toBe(true); // latched on 3rd frame
+    expect(s.update(true, 25)).toBe(false); // 1 frame: not yet
+    expect(s.update(true, 25)).toBe(true); // 2 frames, 50 ms: latched
   });
 
   it('resets the entry run on a gap frame', () => {
     const s = new PinchState();
-    expect(s.update(true)).toBe(false);
-    expect(s.update(false)).toBe(false);
-    expect(s.update(true)).toBe(false);
-    expect(s.update(true)).toBe(false);
-    expect(s.update(true)).toBe(true);
+    expect(s.update(true, 25)).toBe(false);
+    expect(s.update(false, 25)).toBe(false);
+    expect(s.update(true, 25)).toBe(false);
+    expect(s.update(true, 25)).toBe(true);
+  });
+
+  it('latches within 2 frames at slow tracking rates too (rate invariance)', () => {
+    const s = new PinchState();
+    expect(s.update(true, 100)).toBe(false); // 10 fps: first frame
+    expect(s.update(true, 100)).toBe(true); // 200 ms held: latched
+  });
+
+  it('ignores a lone slow spike (frame-count floor holds)', () => {
+    const s = new PinchState();
+    expect(s.update(true, 200)).toBe(false); // 200 ms but a single frame
+    expect(s.update(false, 200)).toBe(false);
+    expect(s.isPinching).toBe(false);
   });
 
   it('uses hysteresis: holds between enter and exit thresholds', () => {
@@ -142,20 +155,20 @@ describe('PinchState', () => {
     expect(pinchRatio(middle)).toBeGreaterThan(PrismConfig.gestures.pinchEnter);
     expect(pinchRatio(middle)).toBeLessThan(PrismConfig.gestures.pinchExit);
 
-    for (let i = 0; i < 3; i++) s.updateFromLandmarks(pinched);
+    for (let i = 0; i < 2; i++) s.updateFromLandmarks(pinched, 25);
     expect(s.isPinching).toBe(true);
-    s.updateFromLandmarks(middle); // single mid-zone frame must not release
+    s.updateFromLandmarks(middle, 25); // single mid-zone frame must not release
     expect(s.isPinching).toBe(true);
   });
 
   it('releases after sustained exit-threshold frames', () => {
     const s = new PinchState();
     const wide = openPalm();
-    for (let i = 0; i < 3; i++) s.update(true);
+    for (let i = 0; i < 2; i++) s.update(true, 25);
     expect(s.isPinching).toBe(true);
-    for (let i = 0; i < 2; i++) s.updateFromLandmarks(wide);
+    s.updateFromLandmarks(wide, 25);
     expect(s.isPinching).toBe(true);
-    s.updateFromLandmarks(wide);
+    s.updateFromLandmarks(wide, 25);
     expect(s.isPinching).toBe(false);
   });
 });
@@ -167,7 +180,7 @@ describe('GestureTracker', () => {
       4: { x: 0.45, y: 0.5, z: 0 },
       8: { x: 0.47, y: 0.5, z: 0 },
     });
-    for (let i = 0; i < 3; i++) t.update(pinched, 16);
+    for (let i = 0; i < 2; i++) t.update(pinched, 25);
     expect(t.pose).toBe('PINCH');
     t.update(null, 16);
     expect(t.pose).toBe('NONE');

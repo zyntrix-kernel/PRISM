@@ -35,6 +35,8 @@ export interface BuilderCtx {
   glowTex: THREE.Texture;
   nebulaTex: THREE.Texture;
   planetTex: PlanetTextureSet;
+  /** Rattle the camera (impacts, detonations). Worlds call, rig owns decay. */
+  shakeCamera: (amount: number) => void;
 }
 
 export interface WorldAPI {
@@ -73,6 +75,10 @@ export interface WorldAPI {
   selectBlock?(index: number): void;
   cycleBlock?(dir: 1 | -1): void;
   selectedBlock?(): { index: number; name: string; color: string };
+  /** Optional: preset-specific coach line (drive easy mode); null hides. */
+  coachHint?(): string | null;
+  /** Optional: rattle the camera (impacts, detonations). */
+  shakeCamera?(amount: number): void;
   /** Dispose per-world geometries/materials (never shared ctx textures). */
   dispose(): void;
 }

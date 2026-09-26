@@ -8,6 +8,7 @@ import { detectDevice } from './device';
 import { InteractionController } from './interaction';
 import { PRESET_LABELS, PRESET_ORDER, type PresetId } from './presets/types';
 import { AiObserver, captureVideoFrame } from './ai/observer';
+import { baseCoachHint } from './coach';
 import { PerfGovernor } from './perf';
 import { PrismScene } from './scene';
 import { drawLandmarkOverlay, HandTracker } from './tracking';
@@ -33,6 +34,13 @@ async function main(): Promise<void> {
   const easyBtn = document.getElementById('btn-easy') as HTMLButtonElement;
   const aiBtn = document.getElementById('btn-ai') as HTMLButtonElement;
   const paletteEl = document.getElementById('voxel-palette') as HTMLElement;
+  const coachEl = document.getElementById('coach') as HTMLElement;
+  const railEls = {
+    cam: document.querySelector('#rail-cam'),
+    hands: document.querySelector('#rail-hands'),
+    gesture: document.querySelector('#rail-gesture'),
+    fps: document.querySelector('#rail-fps'),
+  } as Record<'cam' | 'hands' | 'gesture' | 'fps', HTMLElement | null>;
 
   /** Steering response curve: center deadzone, full lock before the edge. */
   const applySteerCurve = (nx: number): number => {
@@ -69,6 +77,8 @@ async function main(): Promise<void> {
 
   const scene = new PrismScene(container, resolveQuality(), initialPreset);
   const interaction = new InteractionController(scene);
+  // Reduced-motion users get a whisper of impact shake instead of the quake.
+  scene.rig.shakeScale = device.prefersReducedMotion ? 0.15 : 1;
   // FPS governor: steps quality down only while 'auto' is selected.
   const governor = new PerfGovernor(resolveQuality(), (tier) => {
     scene.applyQuality(tier);
@@ -101,6 +111,8 @@ async function main(): Promise<void> {
   };
   presetSel.addEventListener('change', () => loadPreset(presetSel.value as PresetId));
   window.addEventListener('prism-preset', (e) => loadPreset((e as CustomEvent<PresetId>).detail));
+  // X key: rebuild the current world fresh (the only scene reset).
+  window.addEventListener('prism-reset-world', () => loadPreset(scene.currentPreset));
 
   const syncEasyLabel = (): void => {
     const w = scene.currentWorld;
@@ -182,28 +194,48 @@ async function main(): Promise<void> {
   let cameraHandle: CameraHandle | null = null;
   let cameraStarting = false;
 
-  const enableCamera = async (): Promise<void> => {
-    if (cameraHandle || cameraStarting) return;
+  const enableCamera = async (): Promise<boolean> => {
+    if (cameraHandle) return true;
+    if (cameraStarting) return false;
     cameraStarting = true;
     cameraBtn.classList.add('active');
     cameraBtn.disabled = true; // busy state: double-taps can't stack requests
     try {
       setStatus('Requesting camera…');
       cameraHandle = await startCamera(video);
-      tracker.start(video);
-      setStatus(
-        `Tracking ${cameraHandle.width}×${cameraHandle.height} · point to move, pinch to grab.`,
-      );
+      video.classList.add('live');
+      return true;
     } catch (err) {
       setStatus(err instanceof Error ? err.message : String(err));
       cameraBtn.classList.remove('active');
+      video.classList.remove('live');
+      return false;
     } finally {
       cameraStarting = false;
       cameraBtn.disabled = false;
     }
   };
 
-  cameraBtn.addEventListener('click', () => void enableCamera());
+  // Model download starts only with a live feed: denied/unavailable cameras
+  // skip ~19 MB of wasm+model traffic entirely instead of failing slowly.
+  const ensureTracking = async (): Promise<void> => {
+    if (!cameraHandle || tracker.isReady) return;
+    await tracker.init(setStatus);
+    tracker.start(video);
+    const handle = cameraHandle;
+    setStatus(`Tracking ${handle.width}×${handle.height} · point to move, pinch to grab.`);
+  };
+
+  const bootVision = async (): Promise<void> => {
+    try {
+      if (await enableCamera()) await ensureTracking();
+    } catch (err) {
+      console.error('[PRISM] vision stack failed:', err);
+      setStatus(`Hand tracking unavailable (${describeMediaError(err)}). Mouse fallback active.`);
+    }
+  };
+
+  cameraBtn.addEventListener('click', () => void bootVision());
   qualitySel.addEventListener('change', () => {
     const q = resolveQuality();
     scene.applyQuality(q);
@@ -214,9 +246,60 @@ async function main(): Promise<void> {
   });
   window.addEventListener('keydown', (e) => {
     if (e.key === 'd' || e.key === 'D') debugBtn.classList.toggle('active', debug.toggle());
+    if (e.key === 'h' || e.key === 'H') helpCard.classList.toggle('hidden');
   });
   helpBtn.addEventListener('click', () => helpCard.classList.toggle('hidden'));
   helpClose.addEventListener('click', () => helpCard.classList.add('hidden'));
+  // First-run companion: three steps that tick off live as the user does
+  // them. Replaces the old auto-opened help wall — guidance, not homework.
+  const ONBOARD_KEY = 'prism:onboarded:v1';
+  let onboarded = true;
+  try {
+    onboarded = window.localStorage.getItem(ONBOARD_KEY) === '1';
+  } catch {
+    /* private mode / no storage: never auto-open */
+  }
+  const onboardEl = document.getElementById('onboard') as HTMLElement;
+  const onboardClose = document.getElementById('btn-onboard-close') as HTMLButtonElement;
+  const onboardHelp = document.getElementById('btn-onboard-help') as HTMLButtonElement;
+  const onboardCelebrate = onboardEl.querySelector('.celebrate');
+  const onboardStep = (name: string): Element | null => onboardEl.querySelector(`[data-step="${name}"]`);
+  let seenHand = false;
+  let didGrab = false;
+  let onboardCompleteAt = 0;
+  const dismissOnboard = (): void => {
+    onboardEl.classList.add('hidden');
+    try {
+      window.localStorage.setItem(ONBOARD_KEY, '1');
+    } catch {
+      /* ignore */
+    }
+  };
+  onboardClose.addEventListener('click', dismissOnboard);
+  onboardHelp.addEventListener('click', () => {
+    dismissOnboard();
+    helpCard.classList.remove('hidden');
+  });
+  if (!onboarded) onboardEl.classList.remove('hidden');
+  const setStepDone = (name: string, done: boolean): void => {
+    const el = onboardStep(name);
+    if (el && el.classList.contains('done') !== done) {
+      el.classList.toggle('done', done);
+    }
+  };
+  const updateOnboard = (now: number, hands: number, grabbed: string | null): void => {
+    if (onboardEl.classList.contains('hidden')) return;
+    seenHand = seenHand || hands > 0;
+    didGrab = didGrab || grabbed !== null;
+    setStepDone('camera', !!cameraHandle);
+    setStepDone('hand', seenHand);
+    setStepDone('grab', didGrab);
+    if (!onboardCompleteAt && cameraHandle && seenHand && didGrab) {
+      onboardCompleteAt = now;
+      onboardCelebrate?.classList.remove('hidden');
+    }
+    if (onboardCompleteAt && now - onboardCompleteAt > 2500) dismissOnboard();
+  };
 
   window.addEventListener('resize', () => {
     scene.resize(container.clientWidth, container.clientHeight);
@@ -232,12 +315,71 @@ async function main(): Promise<void> {
   let last = performance.now();
   let elapsed = 0;
   let renderFps = 60;
+  let lastUiAt = 0;
+  let lastCoachText = '\0'; // impossible sentinel: first hint always paints
   // Observer candidates only change on preset switch: never rebuild per frame.
   let cachedCandidates: string[] = [];
   let cachedCandidatePreset = '';
+  // Ambient UI: system rail + contextual coach at 4 Hz with
+  // change-detection (DOM writes only when text actually changes).
+  const setRail = (key: 'cam' | 'hands' | 'gesture' | 'fps', state: string, text: string): void => {
+    const item = railEls[key];
+    if (!item) return;
+    const dot = item.querySelector('.dot');
+    const txt = item.querySelector('.txt');
+    if (dot && dot.getAttribute('data-state') !== state) dot.setAttribute('data-state', state);
+    if (txt && txt.textContent !== text) txt.textContent = text;
+  };
+
+  const updateRailAndCoach = (now: number): void => {
+    const frame = tracker.getFrame();
+    const frameAge = frame ? now - frame.timestampMs : Number.POSITIVE_INFINITY;
+    if (!cameraHandle) {
+      setRail('cam', 'off', 'Camera off');
+    } else if (frameAge > 1500) {
+      setRail('cam', 'warn', 'Camera stalled');
+    } else {
+      setRail('cam', 'on', 'Camera live');
+    }
+    const nHands = frame?.hands.length ?? 0;
+    setRail('hands', nHands > 0 ? 'on' : 'off', nHands === 1 ? '1 hand' : `${nHands} hands`);
+    setRail(
+      'gesture',
+      interaction.mode === 'none' ? 'off' : 'on',
+      interaction.mode === 'none' ? '—' : interaction.gesture,
+    );
+    setRail('fps', renderFps >= 30 ? 'on' : 'warn', `${renderFps.toFixed(0)} fps`);
+
+    const hint =
+      scene.currentWorld?.coachHint?.() ??
+      baseCoachHint({
+        mode: interaction.mode,
+        gesture: interaction.gesture,
+        pinching: interaction.isPinching,
+        hovered: interaction.hoveredName,
+        grabbed: interaction.grabbedName,
+        twoHand: interaction.twoHandActive,
+        cameraOn: !!cameraHandle,
+        preset: scene.currentPreset,
+        touch: device.hasTouch,
+      });
+    const text = hint ?? '';
+    if (text !== lastCoachText) {
+      lastCoachText = text;
+      if (hint) {
+        coachEl.textContent = hint;
+        coachEl.classList.remove('hidden');
+      } else {
+        coachEl.classList.add('hidden');
+      }
+    }
+  };
+
   const tick = (now: number): void => {
     requestAnimationFrame(tick); // re-arm FIRST: one bad frame can never freeze the app
     try {
+      // Debug-gated diagnostics: no snapshot strings while the overlay hides.
+      const showDebug = debug.isVisible;
       const dt = Math.min(0.1, Math.max(1e-4, (now - last) / 1000));
       last = now;
       elapsed += dt;
@@ -276,6 +418,11 @@ async function main(): Promise<void> {
         interaction.actionReleased,
       );
       scene.update(dt, elapsed);
+      if (now - lastUiAt >= 250) {
+        lastUiAt = now;
+        updateRailAndCoach(now);
+        updateOnboard(now, frame?.hands.length ?? 0, interaction.grabbedName);
+      }
       if (overlayCtx) drawLandmarkOverlay(overlayCtx, frame);
       const info = scene.bodyInfo(interaction.grabbedName ?? interaction.hoveredName);
       if (info) {
@@ -290,14 +437,15 @@ async function main(): Promise<void> {
           renderFps,
           hands: frame?.hands.length ?? 0,
           confidence: frame?.hands[0]?.confidence ?? 0,
-          deviceLine: deviceLine(),
+          // Debug-only strings snapshot: skip the work entirely when hidden.
+          deviceLine: showDebug ? deviceLine() : '',
         },
         interaction,
         tracker,
         scene.drawCalls,
         scene.triangles,
         scene.grabbables.length,
-        observer.snapshot(),
+        showDebug ? observer.snapshot() : null,
       );
       scene.render();
     } catch (err) {
@@ -309,18 +457,9 @@ async function main(): Promise<void> {
   };
   requestAnimationFrame(tick);
 
-  // Load the vision stack in the background; mouse fallback works regardless.
-  setStatus('Loading hand-tracking model… (mouse works meanwhile)');
-  try {
-    await tracker.init(setStatus);
-    setStatus('Model ready. Enabling camera… (or use the mouse: move = point, hold = grab)');
-    await enableCamera();
-  } catch (err) {
-    console.error('[PRISM] vision stack failed:', err);
-    setStatus(
-      `Hand tracking unavailable (${describeMediaError(err)}). Mouse fallback active.`,
-    );
-  }
+  // Camera first, model second: the render loop is already running and the
+  // mouse works meanwhile; a dead camera skips the model download entirely.
+  void bootVision();
 }
 
 void main();

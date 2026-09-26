@@ -24,7 +24,8 @@ function formatAi(ai: ObserverSnapshot | null): string {
   if (!ai || ai.status === 'off') return 'AI off (AI button or ?ai=1)';
   if (ai.status === 'loading') {
     const pct = ai.progress !== null ? ` ${Math.round(ai.progress * 100)}%` : '';
-    return `AI loading model…${pct}`;
+    const elapsed = ai.loadElapsedMs !== null ? ` · ${Math.round(ai.loadElapsedMs / 1000)}s` : '';
+    return `AI loading model…${pct}${elapsed}`;
   }
   if (ai.status === 'no-camera') return 'AI idle · needs camera';
   if (ai.status === 'no-webgpu' || ai.status === 'error') {

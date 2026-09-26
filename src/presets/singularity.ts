@@ -13,7 +13,7 @@ const PROBES = [
 ];
 
 export function buildSingularity(ctx: BuilderCtx): WorldAPI {
-  const { world } = ctx;
+  const { world, glowTex, shakeCamera } = ctx;
   const grabbables: THREE.Object3D[] = [];
   const orbits = new OrbitSystem();
   const facts = new Map<string, string>();
@@ -36,6 +36,33 @@ export function buildSingularity(ctx: BuilderCtx): WorldAPI {
 
   const debris = new OrbitingDebris(500, 2.6, 7.2, 0.05, 0xd8a06a, 99);
   world.add(debris.mesh);
+
+  // Detonation kit: drag a grabbed probe inside r 2.6 and hold 0.5 s to
+  // push the hole EXTREME — disk flares, jets roar, debris spins up, probes
+  // fling outward while the world pulls back, then everything reforms.
+  const flash = new THREE.Sprite(
+    new THREE.SpriteMaterial({
+      map: glowTex, color: 0xfff2d8, transparent: true, opacity: 0,
+      blending: THREE.AdditiveBlending, depthWrite: false,
+    }),
+  );
+  flash.visible = false;
+  world.add(flash);
+  const shocks: THREE.Mesh[] = [];
+  for (let i = 0; i < 3; i++) {
+    const ring = new THREE.Mesh(
+      new THREE.RingGeometry(1.9, 2.05, 96),
+      new THREE.MeshBasicMaterial({
+        color: 0xffb37a, transparent: true, opacity: 0,
+        blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide,
+      }),
+    );
+    ring.rotation.x = -Math.PI / 2;
+    ring.visible = false;
+    world.add(ring);
+    shocks.push(ring);
+  }
+  let deto: { t: number } | null = null;
 
   const probeGeo = new THREE.SphereGeometry(0.14, 24, 18);
   PROBES.forEach((p, i) => {
@@ -60,6 +87,69 @@ export function buildSingularity(ctx: BuilderCtx): WorldAPI {
     background: 'nebula',
     view: { distance: 11, pitch: 0.5, yaw: 0.4 },
     update(dt: number, elapsed: number): void {
+      // Detonation trigger: grabbed probe held inside r 2.6 charges 0.5 s.
+      if (!deto) {
+        for (const probe of orbits.bodies) {
+          const s = orbits.get(probe);
+          if (!s) continue;
+          if (probe.userData.grabbed && s.radius < 2.6) {
+            const charge = ((probe.userData.diveT as number | undefined) ?? 0) + dt;
+            probe.userData.diveT = charge;
+            if (charge >= 0.5) {
+              probe.userData.diveT = 0;
+              deto = { t: 0 };
+              hole.setExtreme(true);
+              flash.visible = true;
+              for (const shock of shocks) shock.visible = true;
+              shakeCamera(0.8);
+            }
+          } else {
+            probe.userData.diveT = 0;
+          }
+        }
+      } else {
+        deto.t += dt;
+        const t = deto.t;
+        // Act 1 (0–2 s): spin up, fling probes, pull the world back.
+        // Act 2 (2–3.2 s): hold the wide shot, flash pulses.
+        // Act 3 (3.2–4.5 s): settle everything home.
+        const spin = t < 2 ? 1 + (t / 2) * 7 : t < 3.2 ? 8 : Math.max(1, 8 - (t - 3.2) * 5.4);
+        debris.spinBoost = spin;
+        const zoom = t < 2 ? 1 - (t / 2) * 0.45 : t < 3.2 ? 0.55 : 0.55 + ((t - 3.2) / 1.3) * 0.45;
+        world.scale.setScalar(zoom);
+        if (t < 2.5) {
+          for (const probe of orbits.bodies) {
+            const s = orbits.get(probe);
+            if (s) s.radius = Math.min(14, s.radius + dt * 3);
+          }
+        }
+        if (t > 3.2 && hole) hole.setExtreme(false);
+        (flash.material as THREE.SpriteMaterial).opacity = t < 2 ? 0.95 : Math.max(0, 0.95 * (1 - (t - 2) / 1.2));
+        const fsc = 3 + Math.sin(Math.min(t, 2) * 9) * 0.8 + t * 1.5;
+        flash.scale.set(fsc, fsc, 1);
+        shocks.forEach((shock, i) => {
+          const lt = t - i * 0.3;
+          const k = Math.min(Math.max(lt / 1.6, 0), 1);
+          const mat = shock.material as THREE.MeshBasicMaterial;
+          mat.opacity = 0.75 * (1 - k);
+          const sc = 1 + k * 9;
+          shock.scale.set(sc, sc, 1);
+          shock.visible = k < 1;
+        });
+        if (t >= 4.5) {
+          deto = null;
+          debris.spinBoost = 1;
+          world.scale.setScalar(1);
+          flash.visible = false;
+          for (const probe of orbits.bodies) {
+            const s = orbits.get(probe);
+            if (s) {
+              s.radius = s.home.radius;
+              s.periodDays = s.home.periodDays;
+            }
+          }
+        }
+      }
       hole.update(dt, elapsed);
       debris.update(dt);
       orbits.update(dt * 20); // probes run hot: 20 days/sec for visible motion
@@ -70,6 +160,7 @@ export function buildSingularity(ctx: BuilderCtx): WorldAPI {
       orbits.setFromPoint(mesh, localPoint, 2.4, 7.4);
     },
     bodyInfo(name: string | null): string | null {
+      if (deto) return 'SUPERMASSIVE DETONATION — the galaxy is coming apart!';
       if (!name) return null;
       const f = facts.get(name);
       if (!f) return null;

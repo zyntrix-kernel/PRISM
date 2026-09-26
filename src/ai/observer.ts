@@ -44,6 +44,8 @@ export interface ObserverSnapshot {
   status: ObserverStatus;
   /** 0..1 download progress while loading, else null. */
   progress: number | null;
+  /** ms since load started (loading state only), else null. */
+  loadElapsedMs: number | null;
   reading: ObserverReading | null;
   /** ms since the last accepted reading, else null. */
   ageMs: number | null;
@@ -125,6 +127,7 @@ export class AiObserver {
   private enabled = false;
   private status: ObserverStatus = 'off';
   private progress: number | null = null;
+  private loadStartAt = 0;
   private error: string | null = null;
   private reading: ObserverReading | null = null;
   private readingAt = 0;
@@ -164,6 +167,7 @@ export class AiObserver {
     }
     this.status = 'loading';
     this.progress = 0;
+    this.loadStartAt = performance.now();
     this.error = null;
     const worker = this.opts.createWorker();
     this.worker = worker;
@@ -202,6 +206,7 @@ export class AiObserver {
     return {
       status: this.status,
       progress: this.progress,
+      loadElapsedMs: this.status === 'loading' ? Math.max(0, performance.now() - this.loadStartAt) : null,
       reading: this.reading,
       ageMs: this.reading ? Math.max(0, performance.now() - this.readingAt) : null,
       error: this.error,

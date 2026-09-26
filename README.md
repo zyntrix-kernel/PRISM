@@ -79,7 +79,7 @@ Touch screens get two-finger pinch-zoom, larger controls, and a compact HUD.
 - **Grab assist** → near-misses within a small screen radius snap to the body
 - **Two-hand pinch** → hands apart/together zooms, twisting rotates the world (baseline re-captured on every entry — no scale jumps)
 - **Mouse** → full fallback (move = point, hold = grab, drag empty space = orbit camera)
-- **Camera** → drag empty space to orbit, wheel to zoom toward cursor, right-drag to pan; arrows orbit, `+`/`-` zoom, `R` reset view, `T` top, `F` edge, `V` overview, `O` auto-orbit
+- **Camera** → drag empty space to orbit, wheel to zoom toward cursor, right-drag to pan; arrows orbit, `+`/`-` zoom, `R` reset view, `X` reset world, `T` top, `F` edge, `V` overview, `O` auto-orbit, `H` help
 - **Drive preset** → pointer steers, analog pinch = gas pedal, release to coast, Space = brake; Easy mode (button or `E`): point + pinch drops a pin, pinch again sends the car, pinch once more stops it
 - **Presets** → keys `1`–`7` or the dropdown: Space / Block game / Test / Black hole / Drive / Atom / Voxel
 - **Voxel preset** → tap pinch = place block, hold pinch = break (sliding off cancels); palette buttons or `Q`/`E` pick blocks

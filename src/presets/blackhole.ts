@@ -16,6 +16,8 @@ export interface BlackHoleOpts {
 export interface BlackHole {
   group: THREE.Group;
   update(dt: number, elapsed: number): void;
+  /** EXTREME mode: spin up, brighten, flare jets (detonations). */
+  setExtreme(on: boolean): void;
 }
 
 const DISK_VERT = /* glsl */ `
@@ -32,6 +34,7 @@ const DISK_FRAG = /* glsl */ `
   uniform float uTime;
   uniform float uInner;
   uniform float uOuter;
+  uniform float uBoost;
 
   float hash(vec2 p) {
     return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
@@ -66,7 +69,7 @@ const DISK_FRAG = /* glsl */ `
     col += vec3(0.9, 0.85, 0.7) * pow(1.0 - smoothstep(0.0, 0.18, t), 2.0);
 
     float alpha = smoothstep(0.0, 0.06, t) * (1.0 - smoothstep(0.75, 1.0, t));
-    gl_FragColor = vec4(col * brightness * 1.7, alpha * 0.92);
+    gl_FragColor = vec4(col * brightness * 1.7 * uBoost, alpha * 0.92);
   }
 `;
 
@@ -91,6 +94,7 @@ export function buildBlackHole(opts: BlackHoleOpts, glowTex: THREE.Texture): Bla
       uTime: { value: Math.random() * 100 },
       uInner: { value: inner },
       uOuter: { value: outer },
+      uBoost: { value: 1 },
     },
     transparent: true,
     side: THREE.DoubleSide,
@@ -149,12 +153,20 @@ export function buildBlackHole(opts: BlackHoleOpts, glowTex: THREE.Texture): Bla
     }
   }
 
+  let extreme = false;
+
   return {
     group,
     update(dt: number, elapsed: number): void {
-      diskMat.uniforms.uTime.value += dt * (opts.diskSpeed ?? 1);
-      jetMat.opacity = 0.11 + 0.05 * Math.sin(elapsed * 2.3);
-      ring.rotation.z += dt * 0.4;
+      diskMat.uniforms.uTime.value += dt * (opts.diskSpeed ?? 1) * (extreme ? 6 : 1);
+      diskMat.uniforms.uBoost.value += ((extreme ? 2.4 : 1) - diskMat.uniforms.uBoost.value) * Math.min(1, dt * 3);
+      jetMat.opacity = (extreme ? 0.34 : 0.11) + 0.05 * Math.sin(elapsed * (extreme ? 9 : 2.3));
+      ring.rotation.z += dt * (extreme ? 2.5 : 0.4);
+      const ringS = extreme ? 1.35 : 1;
+      ring.scale.setScalar(ringS + Math.sin(elapsed * 6) * (extreme ? 0.08 : 0));
+    },
+    setExtreme(on: boolean): void {
+      extreme = on;
     },
   };
 }

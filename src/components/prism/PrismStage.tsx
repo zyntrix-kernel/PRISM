@@ -9,6 +9,7 @@ import PresetTransitionOverlay from "./PresetTransitionOverlay";
 import InputModeIndicator from "./InputModeIndicator";
 import PrismToast from "./PrismToast";
 import ParallaxDepthLayer from "./ParallaxDepthLayer";
+import SettingsPanel from "./SettingsPanel";
 import {
   Camera,
   Eye,
@@ -237,37 +238,10 @@ export default function PrismStage() {
             aria-label="Toggle easy point-and-go driving"
           />
 
-          {/* Quality control */}
-          <div style={{ position: "relative" }}>
-            <button
-              type="button"
-              className={quality !== "auto" ? "active" : ""}
-              onClick={() => setPaletteOpen((v) => !v)}
-              aria-label="Render quality"
-              aria-expanded={paletteOpen}
-              style={{ display: "flex", alignItems: "center", gap: 7 }}
-            >
-              <Gauge size={13} />
-              <span style={{ textTransform: "capitalize" }}>{quality}</span>
-              <ChevronRight
-                size={13}
-                style={{
-                  transform: paletteOpen ? "rotate(90deg)" : "rotate(0deg)",
-                  transition: "transform 140ms cubic-bezier(0.2,0,0,1)",
-                }}
-              />
-            </button>
-            {paletteOpen && (
-              <QualityMenu
-                current={quality}
-                onPick={(q) => {
-                  app?.setQuality(q);
-                  setPaletteOpen(false);
-                }}
-                onClose={() => setPaletteOpen(false)}
-              />
-            )}
-          </div>
+          {/* Settings gear — opens drawer with Debug/AI/Quality/Easy */}
+          <SettingsPanel state={state} app={app} />
+
+          {/* Hidden native engine buttons (kept for keyboard-shortcut compat) */}
           <select
             id="prism-sel-quality"
             ref={setEl("qualitySel") as React.RefObject<HTMLSelectElement>}
@@ -282,7 +256,6 @@ export default function PrismStage() {
             <option value="low">Low</option>
             <option value="auto">Auto</option>
           </select>
-
           <button
             id="prism-btn-debug"
             type="button"
@@ -290,8 +263,8 @@ export default function PrismStage() {
             title="Toggle debug overlay (D)"
             aria-label="Toggle debug overlay"
             className={state?.debugVisible ? "active" : ""}
+            style={{ position: "absolute", opacity: 0, pointerEvents: "none", width: 1, height: 1 }}
           >
-            <Bug size={13} style={{ display: "inline", verticalAlign: "-2px", marginRight: 5 }} />
             Debug
           </button>
           <button
@@ -301,8 +274,8 @@ export default function PrismStage() {
             title="AI observer: watches the camera with FastVLM (off by default)"
             aria-label="Toggle AI observer"
             className={state?.aiEnabled ? "active" : ""}
+            style={{ position: "absolute", opacity: 0, pointerEvents: "none", width: 1, height: 1 }}
           >
-            <Sparkles size={13} style={{ display: "inline", verticalAlign: "-2px", marginRight: 5 }} />
             AI
           </button>
           <button

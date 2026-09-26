@@ -541,3 +541,109 @@ For client-only data that needs setState after mount, use
 callback satisfies the rule. Never call `setState` synchronously in an
 effect body. For SSR-safe random data: `useState<T|null>(null)` + generate
 in effect + gate render on `if (!data) return null`.
+
+---
+Task ID: 6
+Agent: webDevReview (cron round 5)
+Task: Fix shortcuts cutoff, build settings panel, declutter HUD
+
+## 1. Current Project Status Assessment
+
+PRISM (Next.js 16 + Three.js + MediaPipe) is stable after rounds 0-5.
+Dev server runs on port 3000, HTTP 200, ~96ms. All features functional:
+command palette, preset transitions, input mode indicator, toasts, parallax
+stars, shortcut legend, webcam placeholder, onboarding progress bar.
+ESLint clean, no hydration mismatch (server 0 stars / client 36 stars).
+
+**QA performed via agent-browser + VLM (fresh browser session):**
+- Page loads HTTP 200, 3D scene renders
+- All features verified working
+- **VLM-surfaced issues:**
+  1. Shortcuts chip text cut off ("hortcuts" — missing "S")
+  2. HUD too dense (7 buttons: camera, preset, quality, debug, AI, help, ⌘K)
+  3. Bottom-center cluster (InputModeIndicator + coach) felt disconnected
+     (later VLM confirmed it's actually cohesive/connected)
+
+**Work focus selected:** Fix the shortcuts cutoff (quick win) + build a
+Settings panel to consolidate Debug/AI/Quality into a drawer (declutters
+HUD from 7 → 5 visible buttons). Both address real VLM-found issues.
+
+## 2. Completed Modifications + Verification
+
+**Bug fixes:**
+- **Shortcuts chip text cutoff**: Added `whiteSpace: "nowrap"` + `flex:
+  "none"` to both the icon and text span in the ShortcutLegend trigger
+  button. Text now renders fully as "Shortcuts" (verified via
+  `textContent`). (ShortcutLegend.tsx)
+
+**New features:**
+- **SettingsPanel** (SettingsPanel.tsx): A dreamy glass drawer that slides
+  in from the right with a spring entrance. Consolidates:
+  - Render Quality: 5 tier cards (Auto/Ultra/High/Medium/Low) with icons
+    + descriptions + active checkmarks
+  - Diagnostics & AI: tactile toggle switches for Debug overlay + AI
+    observer (animated knob slide, glow when active)
+  - Drive: Easy mode toggle (only shown for drive preset)
+  - Footer with keyboard shortcut hints (Esc/D/H)
+  - Backdrop blur, Esc to close, gear icon spins when active
+  - The native engine buttons (debug/ai/quality) remain hidden in the DOM
+    for keyboard-shortcut compatibility; the panel calls app methods directly.
+  (new file)
+
+**HUD decluttering:**
+- Replaced the visible Quality dropdown + Debug button + AI button (3
+  controls) with a single Settings gear button
+- HUD visible buttons reduced from 7 → 5: Enable camera, Preset, Settings,
+  Help, ⌘K
+- VLM rated HUD cleanliness 9/10: "significantly cleaner and less crowded"
+
+**Verification:**
+- ESLint: clean (0 errors)
+- Server HTML: 0 stars (no hydration mismatch)
+- Client DOM: 36 parallax stars render after mount
+- Settings drawer: opens via gear click, shows quality tiers (5 buttons),
+  toggle switches work (debug toggle verified: hidden→VISIBLE), quality
+  selection works (clicked High → quality=high), Escape closes drawer
+- Shortcuts chip: text "Shortcuts" renders fully (no cutoff)
+- All other features verified intact: command palette, preset switching,
+  input mode indicator, webcam placeholder, parallax stars, toasts
+- VLM: 9/10 cleanliness, "excellent use of whitespace, consistent styling"
+
+## 3. Unresolved Issues / Risks + Next-Phase Recommendations
+
+**Resolved this round:**
+- ✅ Shortcuts chip text cutoff → nowrap + flex:none
+- ✅ HUD too dense (7 buttons) → Settings panel consolidates to 5 visible
+- ✅ Debug/AI/Quality scattered → unified in a dreamy drawer with toggles
+
+**Still unresolved (from previous rounds):**
+- Camera + MediaPipe hand-tracking can't be tested in headless browser
+  (no device). Mouse fallback is the verified path.
+- AI observer (FastVLM) off by default; loads on opt-in (WebGPU + ~500MB).
+- Responsive CSS in place for ≤820px but headless browser can't resize.
+- Planet label overlap with the Sun (3D scene rendering issue — labels for
+  inner planets overlap the bright sun graphic). This is in the engine's
+  label rendering (presets/labels.ts) and needs a de-collision algorithm.
+- agent-browser console accumulates stale errors across HMR rebuilds.
+
+**Priority recommendations for next phase:**
+1. **Planet label de-collision**: Inner planet labels (Mercury/Venus/Earth/
+  Mars) overlap the sun when clustered. Add dynamic label de-collision or
+  fade labels near the sun in presets/labels.ts.
+2. **Compass styling**: The "N" compass indicator (3D scene element) floats
+  without a container — add a glass backing plate for polish.
+3. **Status text shortening**: VLM noted the status message is verbose.
+  Consider an icon + short state (e.g. mouse icon + "Fallback").
+4. **Performance monitoring widget**: Add a small FPS graph or perf history
+  visualization in the settings panel.
+5. **Sound design (optional)**: Subtle UI sounds for preset switch, grab,
+  release (off by default, toggle in settings).
+6. **Onboarding position**: Consider making the onboarding card collapsible
+  or repositioning on smaller screens.
+
+**Key learning for future rounds:**
+When consolidating engine-owned buttons into a React panel, keep the native
+button elements in the DOM (hidden via inline style: opacity:0, width:1,
+height:1, pointerEvents:none) so the engine's keyboard-shortcut handlers
+and class-toggle logic still work. The React panel calls the same app
+methods directly for click interactions.

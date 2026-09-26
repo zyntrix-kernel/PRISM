@@ -90,8 +90,10 @@ export default function ShortcutLegend({ onPickPreset }: Props) {
           (e.currentTarget as HTMLElement).style.borderColor = "var(--glass-line)";
         }}
       >
-        <Keyboard size={13} style={{ color: "var(--accent)" }} />
-        <span style={{ fontWeight: 500 }}>Shortcuts</span>
+        <Keyboard size={13} style={{ color: "var(--accent)", flex: "none" }} />
+        <span style={{ fontWeight: 500, whiteSpace: "nowrap", flex: "none" }}>
+          Shortcuts
+        </span>
       </button>
 
       {/* Expanded legend panel */}

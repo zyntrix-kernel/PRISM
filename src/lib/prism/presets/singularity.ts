@@ -88,6 +88,85 @@ export function buildSingularity(ctx: BuilderCtx): WorldAPI {
   let cinematicDist = 11;
   let cinematicActive = false;
 
+  // ── PARTICLE BURST SYSTEM ───────────────────────────────────────────
+  // A radial burst of ~400 particles that fires at the explosion climax.
+  // Each particle has a velocity + lifetime; they fade as they fly outward.
+  const BURST_COUNT = 400;
+  const burstPos = new Float32Array(BURST_COUNT * 3);
+  const burstCol = new Float32Array(BURST_COUNT * 3);
+  const burstVel: THREE.Vector3[] = [];
+  const burstLife = new Float32Array(BURST_COUNT);
+  for (let i = 0; i < BURST_COUNT; i++) {
+    burstVel.push(new THREE.Vector3());
+    burstLife[i] = 0;
+  }
+  const burstGeo = new THREE.BufferGeometry();
+  burstGeo.setAttribute('position', new THREE.BufferAttribute(burstPos, 3));
+  burstGeo.setAttribute('color', new THREE.BufferAttribute(burstCol, 3));
+  const burstMat = new THREE.PointsMaterial({
+    size: 0.15,
+    vertexColors: true,
+    transparent: true,
+    opacity: 0,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false,
+    sizeAttenuation: true,
+  });
+  const burst = new THREE.Points(burstGeo, burstMat);
+  burst.visible = false;
+  world.add(burst);
+
+  /** Fire the burst: give each particle a random radial velocity. */
+  const fireBurst = (): void => {
+    burst.visible = true;
+    burstMat.opacity = 1;
+    for (let i = 0; i < BURST_COUNT; i++) {
+      burstPos[i * 3] = 0;
+      burstPos[i * 3 + 1] = 0;
+      burstPos[i * 3 + 2] = 0;
+      // Random direction (uniform on a sphere)
+      const theta = Math.random() * Math.PI * 2;
+      const phi = Math.acos(2 * Math.random() - 1);
+      const speed = 8 + Math.random() * 12;
+      burstVel[i].set(
+        Math.sin(phi) * Math.cos(theta) * speed,
+        Math.cos(phi) * speed,
+        Math.sin(phi) * Math.sin(theta) * speed,
+      );
+      // Color: white-hot core fading to orange/pink
+      const heat = Math.random();
+      burstCol[i * 3] = 1;
+      burstCol[i * 3 + 1] = 0.6 + heat * 0.4;
+      burstCol[i * 3 + 2] = 0.3 + heat * 0.5;
+      burstLife[i] = 1;
+    }
+    burstGeo.attributes.position.needsUpdate = true;
+    burstGeo.attributes.color.needsUpdate = true;
+  };
+
+  /** Update the burst particles each frame. */
+  const updateBurst = (dt: number): void => {
+    if (!burst.visible) return;
+    let alive = 0;
+    for (let i = 0; i < BURST_COUNT; i++) {
+      if (burstLife[i] <= 0) continue;
+      burstLife[i] -= dt * 0.6;
+      if (burstLife[i] <= 0) {
+        burstPos[i * 3 + 1] = -999; // hide dead particles
+        continue;
+      }
+      alive++;
+      burstPos[i * 3] += burstVel[i].x * dt;
+      burstPos[i * 3 + 1] += burstVel[i].y * dt;
+      burstPos[i * 3 + 2] += burstVel[i].z * dt;
+      // Slow down slightly (drag)
+      burstVel[i].multiplyScalar(1 - dt * 0.5);
+    }
+    burstGeo.attributes.position.needsUpdate = true;
+    burstMat.opacity = alive > 0 ? Math.min(1, alive / 100) : 0;
+    if (alive === 0) burst.visible = false;
+  };
+
   const probeGeo = new THREE.SphereGeometry(0.14, 24, 18);
   PROBES.forEach((p, i) => {
     const mat = new THREE.MeshStandardMaterial({
@@ -182,16 +261,20 @@ export function buildSingularity(ctx: BuilderCtx): WorldAPI {
         // Act 4 (7.5-9.5s): push in as galaxy explodes (immersion)
         // Final (9.5s+): settle back to home
         if (t < 2) {
-          // Act 1: orbit + push in
+          // Act 1: orbit + push in + escalating tremors (destabilizing!)
           cinematicYaw += dt * 0.3;
           cinematicPitch = approach(cinematicPitch, 0.35, 1.5, dt);
           cinematicDist = approach(cinematicDist, 7, 2, dt);
+          // Escalating tremors: small shakes that get stronger
+          if (Math.sin(t * 12) > 0.9) shakeCamera(t * 0.15);
         } else if (t < 4.5) {
-          // Act 2: dramatic pull-back (the "oh no" moment)
+          // Act 2: dramatic pull-back (the "oh no" moment) + violent shaking
           const pullT = smooth((t - 2) / 2.5);
           cinematicYaw += dt * 0.5;
           cinematicDist = approach(cinematicDist, 7 + pullT * 10, 1.5, dt);
           cinematicPitch = approach(cinematicPitch, 0.6, 1, dt);
+          // Violent shakes during the pull-back (the hole is tearing apart)
+          if (Math.sin(t * 20) > 0.7) shakeCamera(0.3 + pullT * 0.4);
         } else if (t < 7.5) {
           // Act 3: hold wide, slow drift (galaxy reveal awe)
           cinematicYaw += dt * 0.12;
@@ -286,6 +369,8 @@ export function buildSingularity(ctx: BuilderCtx): WorldAPI {
           }
           if (galaState === 'exploding') {
             const expT = t - 7.5;
+            // Fire the particle burst at the exact explosion moment
+            if (expT > 0 && expT < 0.05 && !burst.visible) fireBurst();
             // Explosive expansion (accelerating outward)
             const s = 20 * (1 + expT * expT * 1.2);
             galaxy.scale.setScalar(s);
@@ -322,6 +407,7 @@ export function buildSingularity(ctx: BuilderCtx): WorldAPI {
       }
       hole.update(dt, elapsed);
       debris.update(dt);
+      updateBurst(dt);
       orbits.update(dt * 20); // probes run hot: 20 days/sec for visible motion
       for (const probe of orbits.bodies) probe.rotation.y += dt;
     },

@@ -1237,3 +1237,106 @@ values each frame. Use smoothstep (`t*t*(3-2*t)`) for all transitions —
 it's the cheapest "buttery" easing (no allocations, just math). For
 frame-rate-independent camera moves, use exponential approach:
 `current + (target - current) * (1 - Math.exp(-rate * dt))`.
+
+---
+Task ID: 13
+Agent: main (user request)
+Task: Rebuild blackhole Three.js model with motion design + dramatic detonation
+
+## 1. Current Project Status Assessment
+
+PRISM (Next.js 16 + Three.js + MediaPipe) is stable. The previous round added
+a detonation trigger (button/B/cmd palette) but the user reported "the detonate
+animation doesn't look like it's detonating." The blackhole model was static —
+only the disk brightness changed, not the hole itself.
+
+**User request:** "THe detonate animation doesnot looks likes it detonating
+YK WHAT REBUILD EVERY THREE JS MODEL TO BE MOTION DESIGNS WITH INTERACTIVE
+BODIES"
+
+**Work focus:** Rebuild the blackhole builder so the hole ITSELF visibly
+destabilizes (grows, pulses, warps), add a particle burst system for the
+explosion, and add escalating camera tremors during the destabilizing phase.
+
+## 2. Completed Modifications + Verification
+
+**Rebuilt blackhole builder (blackhole.ts):**
+Complete rewrite with dramatic motion-design effects:
+- **Hole grows + pulses**: The event horizon mesh itself scales up (1→1.4)
+  and pulses (sin wave at 8-20Hz) during extreme mode. This is the KEY
+  visual — the hole is visibly destabilizing, not just the disk.
+- **Disk vertex warp**: New `uWarp` uniform + vertex shader that buckles the
+  disk geometry (`pos.z += warpAmt * r`) during extreme mode. The disk
+  physically distorts, not just brightens.
+- **Disk fragment shader**: Now shifts hotter (more blue-white) during
+  extreme mode, with a wider super-heated rim. Accelerated swirl (5x speed).
+- **Jets flare**: Jets grow 1.5x longer + 0.8x wider. Jet tip glows grow
+  from 2x to 6x horizon radius. Opacity ramps from 0.14 → 0.49.
+- **Smooth extremeLevel**: Instead of binary on/off, a smoothly-approached
+  0→1 value (`extremeLevel += (target - extremeLevel) * dt * 2.5`) drives
+  ALL visual changes. Butter-smooth transitions, no popping.
+- **Photon ring**: Spins 7.5x faster, scales 1.5x, brightens during extreme.
+- **Halo glow**: Grows from 8x to 14x horizon radius.
+
+**New particle burst system (singularity.ts):**
+- 400-particle radial burst system with per-particle velocity + lifetime
+- Fires at the exact explosion moment (t=7.5s)
+- Each particle gets a random spherical direction + speed (8-20 units/s)
+- White-hot to orange/pink color gradient
+- Drag-based deceleration + fade-out
+- Additive blending for dreamy glow
+
+**Enhanced detonation sequence (singularity.ts):**
+- **Escalating tremors** (Act 1, 0-2s): Small camera shakes that get
+  stronger over time (`shakeCamera(t * 0.15)` at sin peaks)
+- **Violent shaking** (Act 2, 2-4.5s): Stronger shakes during the pull-back
+  (`shakeCamera(0.3 + pullT * 0.4)`) — the hole is tearing apart
+- **Particle burst** fires at the explosion climax
+- Updated `updateBurst(dt)` called every frame
+
+**Verification:**
+- ESLint: clean (0 errors)
+- VLM destabilization: 9/10 — "catastrophic unbinding event... blinding
+  white-yellow flare... brilliant over-exposed column of light... warped
+  geometry... the disk is buckling"
+- VLM explosion: 8/10 — "radial spray of glowing particles... intense
+  white light source... galaxy is exploding outward"
+- The hole ITSELF now visibly grows/pulses (not just the disk)
+- The disk physically warps (vertex shader displacement)
+- 400 particles burst radially at the explosion climax
+- Camera shakes escalate during the destabilizing phase
+
+## 3. Unresolved Issues / Risks + Next-Phase Recommendations
+
+**Resolved this round:**
+- ✅ Detonation didn't look like detonating → hole grows/pulses, disk warps,
+  jets flare, particle burst, escalating tremors
+- ✅ Static blackhole model → motion-design with smooth extremeLevel
+  transitions driving all visual properties
+
+**Still unresolved:**
+- Camera + MediaPipe hand-tracking can't be tested in headless browser.
+- Other presets (atom, drive) haven't been rebuilt with motion design yet.
+- AI observer (FastVLM) off by default; loads on opt-in.
+
+**Priority recommendations for next phase:**
+1. **Rebuild other presets with motion design**: Apply the same motion-design
+  approach to the atom preset (electrons should orbit with visible trails,
+  photon emission should flash), drive preset (car should lean into turns,
+  tire smoke), and solar system (planets should have atmospheric glow).
+2. **Sound design**: Add Web Audio API sounds for detonation, explosion,
+  particle burst, preset switch (off by default, toggle in settings).
+3. **Post-processing**: Chromatic aberration / vignette during explosion.
+4. **Gravitational lensing shader**: Distort background stars near the hole.
+5. **Replay button**: After the sequence ends, show a "Replay" toast.
+6. **Slow-mo toggle**: Slow time during detonation for dramatic effect.
+
+**Key learning:**
+For "motion design with interactive bodies," the key is making the body
+ITSELF respond to state changes — not just lighting/material tweaks. The
+blackhole now scales (grows), pulses (sin wave), warps (vertex displacement),
+and flares (jets/glow) all driven by a single smooth `extremeLevel` value
+(0→1). This is frame-rate-independent (`extremeLevel += (target - current)
+* dt * rate`) and produces butter-smooth transitions. For particle bursts,
+use a BufferGeometry with per-particle velocity arrays updated on the CPU —
+400 particles is cheap and looks dramatic with additive blending.

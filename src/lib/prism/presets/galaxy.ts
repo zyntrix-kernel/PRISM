@@ -30,7 +30,7 @@ export function buildGalaxy(quality: string) {
   geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
 
   const mat = new THREE.PointsMaterial({
-    size: quality === 'ultra' ? 0.04 : quality === 'high' ? 0.06 : 0.1,
+    size: quality === 'ultra' ? 0.06 : quality === 'high' ? 0.1 : 0.15,
     vertexColors: true,
     transparent: true,
     opacity: 1.0,

@@ -15,9 +15,12 @@ export const PrismConfig = {
     wasmUrl: './wasm',
     cdnWasmUrl: 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@1.0.1/wasm',
     numHands: 2,
-    minHandDetectionConfidence: 0.5,
-    minHandPresenceConfidence: 0.5,
-    minTrackingConfidence: 0.5,
+    // LOWERED confidence thresholds for low-quality cameras. A 0.5 threshold
+    // drops frames on blurry/dark/slow feeds. 0.3 keeps marginal hands alive
+    // (the pinch latch + pointer filter handle the resulting noise).
+    minHandDetectionConfidence: 0.3,
+    minHandPresenceConfidence: 0.3,
+    minTrackingConfidence: 0.3,
   },
 
   camera: {
@@ -29,19 +32,24 @@ export const PrismConfig = {
     // Pinch thresholds are normalized by hand size (wrist->middle-MCP), so
     // they work for adults, children, and varying camera distances.
     //
-    // TUNED FOR FORGIVING + STICKY GRABS:
-    // - enter 0.30: fingers just need to be moderately close (not touching).
-    //   Easier to trigger, especially at camera angles where depth is unclear.
-    // - exit 0.48: wide hysteresis — once grabbed, small finger jitter won't
-    //   release. The user must clearly open their hand to let go.
-    // - minFrames 1 + enterMs 20: instant trigger (was 2 frames / 50ms — laggy).
-    // - exitMs 120: must hold open for 120ms to release (stickier, no flicker).
+    // TUNED FOR LOW-QUALITY CAMERAS (5-10 fps):
+    // - enter 0.38: VERY forgiving. Fingers just need to be somewhat close.
+    //   On a 10fps camera, the pinch frame might be the only one captured —
+    //   a tight threshold would miss it entirely.
+    // - exit 0.58: VERY sticky. Once grabbed, even large finger separation
+    //   won't release (slow cameras have jerky landmark data — a momentary
+    //   "open" reading shouldn't drop the grab).
+    // - minFrames 1 + enterMs 0: instant latch on the FIRST pinch frame.
+    //   On a slow camera, you can't afford to wait for a 2nd confirmation
+    //   frame — it might never come.
+    // - exitMs 200: must see "open" for 200ms sustained to release. This
+    //   filters out single-frame landmark glitches on slow cameras.
     // Live value shown in the debug overlay for verification.
-    pinchEnter: 0.30,
-    pinchExit: 0.48,
+    pinchEnter: 0.38,
+    pinchExit: 0.58,
     pinchMinFrames: 1,
-    pinchEnterMs: 20,
-    pinchExitMs: 120,
+    pinchEnterMs: 0,
+    pinchExitMs: 200,
     // A finger counts as extended when tip is clearly farther from the
     // wrist than its PIP joint.
     extendedRatio: 1.12,
@@ -82,8 +90,11 @@ export const PrismConfig = {
     // TAP DETECTION: a quick pinch (down + up within tapMaxMs) fires a
     // 'tap' action — separate from grab. This makes clicking UI / shooting
     // feel instant without needing to hold the pinch.
-    tapMaxMs: 350, // pinch must release within 350ms to count as a tap
-    tapMaxMove: 0.04, // pinch point can't drift more than 4% of screen
+    // On a slow 10fps camera, a "quick" pinch might span 300-500ms of wall
+    // time (even if the physical pinch was fast) because frames are sparse.
+    // tapMaxMs 600 + tapMaxMove 0.06 accommodate this.
+    tapMaxMs: 600, // pinch must release within 600ms to count as a tap
+    tapMaxMove: 0.06, // pinch point can drift up to 6% of screen (slow cam jitter)
   },
 
   cameraRig: {

@@ -298,6 +298,8 @@ export class InteractionController {
   onPresetChange(): void {
     this.release();
     this.twoHand.reset();
+    this.trackers[0].reset();
+    this.trackers[1].reset();
     this.twoHandActive = false;
     this.prevTwoHand = false;
     this.mouseDown = false;

@@ -166,17 +166,17 @@ export class PinchCalibrator {
   /** Feed the live ratio; only openly-open frames move the baseline. */
   observe(ratio: number, handIsOpen: boolean): void {
     if (!handIsOpen || !Number.isFinite(ratio) || ratio <= 0.3 || ratio >= 2.0) return;
-    this.baseline += (ratio - this.baseline) * 0.03;
+    this.baseline += (ratio - this.baseline) * 0.04;
     this.openSamples += 1;
     // Warmup: a stray frame must never yank the thresholds. Only publish
     // after enough open samples to trust the baseline.
-    // Reduced from 30 → 15 so calibration kicks in faster (the user was
-    // fighting uncalibrated thresholds for too long on first load).
-    if (this.openSamples < 15) return;
-    // Loosened clamps to match the forgiving pinchEnter/pinchExit defaults:
-    // enter can go up to 0.36 (very forgiving), exit up to 0.55 (very sticky).
-    const enter = clampNum(this.baseline * 0.40, 0.18, 0.36);
-    const exit = clampNum(this.baseline * 0.62, 0.32, 0.55);
+    // Reduced from 30 → 10 so calibration kicks in FAST on first load
+    // (critical for low-quality cameras where every frame counts).
+    if (this.openSamples < 10) return;
+    // WIDE clamps to match the very-forgiving pinchEnter/pinchExit defaults
+    // (tuned for low-quality cameras). enter up to 0.45, exit up to 0.65.
+    const enter = clampNum(this.baseline * 0.45, 0.25, 0.45);
+    const exit = clampNum(this.baseline * 0.68, 0.42, 0.65);
     const g = PrismConfig.gestures;
     if (Math.abs(g.pinchEnter - enter) > 0.004) g.pinchEnter = enter;
     if (Math.abs(g.pinchExit - exit) > 0.004) g.pinchExit = exit;
@@ -184,20 +184,51 @@ export class PinchCalibrator {
 }
 
 /** Per-hand gesture state: pose + debounced pinch. Point + pinch is the
- *  entire hand vocabulary — everything else was cut for determinism. */
-export class GestureTracker {  readonly pinch = new PinchState();
+ *  entire hand vocabulary — everything else was cut for determinism.
+ *
+ *  COAST: on a slow camera (5-10 fps), MediaPipe often loses the hand
+ *  entirely for 1-3 frames during a pinch (the hand shape changes as
+ *  fingers come together). Without a coast, this immediately drops the
+ *  grab. The coast keeps the last pinch state alive for COAST_MS, so
+ *  brief tracking gaps don't kill the interaction. */
+const PINCH_COAST_MS = 400; // keep pinch alive through 400ms of tracking loss
+
+export class GestureTracker {
+  readonly pinch = new PinchState();
   pose: PoseKind = 'NONE';
+  private lastLandmarkAt = 0;
+  private wasPinching = false;
 
   update(landmarks: Landmark[] | null, dtMs: number): void {
     void dtMs;
+    const now = typeof performance !== 'undefined' ? performance.now() : Date.now();
     if (!landmarks) {
-      this.pinch.reset();
-      this.pose = 'NONE';
+      // Tracking lost. COAST: if we were pinching recently, keep the pinch
+      // alive for PINCH_COAST_MS instead of immediately resetting. This is
+      // the #1 fix for slow cameras — they drop frames mid-pinch constantly.
+      if (this.wasPinching && now - this.lastLandmarkAt < PINCH_COAST_MS) {
+        // Keep the pinch latched; just don't update pose (no landmarks).
+        // The pose stays PINCH so the interaction system keeps the grab.
+        this.pose = 'PINCH';
+      } else {
+        this.pinch.reset();
+        this.wasPinching = false;
+        this.pose = 'NONE';
+      }
       return;
     }
+    this.lastLandmarkAt = now;
     this.pinch.updateFromLandmarks(landmarks, dtMs);
+    this.wasPinching = this.pinch.isPinching;
     // A latched pinch overrides the raw pose so grab survives finger noise.
     this.pose = this.pinch.isPinching ? 'PINCH' : classifyPose(landmarks);
+  }
+
+  reset(): void {
+    this.pinch.reset();
+    this.wasPinching = false;
+    this.lastLandmarkAt = 0;
+    this.pose = 'NONE';
   }
 }
 

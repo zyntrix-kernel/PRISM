@@ -192,15 +192,25 @@ export default function PrismStage() {
       <video id="prism-webcam" autoPlay playsInline muted ref={videoRef} aria-label="Webcam preview for hand tracking" />
       <canvas id="prism-landmark-overlay" ref={overlayRef} />
 
-      {/* Webcam off-state placeholder — invites camera enable, hides when live */}
+      {/* Webcam off-state placeholder — shows ZYNASH LABS logo, hides when live */}
       {!state?.cameraOn && (
         <div id="prism-webcam-frame" aria-hidden="true">
           <div className="prism-webcam-placeholder">
-            <div className="prism-wcam-icon">
-              <Camera size={18} />
-            </div>
-            <span>Camera off</span>
-            <span className="prism-wcam-hint">Enable for hand tracking</span>
+            <img
+              src="/zynash-logo.png"
+              alt="ZYNASH LABS"
+              className="prism-wcam-logo"
+              style={{
+                width: 72,
+                height: 72,
+                objectFit: "contain",
+                marginBottom: 4,
+                opacity: 0.9,
+                filter: "drop-shadow(0 0 12px rgba(125, 211, 252, 0.3))",
+              }}
+            />
+            <span className="prism-wcam-brand">ZYNASH LABS</span>
+            <span className="prism-wcam-hint">Enable camera for hand tracking</span>
           </div>
         </div>
       )}
@@ -585,6 +595,26 @@ export default function PrismStage() {
           <li><b>Hold</b> the pinch to break the block (highlight reddens) — sliding off cancels. Bedrock never breaks.</li>
           <li>Pick blocks from the palette below, or press <b>Q</b>/<b>E</b> to cycle.</li>
         </ul>
+        {/* Credits */}
+        <div className="prism-credits">
+          <div className="prism-credits-logo">
+            <img src="/zynash-logo.png" alt="ZYNASH LABS" style={{ width: 28, height: 28, objectFit: "contain" }} />
+            <span className="prism-credits-brand">ZYNASH LABS</span>
+          </div>
+          <p className="prism-credits-tagline">
+            PRISM — Projected Reality Interaction &amp; Spatial Manipulation
+          </p>
+          <div className="prism-credits-team">
+            <div className="prism-credit-row">
+              <span className="prism-credit-name">Tanay Bhandari</span>
+              <span className="prism-credit-handle">Zyntrix.krnl.sys</span>
+            </div>
+            <div className="prism-credit-row">
+              <span className="prism-credit-name">Ashwin Nagaranjan Ramnath</span>
+              <span className="prism-credit-handle">Ash Collector</span>
+            </div>
+          </div>
+        </div>
         <button id="prism-btn-help-close" type="button" ref={setEl("helpClose") as React.RefObject<HTMLButtonElement>}>
           Close
         </button>

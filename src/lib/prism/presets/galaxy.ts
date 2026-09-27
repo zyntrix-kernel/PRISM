@@ -1,11 +1,81 @@
 // GALAXY: Procedural barred-spiral galaxy for the Singularity cinematic.
-// Uses logarithmic spiral arms with differential rotation (inner particles
-// rotate faster). Spiral structure inspired by ggwzrd/threejs-galaxy (MIT).
-// Attribution: https://github.com/ggwzrd/threejs-galaxy
+// EXACT recreation of the ggwzrd/threejs-galaxy (MIT) look:
+// - 3 spiral arms (branches)
+// - Warm orange-red core (#ff6030) → cool deep blue edges (#1b3984)
+// - Soft circular points via pow(1 - dist, 3.0) fragment shader
+// - Per-particle aScale attribute for size variation
+// - Differential rotation in the vertex shader (inner particles spin faster)
+// - Powered randomness (randomnessPower = 3) so particles hug the arms
+// - Linear spin (spinAngle = radius * spin), not logarithmic
+//
+// Attribution: https://github.com/ggwzrd/threejs-galaxy (MIT)
 
 import * as THREE from 'three';
 
-/** Build a soft radial glow sprite texture for the galactic core. */
+// ── Parameters matching ggwzrd/threejs-galaxy ────────────────────────────
+const GALAXY_PARAMS = {
+  branches: 3,            // 3 spiral arms (ggwzrd default)
+  radius: 5,               // galaxy radius in local space
+  spin: 1,                 // arm winding (linear: spinAngle = radius * spin)
+  randomness: 0.2,         // base scatter amount
+  randomnessPower: 3,      // concentrate particles toward arms (pow exponent)
+  insideColor: 0xff6030,   // warm orange-red core
+  outsideColor: 0x1b3984,  // cool deep blue edges
+  uSize: 30,               // global point size multiplier (tuned for the shader)
+};
+
+// ── Vertex shader: differential rotation + size attenuation ──────────────
+const GALAXY_VERT = /* glsl */ `
+  attribute float aScale;
+  uniform float uSize;
+  uniform float uTime;
+  varying vec3 vColor;
+
+  void main() {
+    vec4 modelPosition = modelMatrix * vec4(position, 1.0);
+
+    // Differential rotation: inner particles spin faster (1/distance).
+    // This is the signature ggwzrd animation — the spiral arms visibly wind.
+    float angle = atan(modelPosition.x, modelPosition.z);
+    float distanceToCenter = length(modelPosition.xz);
+    float angleOffset = (1.0 / max(distanceToCenter, 0.1)) * uTime * 0.2;
+    angle += angleOffset;
+    modelPosition.x = cos(angle) * distanceToCenter;
+    modelPosition.z = sin(angle) * distanceToCenter;
+
+    vec4 viewPosition = viewMatrix * modelPosition;
+    vec4 projectedPosition = projectionMatrix * viewPosition;
+    gl_Position = projectedPosition;
+
+    // Size: per-particle scale × global size × distance attenuation
+    gl_PointSize = uSize * aScale;
+    gl_PointSize *= (1.0 / max(0.1, -viewPosition.z));
+
+    vColor = color;
+  }
+`;
+
+// ── Fragment shader: soft circular point with tight bright core ──────────
+// pow(strength, 3.0) gives the signature ggwzrd look: a tight bright dot
+// with a soft glowing halo around it (NOT a flat disc).
+const GALAXY_FRAG = /* glsl */ `
+  varying vec3 vColor;
+  uniform float uOpacity;
+
+  void main() {
+    // Distance from the center of the point sprite (0.5 = center)
+    float strength = distance(gl_PointCoord, vec2(0.5));
+    strength = 1.0 - strength;
+    // pow(3.0) = tight bright core, soft falloff. This is what makes the
+    // galaxy glow instead of looking like flat squares.
+    strength = pow(strength, 3.0);
+
+    vec3 color = mix(vec3(0.0), vColor, strength);
+    gl_FragColor = vec4(color, strength * uOpacity);
+  }
+`;
+
+/** Build a soft radial glow sprite texture for the galactic core glow. */
 function makeGlowTexture(inner: string, outer: string): THREE.CanvasTexture {
   const c = document.createElement('canvas');
   c.width = 128;
@@ -24,156 +94,110 @@ function makeGlowTexture(inner: string, outer: string): THREE.CanvasTexture {
   return tex;
 }
 
-/** Build a diffuse disc texture for the galactic dust cloud (Milky Way band).
- *  This is what makes the galaxy read as a glowing band at distance instead
- *  of a bunch of dimmed points. The texture is a soft radial gradient with
- *  a brighter bulge at the center. */
-function makeDustTexture(): THREE.CanvasTexture {
-  const c = document.createElement('canvas');
-  c.width = 256;
-  c.height = 256;
-  const ctx = c.getContext('2d');
-  if (ctx) {
-    // Base: transparent
-    ctx.clearRect(0, 0, 256, 256);
-    // Radial gradient: bright core → soft disk → faint halo
-    const g = ctx.createRadialGradient(128, 128, 4, 128, 128, 128);
-    g.addColorStop(0, 'rgba(220, 230, 255, 0.85)');
-    g.addColorStop(0.12, 'rgba(180, 200, 255, 0.55)');
-    g.addColorStop(0.3, 'rgba(140, 160, 230, 0.3)');
-    g.addColorStop(0.55, 'rgba(110, 120, 200, 0.15)');
-    g.addColorStop(0.8, 'rgba(90, 80, 160, 0.05)');
-    g.addColorStop(1, 'rgba(0, 0, 0, 0)');
-    ctx.fillStyle = g;
-    ctx.fillRect(0, 0, 256, 256);
-  }
-  const tex = new THREE.CanvasTexture(c);
-  tex.colorSpace = THREE.SRGBColorSpace;
-  return tex;
-}
-
 export function buildGalaxy(quality: string): THREE.Points {
-  const count = quality === 'ultra' ? 60_000 : quality === 'high' ? 25_000 : 8_000;
-  const arms = 4; // number of spiral arms
-  const armSpread = 0.5; // how wide each arm is
-  const spinFactor = 3.0; // how tightly wound the spiral is
+  // Particle counts — high enough for the dense "glowing band" look.
+  // ggwzrd uses 100k; we scale by quality.
+  const count = quality === 'ultra' ? 100_000 : quality === 'high' ? 50_000 : 20_000;
+
+  const { branches, radius, spin, randomness, randomnessPower, insideColor, outsideColor, uSize } = GALAXY_PARAMS;
 
   const geo = new THREE.BufferGeometry();
-  const pos = new Float32Array(count * 3);
-  const col = new Float32Array(count * 3);
+  const positions = new Float32Array(count * 3);
+  const colors = new Float32Array(count * 3);
+  const scales = new Float32Array(count); // per-particle size variation (ggwzrd aScale)
+
+  const inside = new THREE.Color(insideColor);
+  const outside = new THREE.Color(outsideColor);
 
   for (let i = 0; i < count; i++) {
-    // Distance from center (power distribution: more stars near center)
-    const r = Math.pow(Math.random(), 0.6) * 20;
+    // ── Distance from center: UNIFORM (not power-biased) — ggwzrd uses Math.random() * radius ──
+    const r = Math.random() * radius;
 
-    // Which spiral arm this particle belongs to
-    const armIndex = Math.floor(Math.random() * arms);
-    const armOffset = (armIndex / arms) * Math.PI * 2;
+    // ── Branch angle: which of the N arms this particle belongs to ──
+    const branchAngle = ((i % branches) / branches) * Math.PI * 2;
 
-    // Logarithmic spiral: angle increases with radius
-    const spiralAngle = Math.log(r + 1) * spinFactor + armOffset;
+    // ── Spin: LINEAR (spinAngle = radius * spin) — NOT logarithmic ──
+    const spinAngle = r * spin;
 
-    // Random scatter around the arm (thicker near center, thinner at edges)
-    const scatter = (Math.random() - 0.5) * armSpread * (1.0 + 3.0 / (r + 1));
-    const angle = spiralAngle + scatter;
+    // ── Randomness: POWERED so particles hug the arm (pow = concentrated) ──
+    // Most particles land close to the arm; few become halo stars.
+    // The sign is random (+/-), and the amount scales with radius.
+    const randomX = Math.pow(Math.random(), randomnessPower)
+      * (Math.random() < 0.5 ? 1 : -1) * randomness * r;
+    const randomY = Math.pow(Math.random(), randomnessPower)
+      * (Math.random() < 0.5 ? 1 : -1) * randomness * r;
+    const randomZ = Math.pow(Math.random(), randomnessPower)
+      * (Math.random() < 0.5 ? 1 : -1) * randomness * r;
 
-    // Vertical thickness (galaxy disk is thin, with a bulge at center)
-    const yScatter = (Math.random() - 0.5) * (0.3 + 2.0 / (r + 0.5));
+    // Position: arm center + spin, then scatter
+    positions[i * 3] = Math.cos(branchAngle + spinAngle) * r + randomX;
+    positions[i * 3 + 1] = randomY;
+    positions[i * 3 + 2] = Math.sin(branchAngle + spinAngle) * r + randomZ;
 
-    pos[i * 3] = Math.cos(angle) * r;
-    pos[i * 3 + 1] = yScatter;
-    pos[i * 3 + 2] = Math.sin(angle) * r;
+    // ── Color: warm interior → cool exterior (ggwzrd signature) ──
+    const mixed = inside.clone();
+    mixed.lerp(outside, r / radius);
+    colors[i * 3] = mixed.r;
+    colors[i * 3 + 1] = mixed.g;
+    colors[i * 3 + 2] = mixed.b;
 
-    // Color: hot blue-white core → warm yellow mid → cool red edges.
-    // BOOSTED brightness so stars stay visible at distance (was L 0.85/0.7/0.5/0.4).
-    const distNorm = r / 20;
-    const c = new THREE.Color();
-    if (distNorm < 0.2) {
-      c.setHSL(0.6, 0.5, 0.95); // blue-white core (brighter)
-    } else if (distNorm < 0.5) {
-      c.setHSL(0.12, 0.6, 0.85); // yellow-white (brighter)
-    } else if (distNorm < 0.8) {
-      c.setHSL(0.05, 0.7, 0.65); // orange (brighter)
-    } else {
-      c.setHSL(0.98, 0.5, 0.55); // red edges (brighter)
-    }
-    // Add some variation
-    c.offsetHSL((Math.random() - 0.5) * 0.05, 0, (Math.random() - 0.5) * 0.1);
-    col[i * 3] = c.r;
-    col[i * 3 + 1] = c.g;
-    col[i * 3 + 2] = c.b;
+    // ── Per-particle scale: random 0..1 (ggwzrd aScale) ──
+    scales[i] = Math.random();
   }
 
-  geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
-  geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
+  geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+  geo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+  geo.setAttribute('aScale', new THREE.BufferAttribute(scales, 1));
 
-  // NOTE: sizeAttenuation: false means particles stay a constant SCREEN size
-  // regardless of distance. This is the key fix — at camera distance 80 with
-  // galaxy scaled 81x, sizeAttenuation particles shrink to sub-pixel and the
-  // galaxy vanishes. With sizeAttenuation off, the stars stay visible as a
-  // Milky-Way-like band of points at any distance.
-  const mat = new THREE.PointsMaterial({
-    size: quality === 'ultra' ? 1.4 : quality === 'high' ? 1.8 : 2.2,
-    vertexColors: true,
+  const mat = new THREE.ShaderMaterial({
+    uniforms: {
+      uSize: { value: uSize },
+      uTime: { value: 0 },
+      uOpacity: { value: 1 },
+    },
+    vertexShader: GALAXY_VERT,
+    fragmentShader: GALAXY_FRAG,
     transparent: true,
-    opacity: 1.0,
     blending: THREE.AdditiveBlending,
     depthWrite: false,
-    sizeAttenuation: false, // ← key: stars stay visible at distance
+    vertexColors: true,
   });
 
   const galaxy = new THREE.Points(geo, mat);
 
-  // ── Diffuse dust cloud (the Milky Way band) ────────────────────────────
-  // A big additive disc with a soft radial gradient. This is what makes the
-  // galaxy read as a glowing band at distance — the diffuse glow of
-  // unresolved stars + interstellar gas. Without it, at distance the galaxy
-  // looks like "a bunch of dimmed particles" (user complaint). With it, the
-  // galaxy looks like the Milky Way: a luminous band with embedded stars.
-  const dustTex = makeDustTexture();
-  const dustDisc = new THREE.Mesh(
-    new THREE.CircleGeometry(20, 64),
-    new THREE.MeshBasicMaterial({
-      map: dustTex,
-      transparent: true,
-      opacity: 0.7,
-      blending: THREE.AdditiveBlending,
-      depthWrite: false,
-      side: THREE.DoubleSide,
-    }),
-  );
-  // Lay the disc flat in the galaxy's plane (XZ). It will rotate with the galaxy.
-  dustDisc.rotation.x = -Math.PI / 2;
-  dustDisc.position.set(0, 0, 0);
-  galaxy.add(dustDisc);
-
-  // ── Galactic core glow: bright inner sprite + soft outer halo ──────────
+  // ── Galactic core glow sprites (for distance visibility) ───────────────
   // These additive sprites give the galaxy a luminous core that reads even
-  // at distance / during the cinematic zoom-out.
-  const glowTex = makeGlowTexture('rgba(220,230,255,1)', 'rgba(120,150,255,0)');
+  // when fully zoomed out (camera at distance 80). The particles alone use
+  // size attenuation, so at extreme distance they become sub-pixel. These
+  // glow sprites ensure the galaxy is always visible as a glowing band.
+  // They DON'T change the particle look — they're additive overlays.
+  const glowTex = makeGlowTexture('rgba(255,180,120,1)', 'rgba(60,40,120,0)');
+
+  // Inner core glow: warm orange (matches the warm insideColor)
   const coreGlow = new THREE.Sprite(new THREE.SpriteMaterial({
-    map: glowTex, color: 0xdde6ff, transparent: true, opacity: 0.9,
+    map: glowTex, color: 0xff8050, transparent: true, opacity: 0.85,
     blending: THREE.AdditiveBlending, depthWrite: false,
   }));
-  coreGlow.scale.set(6, 6, 1);
+  coreGlow.scale.set(4, 4, 1);
   coreGlow.position.set(0, 0, 0);
   galaxy.add(coreGlow);
 
+  // Mid halo: warm-to-cool blend
   const haloGlow = new THREE.Sprite(new THREE.SpriteMaterial({
-    map: glowTex, color: 0x8899ff, transparent: true, opacity: 0.4,
+    map: glowTex, color: 0xaa6688, transparent: true, opacity: 0.4,
     blending: THREE.AdditiveBlending, depthWrite: false,
   }));
-  haloGlow.scale.set(20, 20, 1);
+  haloGlow.scale.set(12, 12, 1);
   haloGlow.position.set(0, 0, 0);
   galaxy.add(haloGlow);
 
-  // Outer faint halo — a wide soft glow that makes the galaxy visible as a
-  // hazy band even when fully zoomed out (camera at distance 80).
+  // Outer halo: cool blue (matches the cool outsideColor) — wide + faint,
+  // makes the galaxy visible as a hazy band at extreme distance
   const outerHalo = new THREE.Sprite(new THREE.SpriteMaterial({
-    map: glowTex, color: 0x6677aa, transparent: true, opacity: 0.2,
+    map: glowTex, color: 0x2a4a8a, transparent: true, opacity: 0.25,
     blending: THREE.AdditiveBlending, depthWrite: false,
   }));
-  outerHalo.scale.set(40, 40, 1);
+  outerHalo.scale.set(30, 30, 1);
   outerHalo.position.set(0, 0, 0);
   galaxy.add(outerHalo);
 

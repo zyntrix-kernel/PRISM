@@ -423,8 +423,11 @@ export function buildSingularity(ctx: BuilderCtx): WorldAPI {
             galaxy.scale.setScalar(s);
             galaxy.rotation.y += dt * 1.2;
             galaxy.rotation.z += dt * 0.4;
-            const gMat = galaxy.material as THREE.PointsMaterial;
-            gMat.opacity = Math.max(0, 1 - expSmooth);
+            // Fade the galaxy particles via the uOpacity shader uniform.
+            const gMat = galaxy.material as THREE.ShaderMaterial;
+            gMat.uniforms.uTime.value = elapsed;
+            gMat.uniforms.uOpacity.value = Math.max(0, 1 - expSmooth);
+            galaxy.visible = expSmooth < 0.99;
             // Smooth shake decay at the explosion peak (was a 0.15s spike).
             if (expT > 0 && expT < 0.4) shakeCamera(0.4 * (1 - expT / 0.4));
             if (expT >= 2) {
@@ -460,6 +463,13 @@ export function buildSingularity(ctx: BuilderCtx): WorldAPI {
       hole.update(dt, elapsed);
       debris.update(dt);
       updateBurst(dt);
+      // Drive the galaxy's differential rotation shader (ggwzrd uTime uniform).
+      // The galaxy's vertex shader animates inner particles spinning faster —
+      // this is what makes the spiral arms visibly wind.
+      if (galaxy.visible) {
+        const gMat = galaxy.material as THREE.ShaderMaterial;
+        gMat.uniforms.uTime.value = elapsed;
+      }
       orbits.update(dt * 20); // probes run hot: 20 days/sec for visible motion
       for (const probe of orbits.bodies) probe.rotation.y += dt;
     },

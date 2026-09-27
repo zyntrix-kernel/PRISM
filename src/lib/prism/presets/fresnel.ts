@@ -58,7 +58,7 @@ export function createFresnelGlow(
     blending: THREE.AdditiveBlending,
     depthWrite: false,
   });
-  const mesh = new THREE.Mesh(new THREE.SphereGeometry(radius, 32, 24), material);
+  const mesh = new THREE.Mesh(new THREE.SphereGeometry(radius, 20, 14), material);
   mesh.scale.setScalar(1.1);
   return mesh;
 }

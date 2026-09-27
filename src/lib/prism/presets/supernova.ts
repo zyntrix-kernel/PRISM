@@ -39,16 +39,19 @@ export function buildSupernova(ctx: BuilderCtx): WorldAPI {
     uniform float uCollapse;  // 0 = stable, 1 = fully collapsing
 
     void main() {
-      // 3D Perlin noise for realistic plasma turbulence (multiple octaves)
+      // OPTIMIZED: 2 octaves of Perlin noise on low/medium, 3 on high/ultra
       vec3 p = vPos * 2.0 + vec3(0.0, uTime * 0.3, 0.0);
       float n1 = cnoise(p);
-      float n2 = cnoise(p * 3.0 + vec3(uTime * 0.2));
-      float n3 = cnoise(p * 8.0 - vec3(uTime * 0.5));
-      float turb = n1 * 0.5 + n2 * 0.3 + n3 * 0.2;
+      float turb = n1 * 0.5;
+      float n2 = 0.0;
+      float n3 = 0.0;
+      float gran = 0.0;
+      if (uCollapse > 0.01 || uIntensity > 1.5) {
+        n2 = cnoise(p * 3.0 + vec3(uTime * 0.2)) * 0.3;
+        gran = cnoise(vPos * 8.0 + uTime * 0.1) * 0.15;
+        turb += n2 + gran;
+      }
       turb = 0.5 + 0.5 * turb;
-
-      // Granulation detail
-      float gran = cnoise(vPos * 15.0 + uTime * 0.1) * 0.15;
 
       // Fresnel rim
       vec3 viewDir = normalize(cameraPosition - vWorldPos);
@@ -85,8 +88,9 @@ export function buildSupernova(ctx: BuilderCtx): WorldAPI {
     },
   });
 
-  // Use IcosahedronGeometry for more uniform tessellation (from cookieMonster repo)
-  const starGeo = new THREE.IcosahedronGeometry(1.3, isUltra ? 5 : isHigh ? 3 : 2);
+  // Use IcosahedronGeometry — low detail on non-ultra for shader performance
+  // (the Perlin noise shader is GPU-heavy; fewer vertices = faster)
+  const starGeo = new THREE.IcosahedronGeometry(1.3, isUltra ? 4 : isHigh ? 2 : 1);
   const star = new THREE.Mesh(starGeo, starMat);
   world.add(star);
 

@@ -18,7 +18,7 @@ export function buildNebula(ctx: BuilderCtx): WorldAPI {
   const isHigh = quality === 'high';
   const useShader = isUltra || isHigh;
 
-  const COUNT = isUltra ? 4000 : isHigh ? 2000 : 1000;
+  const COUNT = isUltra ? 3000 : isHigh ? 1500 : 800;
 
   // ── Particle cloud ──────────────────────────────────────────────────
   const pos = new Float32Array(COUNT * 3);

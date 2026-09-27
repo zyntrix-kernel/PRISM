@@ -57,7 +57,7 @@ const ATMO_FRAG = /* glsl */ `
 
 function makeAtmosphere(size: number, color: number): THREE.Mesh {
   const mesh = new THREE.Mesh(
-    new THREE.SphereGeometry(size * 1.22, 32, 24),
+    new THREE.SphereGeometry(size * 1.22, 20, 14),
     new THREE.ShaderMaterial({
       vertexShader: ATMO_VERT,
       fragmentShader: ATMO_FRAG,

@@ -92,7 +92,7 @@ export function buildBlackHole(opts: BlackHoleOpts, glowTex: THREE.Texture): Bla
   // The void: pure black. We'll SCALE this during extreme mode to make the
   // hole itself visibly grow/destabilize.
   const hole = new THREE.Mesh(
-    new THREE.SphereGeometry(horizon, 48, 32),
+    new THREE.SphereGeometry(horizon, 24, 16),
     new THREE.MeshBasicMaterial({ color: 0x000000 }),
   );
   group.add(hole);
@@ -113,13 +113,13 @@ export function buildBlackHole(opts: BlackHoleOpts, glowTex: THREE.Texture): Bla
     depthWrite: false,
     blending: THREE.AdditiveBlending,
   });
-  const disk = new THREE.Mesh(new THREE.RingGeometry(inner, outer, 128, 12), diskMat);
+  const disk = new THREE.Mesh(new THREE.RingGeometry(inner, outer, 96, 6), diskMat);
   disk.rotation.x = -Math.PI / 2;
   group.add(disk);
 
   // Photon ring: thin, bright torus hugging the shadow.
   const ring = new THREE.Mesh(
-    new THREE.TorusGeometry(horizon * 1.32, horizon * 0.045, 12, 96),
+    new THREE.TorusGeometry(horizon * 1.32, horizon * 0.045, 8, 48),
     new THREE.MeshBasicMaterial({
       color: 0xffe6b8,
       transparent: true,
@@ -158,7 +158,7 @@ export function buildBlackHole(opts: BlackHoleOpts, glowTex: THREE.Texture): Bla
   const jetGlows: THREE.Sprite[] = [];
   if (opts.jets !== false) {
     for (const sign of [1, -1]) {
-      const jet = new THREE.Mesh(new THREE.ConeGeometry(horizon * 0.4, horizon * 7, 24, 1, true), jetMat);
+      const jet = new THREE.Mesh(new THREE.ConeGeometry(horizon * 0.4, horizon * 7, 12, 1, true), jetMat);
       jet.position.y = sign * horizon * 3.5;
       if (sign < 0) jet.rotation.z = Math.PI;
       group.add(jet);

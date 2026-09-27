@@ -6,9 +6,9 @@ import * as THREE from 'three';
 import type { PlanetTextureSet } from '../textures';
 import type { QualityTier } from '../config';
 
-export type PresetId = 'space' | 'blocks' | 'test' | 'singularity' | 'drive' | 'atom' | 'voxel';
+export type PresetId = 'space' | 'blocks' | 'test' | 'singularity' | 'drive' | 'atom' | 'voxel' | 'gun';
 
-export const PRESET_ORDER: PresetId[] = ['space', 'blocks', 'test', 'singularity', 'drive', 'atom', 'voxel'];
+export const PRESET_ORDER: PresetId[] = ['space', 'blocks', 'test', 'singularity', 'drive', 'atom', 'voxel', 'gun'];
 
 export const PRESET_LABELS: Record<PresetId, string> = {
   space: 'Space',
@@ -18,6 +18,7 @@ export const PRESET_LABELS: Record<PresetId, string> = {
   drive: 'Drive',
   atom: 'Atom',
   voxel: 'Voxel',
+  gun: 'Gun game',
 };
 
 /** Per-preset camera framing applied on load. */

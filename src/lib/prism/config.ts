@@ -82,6 +82,8 @@ export const PrismConfig = {
     minDistance: 4,
     maxDistance: 120,
     autoRotateSpeed: 0.22, // rad/s when auto-orbit is on (O key)
+    // Performance: the rig update is cheap but the renderer is the bottleneck.
+    // These are just camera constants; perf is controlled by quality tiers.
   },
 
   bloom: {
@@ -102,9 +104,9 @@ export const PrismConfig = {
   },
 
   quality: {
-    ultra: { pixelRatio: 3.0 },
-    high: { pixelRatio: 2.0 },
-    medium: { pixelRatio: 1.5 },
+    ultra: { pixelRatio: 1.75 },
+    high: { pixelRatio: 1.5 },
+    medium: { pixelRatio: 1.25 },
     low: { pixelRatio: 1.0 },
   } as Record<string, { pixelRatio: number }>,
 };

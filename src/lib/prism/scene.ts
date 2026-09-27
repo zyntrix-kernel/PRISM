@@ -15,6 +15,7 @@ import { buildSingularity } from './presets/singularity';
 import { buildVoxel } from './presets/voxel';
 import { buildSolar } from './presets/solar';
 import { buildTest } from './presets/test';
+import { buildGunGame } from './presets/gun';
 import {
   disposeGroup,
   type PresetId,
@@ -34,6 +35,7 @@ const BUILDERS: Record<PresetId, WorldBuilder> = {
   drive: buildDrive,
   atom: buildAtom,
   voxel: buildVoxel,
+  gun: buildGunGame,
 };
 
 /** Orbit/pan/zoom camera rig (mouse, touch-drag, wheel, arrow keys). */
@@ -154,10 +156,20 @@ export class PrismScene {
 
   constructor(container: HTMLElement, quality: QualityTier, preset: PresetId) {
     this.quality = quality;
-    this.renderer = new THREE.WebGLRenderer({ antialias: true });
+    // Performance: request high-performance GPU adapter explicitly. This forces
+    // the browser to use the discrete GPU on dual-GPU machines (common on laptops).
+    // Use antialias only on high/ultra (MSAA is expensive; pixelRatio covers it on lower tiers).
+    const useAA = quality === 'high' || quality === 'ultra';
+    this.renderer = new THREE.WebGLRenderer({
+      antialias: useAA,
+      powerPreference: 'high-performance',
+      stencil: false,
+    });
     this.renderer.setSize(container.clientWidth, container.clientHeight);
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
     this.renderer.toneMappingExposure = 1.1;
+    // Performance: disable shadow maps (not used; saves allocation + render pass).
+    this.renderer.shadowMap.enabled = false;
     this.applyPixelRatio();
     container.appendChild(this.renderer.domElement);
     // Screen readers get a labeled image role instead of a silent canvas.
@@ -360,7 +372,7 @@ export class PrismScene {
   }
 
   private buildStarfield(): void {
-    const count = 1400;
+    const count = this.quality === 'ultra' ? 1200 : this.quality === 'high' ? 800 : 500;
     const positions = new Float32Array(count * 3);
     for (let i = 0; i < count; i++) {
       const r = 60 + Math.random() * 60;

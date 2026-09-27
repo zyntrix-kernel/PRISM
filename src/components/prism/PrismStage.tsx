@@ -33,6 +33,7 @@ import {
   Car,
   Atom,
   Grid3x3,
+  Crosshair,
   type LucideIcon,
 } from "lucide-react";
 
@@ -47,6 +48,7 @@ const PRESET_VISUALS: Record<
   drive: { icon: Car, hue: "143, 245, 180", blurb: "Neon circuit arcade" },
   atom: { icon: Atom, hue: "154, 220, 255", blurb: "Bohr model photon lab" },
   voxel: { icon: Grid3x3, hue: "255, 207, 92", blurb: "Place & break blocks" },
+  gun: { icon: Crosshair, hue: "125, 211, 252", blurb: "Target shooting range" },
 };
 
 export default function PrismStage() {

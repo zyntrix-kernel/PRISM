@@ -20,6 +20,7 @@ import {
   Car,
   Atom,
   Grid3x3,
+  Crosshair,
   type LucideIcon,
 } from "lucide-react";
 
@@ -57,6 +58,7 @@ const PRESETS: Array<{ id: PrismState["preset"]; label: string; icon: LucideIcon
   { id: "drive", label: "Drive", icon: Car, blurb: "Neon circuit arcade" },
   { id: "atom", label: "Atom", icon: Atom, blurb: "Bohr model photon lab" },
   { id: "voxel", label: "Voxel", icon: Grid3x3, blurb: "Place & break blocks" },
+  { id: "gun", label: "Gun game", icon: Crosshair, blurb: "Target shooting range" },
 ];
 
 const QUALITIES = [

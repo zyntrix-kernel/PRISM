@@ -209,7 +209,7 @@ export default function PrismStage() {
       <header id="prism-hud" className="prism-glass">
         <div id="prism-hud-title">
           <span className="prism-mark" aria-hidden="true" />
-          PRISM <span>hand-controlled 3D lab</span>
+          PRISM
         </div>
         <div
           id="prism-hud-status"
@@ -475,7 +475,7 @@ export default function PrismStage() {
         ref={setEl("onboard")}
       >
         <div className="prism-onboard-header">
-          <h2>First flight</h2>
+          <h2>Getting started</h2>
           <button
             type="button"
             className="prism-onboard-min"
@@ -495,7 +495,7 @@ export default function PrismStage() {
         </div>
         {!onboardMin && (
           <>
-            <p className="prism-onboard-sub">Three steps to lift off.</p>
+            <p className="prism-onboard-sub">Complete these to get started.</p>
             <ol>
               <li data-step="camera">
                 <span className="tick" />
@@ -526,14 +526,14 @@ export default function PrismStage() {
         {!onboardMin && (
           <div className="row">
             <button id="prism-btn-onboard-close" type="button" ref={setEl("onboardClose") as React.RefObject<HTMLButtonElement>}>
-              Skip tour
+              Dismiss
             </button>
             <button id="prism-btn-onboard-help" type="button" ref={setEl("onboardHelp") as React.RefObject<HTMLButtonElement>}>
-              Full guide
+              View guide
             </button>
           </div>
         )}
-        <div className="celebrate hidden">Ready to explore</div>
+        <div className="celebrate hidden">Setup complete</div>
       </aside>
 
       {/* ===== Help card ===== */}

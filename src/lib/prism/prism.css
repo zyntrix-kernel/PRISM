@@ -1,80 +1,78 @@
 /* ============================================================================
-   PRISM — Dreamy Spatial Design System
+   PRISM — Professional Design System
    ----------------------------------------------------------------------------
-   Identity: a translucent instrument floating above a living 3D field.
-   Deep-plum night glass · signal-cyan luminescence · dreamy pink + lavender.
-   Material 3 foundation + spatial computing + tactile motion.
-   Every value is a token; components reference tokens only.
+   Identity: a precision instrument. Restrained, dense, confident.
+   Slate-dark surfaces · single restrained cyan accent · no decorative glow.
+   Solid panels (not heavy glass), tight spacing, 6px radii, minimal shadows.
    ========================================================================== */
 
 :root {
-  /* ---- Color: dreamy cream + pink + baby blue on deep plum night ---- */
-  --prism-bg: #06040d;
-  --prism-bg-2: #0c0818;
-  --hud-fg: #fff7ef;
-  --hud-fg-dim: rgba(255, 243, 230, 0.74);
-  --hud-fg-faint: rgba(255, 243, 230, 0.42);
-  --accent: #9adcff;
-  --accent-soft: rgba(154, 220, 255, 0.16);
+  /* ---- Color: refined slate + single restrained accent ---- */
+  --prism-bg: #0a0b0f;
+  --prism-bg-2: #0e1014;
+  --hud-fg: #e8eaed;
+  --hud-fg-dim: rgba(232, 234, 237, 0.68);
+  --hud-fg-faint: rgba(232, 234, 237, 0.38);
+  --accent: #7dd3fc;
+  --accent-soft: rgba(125, 211, 252, 0.12);
   --accent-ink: #0a1a2e;
-  --pink: #ffb3d9;
-  --pink-deep: #ff8fc0;
-  --lavender: #c9b8ff;
-  --peach: #ffd6a8;
-  --warn: #ffcf5c;
-  --error: #ff9aa5;
-  --ok: #8ff5b4;
-  --violet-glow: rgba(180, 150, 255, 0.35);
+  --pink: #7dd3fc; /* remapped to accent for consistency */
+  --pink-deep: #38bdf8;
+  --lavender: #a5b4fc;
+  --peach: #fbbf24;
+  --warn: #fbbf24;
+  --error: #f87171;
+  --ok: #34d399;
+  --violet-glow: transparent;
 
-  /* ---- Glass tiers (intentional hierarchy, not all-blur) ---- */
-  --glass-1: rgba(255, 246, 235, 0.05); /* atmosphere haze */
-  --glass-2: rgba(22, 14, 32, 0.55); /* standard floating panel */
-  --glass-3: rgba(14, 9, 22, 0.74); /* deep: help / modal */
-  --glass-card: rgba(26, 17, 38, 0.6);
-  --glass-line: rgba(255, 205, 230, 0.22);
-  --glass-line-strong: rgba(154, 220, 255, 0.46);
-  --glass-violet-line: rgba(201, 184, 255, 0.45);
-  --glass-highlight: inset 0 1px 0 rgba(255, 246, 235, 0.18);
-  --glass-edge: inset 0 0 0 0.5px rgba(255, 255, 255, 0.08);
-  --glass-glow: 0 8px 32px rgba(255, 143, 192, 0.1), 0 2px 8px rgba(0, 0, 0, 0.5);
-  --glass-glow-strong: 0 0 0 1px rgba(154, 220, 255, 0.22), 0 16px 48px rgba(255, 143, 192, 0.18),
-    0 6px 18px rgba(0, 0, 0, 0.55);
-  --glass-lift: 0 1px 2px rgba(0, 0, 0, 0.4), 0 8px 24px rgba(0, 0, 0, 0.35);
+  /* ---- Surfaces: solid, not blurry glass ---- */
+  --glass-1: rgba(255, 255, 255, 0.03);
+  --glass-2: rgba(18, 20, 26, 0.88); /* standard panel — solid */
+  --glass-3: rgba(12, 14, 18, 0.94); /* modal — near-opaque */
+  --glass-card: rgba(22, 24, 30, 0.9);
+  --glass-line: rgba(255, 255, 255, 0.08);
+  --glass-line-strong: rgba(125, 211, 252, 0.3);
+  --glass-violet-line: rgba(255, 255, 255, 0.1);
+  --glass-highlight: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  --glass-edge: none;
+  --glass-glow: 0 1px 3px rgba(0, 0, 0, 0.4), 0 4px 12px rgba(0, 0, 0, 0.3);
+  --glass-glow-strong: 0 0 0 1px rgba(125, 211, 252, 0.15), 0 8px 24px rgba(0, 0, 0, 0.5);
+  --glass-lift: 0 1px 2px rgba(0, 0, 0, 0.4), 0 4px 12px rgba(0, 0, 0, 0.25);
 
   /* ---- Typography ---- */
   --font-ui: "Geist", "Segoe UI", system-ui, -apple-system, sans-serif;
   --font-mono: "Geist Mono", Consolas, "Cascadia Mono", monospace;
-  --text-display: 22px;
-  --text-title: 15px;
-  --text-body: 14px;
-  --text-small: 12px;
-  --text-micro: 11px;
-  --text-debug: 12px;
-  --text-lift: 0 1px 8px rgba(0, 0, 0, 0.7);
+  --text-display: 18px;
+  --text-title: 13px;
+  --text-body: 13px;
+  --text-small: 11px;
+  --text-micro: 10px;
+  --text-debug: 11px;
+  --text-lift: none;
 
-  /* ---- Spacing scale ---- */
-  --space-xs: 4px;
-  --space-sm: 6px;
-  --space-md: 10px;
-  --space-lg: 14px;
-  --space-xl: 20px;
-  --space-2xl: 28px;
+  /* ---- Spacing scale (tighter) ---- */
+  --space-xs: 3px;
+  --space-sm: 5px;
+  --space-md: 8px;
+  --space-lg: 12px;
+  --space-xl: 16px;
+  --space-2xl: 22px;
 
-  /* ---- Shape ---- */
-  --radius-xs: 6px;
-  --radius-sm: 10px;
-  --radius-md: 14px;
-  --radius-lg: 20px;
-  --radius-xl: 26px;
-  --radius-pill: 999px;
+  /* ---- Shape (smaller radii — more precise) ---- */
+  --radius-xs: 4px;
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 10px;
+  --radius-xl: 12px;
+  --radius-pill: 6px;
 
   /* ---- Motion ---- */
-  --motion-fast: 140ms;
-  --motion-med: 240ms;
-  --motion-slow: 420ms;
+  --motion-fast: 120ms;
+  --motion-med: 200ms;
+  --motion-slow: 340ms;
   --motion-ease: cubic-bezier(0.2, 0, 0, 1);
-  --motion-dream: cubic-bezier(0.34, 0, 0.2, 1);
-  --motion-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --motion-dream: cubic-bezier(0.16, 1, 0.3, 1);
+  --motion-spring: cubic-bezier(0.16, 1, 0.3, 1);
   --motion-out-back: cubic-bezier(0.16, 1, 0.3, 1);
   --motion-snappy: cubic-bezier(0.16, 1, 0.3, 1);
 }
@@ -127,12 +125,12 @@
   overflow: hidden;
 }
 
-/* Slow drifting aurora orbs — the dream ambience */
+/* Subtle ambient gradient — minimal, not dreamy/playful */
 .prism-orb {
   position: absolute;
   border-radius: 50%;
-  filter: blur(80px);
-  opacity: 0.28;
+  filter: blur(60px);
+  opacity: 0.12;
   will-change: transform;
 }
 
@@ -141,7 +139,7 @@
   height: 46vmax;
   left: -14vmax;
   top: -16vmax;
-  background: radial-gradient(circle, rgba(154, 220, 255, 0.6), transparent 65%);
+  background: radial-gradient(circle, rgba(125, 211, 252, 0.4), transparent 65%);
   animation: prism-orb-a 28s ease-in-out infinite alternate;
 }
 
@@ -150,7 +148,7 @@
   height: 48vmax;
   right: -16vmax;
   bottom: -18vmax;
-  background: radial-gradient(circle, rgba(255, 179, 217, 0.55), transparent 65%);
+  background: radial-gradient(circle, rgba(125, 211, 252, 0.3), transparent 65%);
   animation: prism-orb-b 34s ease-in-out infinite alternate;
 }
 
@@ -396,8 +394,8 @@ video#prism-webcam.live + #prism-webcam-frame .prism-webcam-placeholder {
 
 .prism-glass {
   background: var(--glass-2);
-  -webkit-backdrop-filter: blur(22px) saturate(160%);
-  backdrop-filter: blur(22px) saturate(160%);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
   border: 1px solid var(--glass-line);
   box-shadow: var(--glass-highlight), var(--glass-edge), var(--glass-glow);
 }
@@ -408,22 +406,21 @@ video#prism-webcam.live + #prism-webcam-frame .prism-webcam-placeholder {
 
 #prism-hud {
   position: absolute;
-  top: 14px;
-  left: 14px;
-  right: 14px;
+  top: 10px;
+  left: 10px;
+  right: 10px;
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: var(--space-md) var(--space-lg);
-  border-radius: var(--radius-lg);
+  gap: 10px;
+  padding: var(--space-sm) var(--space-md);
+  border-radius: var(--radius-md);
   z-index: 12;
-  animation: prism-hud-in var(--motion-slow) var(--motion-dream) both;
 }
 
 @keyframes prism-hud-in {
   from {
     opacity: 0;
-    transform: translateY(-12px);
+    transform: translateY(-8px);
   }
   to {
     opacity: 1;
@@ -432,33 +429,29 @@ video#prism-webcam.live + #prism-webcam-frame .prism-webcam-placeholder {
 }
 
 #prism-hud-title {
-  font-weight: 700;
+  font-weight: 600;
   font-size: var(--text-title);
-  letter-spacing: 2.4px;
-  color: var(--accent);
+  letter-spacing: 0.5px;
+  color: var(--hud-fg);
   white-space: nowrap;
-  text-shadow: 0 0 16px rgba(154, 220, 255, 0.5);
+  text-shadow: none;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 7px;
 }
 
 #prism-hud-title .prism-mark {
-  width: 18px;
-  height: 18px;
-  border-radius: 5px;
-  background: linear-gradient(135deg, var(--accent), var(--pink));
-  box-shadow: 0 0 12px rgba(154, 220, 255, 0.6);
+  width: 16px;
+  height: 16px;
+  border-radius: 4px;
+  background: var(--accent);
+  box-shadow: none;
   position: relative;
   overflow: hidden;
 }
 
 #prism-hud-title .prism-mark::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(135deg, transparent 40%, rgba(255, 255, 255, 0.45) 50%, transparent 60%);
-  animation: prism-mark-sheen 4s ease-in-out infinite;
+  display: none;
 }
 
 @keyframes prism-mark-sheen {
@@ -497,56 +490,35 @@ video#prism-webcam.live + #prism-webcam-frame .prism-webcam-placeholder {
 
 #prism-hud-controls {
   display: flex;
-  gap: 8px;
+  gap: 5px;
   align-items: center;
 }
 
-/* ---- Glass control (button + select) ---- */
+/* ---- Compact controls (button + select) ---- */
 #prism-hud-controls button,
 #prism-hud-controls select {
-  background: var(--accent-soft);
-  color: var(--hud-fg);
-  border: 1px solid var(--glass-line-strong);
-  border-radius: var(--radius-pill);
-  box-shadow: var(--glass-highlight);
-  padding: 7px 15px;
-  min-height: 36px;
-  font-size: 0.84em;
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--hud-fg-dim);
+  border: 1px solid var(--glass-line);
+  border-radius: var(--radius-sm);
+  box-shadow: none;
+  padding: 5px 10px;
+  min-height: 30px;
+  font-size: 12px;
   font-family: inherit;
   font-weight: 500;
-  letter-spacing: 0.2px;
+  letter-spacing: 0;
   cursor: pointer;
-  transition: background 180ms var(--motion-snappy),
-    box-shadow 180ms var(--motion-snappy),
-    transform 180ms var(--motion-spring),
-    border-color 180ms var(--motion-snappy),
-    color 180ms var(--motion-snappy);
+  transition: background 120ms var(--motion-snappy),
+    border-color 120ms var(--motion-snappy),
+    color 120ms var(--motion-snappy);
   position: relative;
-  overflow: hidden;
 }
 
-/* Subtle shimmer sweep on hover (professional, not gimmicky) */
+/* Remove the shimmer sweep — too playful */
 #prism-hud-controls button::after,
 #prism-hud-controls select::after {
-  content: "";
-  position: absolute;
-  top: 0;
-  left: -100%;
-  width: 100%;
-  height: 100%;
-  background: linear-gradient(
-    90deg,
-    transparent,
-    rgba(255, 255, 255, 0.08),
-    transparent
-  );
-  transition: left 480ms var(--motion-ease);
-  pointer-events: none;
-}
-
-#prism-hud-controls button:hover::after,
-#prism-hud-controls select:hover::after {
-  left: 100%;
+  display: none;
 }
 
 #prism-hud-controls select option {
@@ -556,33 +528,30 @@ video#prism-webcam.live + #prism-webcam-frame .prism-webcam-placeholder {
 
 #prism-hud-controls button:hover,
 #prism-hud-controls select:hover {
-  background: rgba(154, 220, 255, 0.24);
-  border-color: var(--accent);
-  box-shadow: var(--glass-highlight), 0 0 18px rgba(154, 220, 255, 0.28);
-  transform: translateY(-1px);
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.15);
+  color: var(--hud-fg);
 }
 
 #prism-hud-controls button:active {
-  transform: scale(0.94) translateY(0);
+  background: rgba(255, 255, 255, 0.12);
 }
 
-/* Subtle lift-glow on hover for active-state buttons (extra polish) */
+/* Active state — solid accent fill, no glow */
 #prism-hud-controls button.active {
   background: var(--accent);
   color: var(--accent-ink);
-  font-weight: 700;
+  font-weight: 600;
   border-color: var(--accent);
-  box-shadow: 0 0 22px rgba(154, 220, 255, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.4);
-  transform: translateY(-1px);
+  box-shadow: none;
 }
 
 #prism-hud-controls button.active:hover {
-  box-shadow: 0 0 30px rgba(154, 220, 255, 0.75), inset 0 1px 0 rgba(255, 255, 255, 0.5),
-    0 4px 14px rgba(0, 0, 0, 0.3);
+  background: #93dcfd;
 }
 
 #prism-hud-controls button:disabled {
-  opacity: 0.5;
+  opacity: 0.4;
   cursor: wait;
   transform: none;
 }
@@ -619,11 +588,11 @@ video#prism-webcam.live + #prism-webcam-frame .prism-webcam-placeholder {
   }
 }
 
-/* Camera enable button gets a special inviting glow when off */
+/* Camera enable button — subtle accent border when off, no pulse */
 #prism-btn-camera:not(.active):not(:disabled) {
-  background: linear-gradient(135deg, rgba(154, 220, 255, 0.22), rgba(255, 179, 217, 0.18));
-  border-color: rgba(154, 220, 255, 0.6);
-  animation: prism-invite-pulse 3s ease-in-out infinite;
+  background: var(--accent-soft);
+  border-color: var(--glass-line-strong);
+  color: var(--accent);
 }
 
 @keyframes prism-invite-pulse {

@@ -157,8 +157,6 @@ export class PrismScene {
   private readonly planetTex: PlanetTextureSet;
   private readonly tmpVec = new THREE.Vector3();
   private hovered: THREE.Object3D | null = null;
-  // Gravitational lensing pass (Ultra only, singularity preset)
-  private lensPass: import('./presets/lens').GravitationalLensPass | null = null;
 
   constructor(container: HTMLElement, quality: QualityTier, preset: PresetId) {
     this.quality = quality;
@@ -377,14 +375,6 @@ export class PrismScene {
     this.quality = tier;
     this.applyPixelRatio();
     this.applyTextureMaps();
-    // Initialize gravitational lensing pass on Ultra only
-    if (tier === 'ultra' && !this.lensPass) {
-      import('./presets/lens').then(({ GravitationalLensPass }) => {
-        this.lensPass = new GravitationalLensPass();
-      });
-    } else if (tier !== 'ultra') {
-      this.lensPass = null;
-    }
   }
 
   // ---- frame ------------------------------------------------------------
@@ -493,38 +483,6 @@ export class PrismScene {
       this.composer.render();
     } else {
       this.renderer.render(this.scene, this.camera);
-    }
-
-    // Gravitational lensing post-effect (Ultra only, singularity preset).
-    // Bends light around the black hole's screen position — the classic
-    // Interstellar Gargantua effect.
-    if (this.quality === 'ultra' && this.presetId === 'singularity' && this.lensPass) {
-      // Project the world origin (where the hole sits) to screen space
-      this.tmpVec.set(0, 0, 0).project(this.camera);
-      const holePos = new THREE.Vector2(
-        (this.tmpVec.x + 1) / 2,
-        (this.tmpVec.y + 1) / 2,
-      );
-      // Only apply lensing if the hole is roughly in view
-      if (holePos.x > -0.2 && holePos.x < 1.2 && holePos.y > -0.2 && holePos.y < 1.2) {
-        // Estimate screen-space radius based on distance
-        const dist = this.camera.position.length();
-        const horizonRadius = 1.5; // scene units
-        const screenRadius = Math.max(0.01, Math.min(0.15, horizonRadius / dist));
-        // Strength scales with how close we are (closer = stronger lensing)
-        const strength = Math.max(0, Math.min(1, 8 / dist));
-        // Render lensing directly to screen (post-composer)
-        const renderTarget = this.composer.renderTarget1 ?? null;
-        this.lensPass.render(
-          this.renderer,
-          renderTarget ?? (this.composer.readBuffer as unknown as THREE.WebGLRenderTarget),
-          null,
-          holePos,
-          screenRadius,
-          strength,
-          performance.now() / 1000,
-        );
-      }
     }
   }
 

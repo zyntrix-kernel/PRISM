@@ -90,7 +90,7 @@ export default function SettingsPanel({ state, app }: Props) {
               position: "fixed",
               top: 0,
               right: 0,
-              bottom: 0,
+              height: "100vh",
               width: "min(340px, calc(100vw - 32px))",
               zIndex: 36,
               display: "flex",
@@ -102,7 +102,7 @@ export default function SettingsPanel({ state, app }: Props) {
               borderRight: "none",
               borderTop: "none",
               borderBottom: "none",
-              animation: "prism-drawer-in 280ms cubic-bezier(0.34,1.56,0.64,1)",
+              animation: "prism-drawer-in 280ms cubic-bezier(0.34,1.56,0.64,1) forwards",
             }}
           >
             <style>{`
@@ -161,7 +161,16 @@ export default function SettingsPanel({ state, app }: Props) {
             </div>
 
             {/* Drawer content — scrollable */}
-            <div style={{ flex: 1, overflowY: "auto", padding: "16px 20px" }}>
+            <div
+              style={{
+                flex: 1,
+                overflowY: "auto",
+                padding: "12px 20px",
+                scrollbarWidth: "thin",
+                scrollbarColor: "rgba(154,220,255,0.3) transparent",
+              }}
+              className="prism-settings-scroll"
+            >
               {/* Performance sparkline */}
               <FpsSparkline history={state?.fpsHistory ?? []} />
 

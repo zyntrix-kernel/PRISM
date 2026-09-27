@@ -1254,6 +1254,21 @@ video#prism-webcam.live + #prism-webcam-frame .prism-webcam-placeholder {
   pointer-events: none;
 }
 
+/* Settings drawer scroll area — dreamy custom scrollbar */
+.prism-settings-scroll::-webkit-scrollbar {
+  width: 6px;
+}
+.prism-settings-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+.prism-settings-scroll::-webkit-scrollbar-thumb {
+  background: rgba(154, 220, 255, 0.3);
+  border-radius: 3px;
+}
+.prism-settings-scroll::-webkit-scrollbar-thumb:hover {
+  background: rgba(154, 220, 255, 0.5);
+}
+
 /* Engine-owned elements toggle the bare `hidden` class — support it here. */
 .prism-root .hidden {
   display: none !important;

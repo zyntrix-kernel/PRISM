@@ -1373,3 +1373,46 @@ ALWAYS set `pointer-events: none` on it (both in CSS and inline). A visual
 overlay should never intercept clicks. The round-11 implementation had the
 backdrop toggle pointer-events based on modal state, which was the bug —
 even when "active" (visible), it must stay non-interactive.
+
+---
+Task ID: 15
+Agent: main (user bug report)
+Task: Fix settings menu half-cut (drawer collapsed to 56px height)
+
+## 1. Current Project Status Assessment
+
+PRISM is stable. The user reported: "the settings menu is half cut."
+
+**Root cause:** The settings drawer used `position: fixed; top: 0; right: 0;
+bottom: 0` which should fill the viewport height, but the computed height
+was only 56px (just the header). The CSS `top:0; bottom:0` on a fixed
+element wasn't being honored — likely because the `animation` property
+without `animation-fill-mode: forwards` caused the element to revert to its
+pre-animation state after the slide-in completed. Additionally, the content
+area needed scrolling but had no visible scrollbar cue.
+
+**Fix (SettingsPanel.tsx + prism.css):**
+1. Changed `bottom: 0` → explicit `height: "100vh"` (more reliable than
+   top+bottom anchoring for fixed elements with animations)
+2. Added `animation-fill-mode: forwards` (via `forwards` keyword in the
+   animation shorthand) so the end state holds after the slide-in
+3. Reduced content padding from 16px → 12px so more content fits without
+   scrolling
+4. Added a dreamy custom scrollbar (6px, cyan, rounded) via
+   `.prism-settings-scroll` class + webkit scrollbar CSS so users can
+   see they can scroll
+
+**Verification:**
+- Drawer height: 577px (full viewport) ✓
+- Content scrollHeight: 541px, clientHeight: 468px → scrollable ✓
+- VLM: 9/10 completeness — "Performance, Render Quality, Diagnostics & AI
+  toggles, footer" all visible
+- ESLint: clean
+
+**Key learning:** When animating a fixed-position drawer with
+`transform: translateX()`, always add `animation-fill-mode: forwards`
+(or the `forwards` keyword in the shorthand) — otherwise the element
+reverts to its pre-animation transform state after the animation ends,
+which can collapse its layout. For full-height fixed drawers, prefer
+explicit `height: 100vh` over `top:0; bottom:0` anchoring when combined
+with transforms.

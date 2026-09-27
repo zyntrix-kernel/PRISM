@@ -11,7 +11,7 @@ import { disposeGroup, type BuilderCtx, type WorldAPI } from './types';
 import { NOISE_GLSL } from './noise_glsl';
 
 export function buildNebula(ctx: BuilderCtx): WorldAPI {
-  const { world, quality } = ctx;
+  const { world, quality, glowTex } = ctx;
   const grabbables: THREE.Object3D[] = [];
 
   const isUltra = quality === 'ultra';
@@ -140,12 +140,30 @@ export function buildNebula(ctx: BuilderCtx): WorldAPI {
   world.add(bgStars);
 
   // ── Central core glow ────────────────────────────────────────────────
-  const coreSprite = new THREE.Sprite(new THREE.SpriteMaterial({
-    color: 0x88ddff, transparent: true, opacity: 0.3,
+  // Multi-layer additive core: bright inner sprite + soft outer halo.
+  // Both use the shared radial glowTex (soft circular falloff) — without
+  // a texture map, sprites render as flat hard-edged squares (the "odd
+  // square in the middle" bug).
+  const coreInner = new THREE.Sprite(new THREE.SpriteMaterial({
+    map: glowTex, color: 0x88ddff, transparent: true, opacity: 0.85,
     blending: THREE.AdditiveBlending, depthWrite: false,
   }));
-  coreSprite.scale.set(3, 3, 1);
-  world.add(coreSprite);
+  coreInner.scale.set(2.5, 2.5, 1);
+  world.add(coreInner);
+
+  const coreHalo = new THREE.Sprite(new THREE.SpriteMaterial({
+    map: glowTex, color: 0x9988ff, transparent: true, opacity: 0.35,
+    blending: THREE.AdditiveBlending, depthWrite: false,
+  }));
+  coreHalo.scale.set(6, 6, 1);
+  world.add(coreHalo);
+
+  // A small bright PointLight at the core illuminates the inner particles
+  // (they're MeshBasicMaterial so this is subtle, but it adds depth on
+  // MeshStandard children if any are added later).
+  const coreLight = new THREE.PointLight(0xaaccff, 1.2, 12, 2);
+  coreLight.position.set(0, 0, 0);
+  world.add(coreLight);
 
   return {
     grabbables,
@@ -173,9 +191,15 @@ export function buildNebula(ctx: BuilderCtx): WorldAPI {
       cloud.rotation.y += dt * 0.05;
       bgStars.rotation.y -= dt * 0.02;
 
-      const pulse = 3 + Math.sin(elapsed * 0.8) * 0.5;
-      coreSprite.scale.set(pulse, pulse, 1);
-      (coreSprite.material as THREE.SpriteMaterial).opacity = 0.25 + Math.sin(elapsed * 0.8) * 0.08;
+      // Core: dual-layer breathing pulse (inner bright + outer halo).
+      const innerPulse = 2.5 + Math.sin(elapsed * 0.8) * 0.4;
+      const haloPulse = 6 + Math.sin(elapsed * 0.5 + 1.2) * 1.0;
+      coreInner.scale.set(innerPulse, innerPulse, 1);
+      coreHalo.scale.set(haloPulse, haloPulse, 1);
+      (coreInner.material as THREE.SpriteMaterial).opacity = 0.85 + Math.sin(elapsed * 1.2) * 0.1;
+      (coreHalo.material as THREE.SpriteMaterial).opacity = 0.35 + Math.sin(elapsed * 0.5) * 0.08;
+      // Core light intensity breathes with the pulse.
+      coreLight.intensity = 1.2 + Math.sin(elapsed * 0.8) * 0.3;
     },
     coachHint() { return 'A living nebula — Perlin noise drives the flow'; },
     dispose() { disposeGroup(world); },

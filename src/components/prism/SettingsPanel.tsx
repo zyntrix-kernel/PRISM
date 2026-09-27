@@ -62,8 +62,8 @@ export default function SettingsPanel({ state, app }: Props) {
         aria-label="Settings"
         aria-expanded={open}
         title="Settings"
-        className={open ? "active" : ""}
-        style={{ display: "flex", alignItems: "center", justifyContent: "center" }}
+        className={`prism-pressable ${open ? "active" : ""}`}
+        style={{ display: "flex", alignItems: "center", justifyContent: "center", padding: "8px 10px" }}
       >
         <Settings size={14} style={{ animation: open ? "prism-gear-spin 4s linear infinite" : "none" }} />
       </button>
@@ -77,47 +77,39 @@ export default function SettingsPanel({ state, app }: Props) {
               position: "fixed",
               inset: 0,
               zIndex: 35,
-              background: "rgba(6, 4, 13, 0.45)",
-              backdropFilter: "blur(4px)",
-              WebkitBackdropFilter: "blur(4px)",
-              animation: "prism-fade-in 160ms cubic-bezier(0.2,0,0,1)",
+              background: "rgba(6, 4, 13, 0.55)",
+              backdropFilter: "blur(8px) saturate(80%)",
+              WebkitBackdropFilter: "blur(8px) saturate(80%)",
+              animation: "prism-fade-in 200ms cubic-bezier(0.2,0,0,1)",
             }}
             aria-hidden="true"
           />
           <div
-            className="prism-glass"
+            className="prism-glass-premium prism-drawer-enter"
             style={{
               position: "fixed",
               top: 0,
               right: 0,
               height: "100vh",
-              width: "min(340px, calc(100vw - 32px))",
+              width: "min(360px, calc(100vw - 32px))",
               zIndex: 36,
               display: "flex",
               flexDirection: "column",
-              background: "var(--glass-3)",
-              boxShadow: "var(--glass-glow-strong), var(--glass-highlight)",
-              borderLeft: "1px solid var(--glass-line-strong)",
+              borderLeft: "1px solid rgba(255, 255, 255, 0.08)",
               borderRadius: 0,
               borderRight: "none",
               borderTop: "none",
               borderBottom: "none",
-              animation: "prism-drawer-in 280ms cubic-bezier(0.34,1.56,0.64,1) forwards",
             }}
           >
             <style>{`
-              @keyframes prism-drawer-in {
-                from { transform: translateX(100%); opacity: 0.4; }
-                to { transform: translateX(0); opacity: 1; }
-              }
               @keyframes prism-gear-spin {
                 to { transform: rotate(360deg); }
               }
-              @keyframes prism-toggle-knob {
-                from { transform: translateX(0); }
-                to { transform: translateX(20px); }
-              }
             `}</style>
+
+            {/* Premium drag handle at top (centered, 36×4px) */}
+            <div className="prism-drag-handle" aria-hidden="true" />
 
             {/* Drawer header */}
             <div
@@ -125,7 +117,7 @@ export default function SettingsPanel({ state, app }: Props) {
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "space-between",
-                padding: "18px 20px 14px",
+                padding: "16px 20px 14px",
                 borderBottom: "1px solid var(--glass-line)",
               }}
             >
@@ -310,15 +302,16 @@ function SectionHeader({
         alignItems: "center",
         gap: 7,
         marginBottom: 8,
+        marginTop: 4,
       }}
     >
-      <Icon size={12} style={{ color: "var(--hud-fg-faint)" }} />
+      <Icon size={11} style={{ color: "rgba(255, 255, 255, 0.4)" }} />
       <span
         style={{
           fontSize: 10,
           letterSpacing: 1.6,
           textTransform: "uppercase",
-          color: "var(--hud-fg-faint)",
+          color: "rgba(255, 255, 255, 0.4)",
           fontWeight: 600,
         }}
       >
@@ -345,6 +338,7 @@ function ToggleRow({
     <button
       type="button"
       onClick={onToggle}
+      className="prism-pressable"
       style={{
         display: "flex",
         alignItems: "center",
@@ -357,13 +351,15 @@ function ToggleRow({
         textAlign: "left",
         color: "var(--hud-fg)",
         fontFamily: "inherit",
-        transition: "all 140ms cubic-bezier(0.2,0,0,1)",
+        transition: "background 140ms cubic-bezier(0.2,0,0,1), border-color 140ms cubic-bezier(0.2,0,0,1)",
       }}
       onMouseEnter={(e) => {
         (e.currentTarget as HTMLElement).style.background = "rgba(255,255,255,0.07)";
+        (e.currentTarget as HTMLElement).style.borderColor = "rgba(255,255,255,0.16)";
       }}
       onMouseLeave={(e) => {
         (e.currentTarget as HTMLElement).style.background = "rgba(255,255,255,0.03)";
+        (e.currentTarget as HTMLElement).style.borderColor = "var(--glass-line)";
       }}
     >
       <span
@@ -386,33 +382,13 @@ function ToggleRow({
         <span style={{ fontSize: 13, fontWeight: 500 }}>{label}</span>
         <span style={{ fontSize: 11, color: "var(--hud-fg-faint)" }}>{desc}</span>
       </span>
-      {/* Toggle switch */}
+      {/* Premium iOS-style toggle switch (rounded pill, green when on, smooth slide) */}
       <span
-        style={{
-          width: 38,
-          height: 22,
-          flex: "none",
-          borderRadius: 11,
-          background: active ? "var(--accent)" : "rgba(255,255,255,0.1)",
-          position: "relative",
-          transition: "background 200ms cubic-bezier(0.2,0,0,1)",
-          boxShadow: active ? "0 0 10px rgba(154,220,255,0.5)" : "inset 0 1px 2px rgba(0,0,0,0.3)",
-        }}
+        className="prism-toggle-track"
+        data-on={active ? "true" : "false"}
+        aria-hidden="true"
       >
-        <span
-          style={{
-            position: "absolute",
-            top: 2,
-            left: 2,
-            width: 18,
-            height: 18,
-            borderRadius: "50%",
-            background: active ? "#fff" : "var(--hud-fg-dim)",
-            transform: active ? "translateX(16px)" : "translateX(0)",
-            transition: "transform 200ms cubic-bezier(0.34,1.56,0.64,1), background 200ms",
-            boxShadow: "0 1px 3px rgba(0,0,0,0.4)",
-          }}
-        />
+        <span className="prism-toggle-knob" />
       </span>
     </button>
   );

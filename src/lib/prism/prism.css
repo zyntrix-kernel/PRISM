@@ -24,7 +24,7 @@
   --ok: #30d158;
   --violet-glow: transparent;
 
-  /* ---- Surfaces: unified glass (Apple Materials) ---- */
+  /* ---- Surfaces: unified glass (Apple Materials, premium) ---- */
   --glass-1: rgba(255, 255, 255, 0.04);
   --glass-2: rgba(28, 28, 30, 0.72);
   --glass-3: rgba(18, 18, 20, 0.88);
@@ -32,11 +32,23 @@
   --glass-line: rgba(255, 255, 255, 0.1);
   --glass-line-strong: rgba(10, 132, 255, 0.35);
   --glass-violet-line: rgba(255, 255, 255, 0.08);
-  --glass-highlight: inset 0 0.5px 0 rgba(255, 255, 255, 0.1);
+
+  /* Premium glass recipe — top edge highlight + inner glow on hover +
+     layered (ambient + key + rim) shadow for true depth. */
+  --glass-highlight: inset 0 0.5px 0 rgba(255, 255, 255, 0.12);
+  --glass-top-edge: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  --glass-hover-inner: inset 0 0.0 1px rgba(255, 255, 255, 0.08),
+    inset 0 0 24px rgba(255, 255, 255, 0.03);
   --glass-edge: none;
-  --glass-glow: 0 2px 10px rgba(0, 0, 0, 0.4);
-  --glass-glow-strong: 0 4px 20px rgba(0, 0, 0, 0.5);
-  --glass-lift: 0 1px 4px rgba(0, 0, 0, 0.3);
+  /* Ambient: large diffuse cast. Key: tight contact shadow. Rim: accent-tinted edge. */
+  --glass-glow: 0 1px 2px rgba(0, 0, 0, 0.5),
+    0 8px 24px rgba(0, 0, 0, 0.42),
+    0 16px 48px rgba(0, 0, 0, 0.32);
+  --glass-glow-strong: 0 1px 2px rgba(0, 0, 0, 0.55),
+    0 12px 32px rgba(0, 0, 0, 0.5),
+    0 24px 64px rgba(0, 0, 0, 0.4);
+  --glass-lift: 0 1px 2px rgba(0, 0, 0, 0.4), 0 4px 12px rgba(0, 0, 0, 0.3);
+  --glass-rim: 0 0 0 0.5px rgba(255, 255, 255, 0.04);
 
   /* ---- Typography: SF Pro metrics (system font on Apple devices) ---- */
   --font-ui: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display",
@@ -58,23 +70,25 @@
   --space-xl: 20px;
   --space-2xl: 28px;
 
-  /* ---- Shape: Apple continuous-corner feel ---- */
+  /* ---- Shape: Apple continuous-corner feel (premium radii) ---- */
   --radius-xs: 6px;
   --radius-sm: 8px;
   --radius-md: 10px;
-  --radius-lg: 12px;
-  --radius-xl: 14px;
-  --radius-pill: 8px;
+  --radius-lg: 14px;
+  --radius-xl: 18px;
+  --radius-pill: 999px;
+  --radius-modal: 16px;
 
-  /* ---- Motion: Apple spring physics ---- */
-  --motion-fast: 200ms;
-  --motion-med: 300ms;
+  /* ---- Motion: Apple spring physics + premium micro-interactions ---- */
+  --motion-fast: 140ms;
+  --motion-med: 280ms;
   --motion-slow: 450ms;
-  --motion-ease: cubic-bezier(0.25, 0.1, 0.25, 1);
-  --motion-dream: cubic-bezier(0.25, 0.1, 0.25, 1);
+  --motion-ease: cubic-bezier(0.2, 0, 0, 1);
+  --motion-dream: cubic-bezier(0.16, 1, 0.3, 1);
   --motion-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
   --motion-out-back: cubic-bezier(0.34, 1.56, 0.64, 1);
-  --motion-snappy: cubic-bezier(0.25, 0.1, 0.25, 1);
+  --motion-snappy: cubic-bezier(0.2, 0, 0, 1);
+  --motion-press: 80ms;
 }
 
 /* ==========================================================================
@@ -373,14 +387,138 @@ video#prism-webcam.live + #prism-webcam-frame .prism-webcam-placeholder {
 
 /* ==========================================================================
    Shared glass recipe — the foundational spatial surface
+   ----------------------------------------------------------------------------
+   Layered: top-edge highlight (1px) + frosted backdrop (28px blur, 180%
+   saturation) + ambient/key/rim shadow stack for true depth.
    ========================================================================== */
 
 .prism-glass {
+  position: relative;
   background: var(--glass-2);
-  -webkit-backdrop-filter: blur(20px) saturate(180%);
-  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(28px) saturate(180%);
+  backdrop-filter: blur(28px) saturate(180%);
   border: 1px solid var(--glass-line);
-  box-shadow: var(--glass-highlight), var(--glass-glow);
+  box-shadow: var(--glass-highlight), var(--glass-top-edge), var(--glass-glow),
+    var(--glass-rim);
+  transition: box-shadow var(--motion-fast) var(--motion-ease),
+    border-color var(--motion-fast) var(--motion-ease);
+}
+
+/* Premium glass variant — heavier blur + stronger layered shadow.
+   Use for elevated surfaces: settings drawer, command palette, help card. */
+.prism-glass-premium {
+  background: var(--glass-3);
+  -webkit-backdrop-filter: blur(40px) saturate(200%);
+  backdrop-filter: blur(40px) saturate(200%);
+  border: 1px solid var(--glass-line);
+  box-shadow: var(--glass-highlight), var(--glass-top-edge),
+    var(--glass-glow-strong), var(--glass-rim);
+}
+
+/* Subtle inner glow when hovered — premium tactile feedback */
+.prism-glass-hover {
+  transition: box-shadow var(--motion-fast) var(--motion-ease),
+    background var(--motion-fast) var(--motion-ease);
+}
+.prism-glass-hover:hover {
+  box-shadow: var(--glass-highlight), var(--glass-top-edge),
+    var(--glass-hover-inner), var(--glass-glow), var(--glass-rim);
+  background: rgba(34, 34, 36, 0.78);
+}
+
+/* ==========================================================================
+   Premium wordmark — metallic gradient text (PRISM)
+   ========================================================================== */
+.prism-wordmark {
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  background: linear-gradient(180deg, #f5f5f7 0%, #d8d8dc 50%, #a0a0a8 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+  /* Fallback for browsers without background-clip:text */
+  @supports not (background-clip: text) {
+    color: var(--hud-fg);
+  }
+}
+
+/* ==========================================================================
+   Status dot — soft pulsing glow that signals system health
+   ========================================================================== */
+.prism-status-dot {
+  position: relative;
+  flex: none;
+  border-radius: 50%;
+  transition: background var(--motion-fast) var(--motion-ease),
+    box-shadow var(--motion-fast) var(--motion-ease);
+}
+.prism-status-dot::after {
+  /* Soft pulsing halo — sonar-like ambient ping */
+  content: "";
+  position: absolute;
+  inset: -2px;
+  border-radius: 50%;
+  background: inherit;
+  opacity: 0.4;
+  animation: prism-status-ping 2.4s ease-out infinite;
+  pointer-events: none;
+}
+@keyframes prism-status-ping {
+  0% {
+    transform: scale(1);
+    opacity: 0.5;
+  }
+  70% {
+    transform: scale(2.4);
+    opacity: 0;
+  }
+  100% {
+    transform: scale(2.4);
+    opacity: 0;
+  }
+}
+
+/* ==========================================================================
+   Button group separator — 1px vertical divider between HUD groups
+   ========================================================================== */
+.prism-btn-sep {
+  width: 1px;
+  height: 20px;
+  background: rgba(255, 255, 255, 0.08);
+  flex: none;
+  margin: 0 4px;
+}
+
+/* ==========================================================================
+   Premium entrance animation — fade + slide up 8px, 280ms
+   ========================================================================== */
+@keyframes prism-enter {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.prism-enter {
+  animation: prism-enter 280ms var(--motion-spring);
+}
+
+/* ==========================================================================
+   Universal micro-interaction tokens — apply to all interactive elements
+   ========================================================================== */
+.prism-pressable {
+  transition: transform var(--motion-press) var(--motion-ease),
+    background var(--motion-fast) var(--motion-ease),
+    border-color var(--motion-fast) var(--motion-ease),
+    box-shadow var(--motion-fast) var(--motion-ease),
+    color var(--motion-fast) var(--motion-ease);
+}
+.prism-pressable:active {
+  transform: scale(0.96);
 }
 
 /* ==========================================================================
@@ -394,9 +532,9 @@ video#prism-webcam.live + #prism-webcam-frame .prism-webcam-placeholder {
   right: 16px;
   display: flex;
   align-items: center;
-  gap: 16px;
-  padding: 10px 16px;
-  border-radius: 16px;
+  gap: 12px;
+  padding: 8px 14px;
+  border-radius: var(--radius-lg);
   z-index: 12;
   animation: prism-hud-in 600ms var(--motion-ease) both;
 }
@@ -414,14 +552,15 @@ video#prism-webcam.live + #prism-webcam-frame .prism-webcam-placeholder {
 
 #prism-hud-title {
   font-weight: 600;
-  font-size: 15px;
-  letter-spacing: -0.4px;
+  font-size: 14px;
+  letter-spacing: 0.08em;
   color: var(--hud-fg);
   white-space: nowrap;
   text-shadow: none;
   display: flex;
   align-items: center;
   gap: 10px;
+  flex: none;
 }
 
 #prism-hud-title .prism-mark {
@@ -475,26 +614,32 @@ video#prism-webcam.live + #prism-webcam-frame .prism-webcam-placeholder {
   align-items: center;
 }
 
-/* ---- Controls — Apple-style filled buttons ---- */
+/* ---- Controls — Apple-style filled buttons (premium consistency) ---- */
 #prism-hud-controls button,
 #prism-hud-controls select {
-  background: rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.06);
   color: var(--hud-fg);
-  border: none;
-  border-radius: 8px;
-  box-shadow: none;
-  padding: 7px 14px;
-  min-height: 34px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: var(--radius-sm);
+  box-shadow: inset 0 0.5px 0 rgba(255, 255, 255, 0.06);
+  padding: 8px 14px;
+  min-height: 32px;
   font-size: 13px;
   font-family: inherit;
   font-weight: 500;
   letter-spacing: -0.1px;
   cursor: pointer;
-  transition: background 200ms var(--motion-ease),
-    transform 100ms var(--motion-spring);
+  transition: background var(--motion-fast) var(--motion-ease),
+    border-color var(--motion-fast) var(--motion-ease),
+    transform var(--motion-press) var(--motion-ease),
+    box-shadow var(--motion-fast) var(--motion-ease),
+    color var(--motion-fast) var(--motion-ease);
   position: relative;
   -webkit-backdrop-filter: blur(10px);
   backdrop-filter: blur(10px);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
 /* Remove the shimmer sweep — too playful */
@@ -511,6 +656,9 @@ video#prism-webcam.live + #prism-webcam-frame .prism-webcam-placeholder {
 #prism-hud-controls button:hover,
 #prism-hud-controls select:hover {
   background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(255, 255, 255, 0.14);
+  box-shadow: inset 0 0.5px 0 rgba(255, 255, 255, 0.1),
+    0 1px 2px rgba(0, 0, 0, 0.3);
   color: var(--hud-fg);
 }
 
@@ -523,11 +671,15 @@ video#prism-webcam.live + #prism-webcam-frame .prism-webcam-placeholder {
 #prism-hud-controls button.active {
   background: var(--accent);
   color: var(--accent-ink);
+  border-color: var(--accent);
   font-weight: 600;
+  box-shadow: inset 0 0.5px 0 rgba(255, 255, 255, 0.2),
+    0 1px 3px rgba(0, 0, 0, 0.3), 0 0 12px rgba(10, 132, 255, 0.3);
 }
 
 #prism-hud-controls button.active:hover {
   background: #0071e3;
+  border-color: #0071e3;
 }
 
 #prism-hud-controls button:disabled {
@@ -536,22 +688,24 @@ video#prism-webcam.live + #prism-webcam-frame .prism-webcam-placeholder {
   transform: none;
 }
 
+/* Premium focus ring — accent halo, not browser outline */
 #prism-hud-controls button:focus-visible,
 #prism-hud-controls select:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
-  box-shadow: 0 0 0 4px rgba(154, 220, 255, 0.25), 0 0 16px rgba(154, 220, 255, 0.4);
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px rgba(10, 132, 255, 0.4),
+    inset 0 0.5px 0 rgba(255, 255, 255, 0.1);
 }
 
-/* Global focus-visible polish for all interactive elements within PRISM */
+/* Global focus-visible polish — accent halo, no browser outline */
 .prism-root button:focus-visible,
 .prism-root select:focus-visible,
-.prism-root a:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
-  box-shadow: 0 0 0 4px rgba(154, 220, 255, 0.22);
-  transition: box-shadow var(--motion-fast) var(--motion-ease),
-    outline-offset var(--motion-fast) var(--motion-ease);
+.prism-root a:focus-visible,
+.prism-root input:focus-visible,
+.prism-root [tabindex]:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(10, 132, 255, 0.4);
+  transition: box-shadow var(--motion-fast) var(--motion-ease);
 }
 
 /* Focus ring animation for keyboard navigation (subtle pulse) */
@@ -561,10 +715,10 @@ video#prism-webcam.live + #prism-webcam-frame .prism-webcam-placeholder {
 
 @keyframes prism-focus-pulse {
   0%, 100% {
-    box-shadow: 0 0 0 4px rgba(154, 220, 255, 0.22);
+    box-shadow: 0 0 0 2px rgba(10, 132, 255, 0.35);
   }
   50% {
-    box-shadow: 0 0 0 4px rgba(154, 220, 255, 0.35), 0 0 12px rgba(154, 220, 255, 0.3);
+    box-shadow: 0 0 0 4px rgba(10, 132, 255, 0.25), 0 0 14px rgba(10, 132, 255, 0.3);
   }
 }
 
@@ -1306,6 +1460,292 @@ video#prism-webcam.live + #prism-webcam-frame .prism-webcam-placeholder {
 }
 
 /* ==========================================================================
+   Premium shell refinements — preset gallery, command palette, toasts
+   ----------------------------------------------------------------------------
+   Layered on top of the base Apple-HIG recipe for elevated modal surfaces.
+   ========================================================================== */
+
+/* ---- Preset gallery cards (dropdown picker) ---- */
+.prism-preset-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  padding: 12px 14px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--glass-line);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  text-align: left;
+  color: var(--hud-fg);
+  font-family: inherit;
+  transition: transform var(--motion-fast) var(--motion-spring),
+    background var(--motion-fast) var(--motion-ease),
+    border-color var(--motion-fast) var(--motion-ease),
+    box-shadow var(--motion-fast) var(--motion-ease);
+  position: relative;
+  overflow: hidden;
+}
+.prism-preset-card:hover {
+  transform: translateY(-2px);
+  background: rgba(255, 255, 255, 0.07);
+}
+.prism-preset-card:active {
+  transform: translateY(0) scale(0.98);
+}
+.prism-preset-card .prism-preset-accent-bar {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  background: linear-gradient(180deg, var(--accent-hue, var(--accent)), transparent);
+  opacity: 0;
+  transition: opacity var(--motion-fast) var(--motion-ease);
+}
+.prism-preset-card:hover .prism-preset-accent-bar {
+  opacity: 1;
+}
+
+/* Premium spring entrance for the dropdown itself */
+@keyframes prism-dropdown-in {
+  from {
+    opacity: 0;
+    transform: scale(0.96) translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+.prism-dropdown-enter {
+  animation: prism-dropdown-in 200ms var(--motion-spring);
+  transform-origin: top right;
+}
+
+/* ---- Command palette premium shell ---- */
+.prism-cmd-shell {
+  border-radius: var(--radius-modal) !important;
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+  box-shadow: 0 0 0 0.5px rgba(255, 255, 255, 0.06),
+    0 1px 2px rgba(0, 0, 0, 0.5),
+    0 24px 64px rgba(0, 0, 0, 0.55),
+    0 0 80px rgba(10, 132, 255, 0.08) !important;
+}
+@keyframes prism-cmd-in {
+  from {
+    opacity: 0;
+    transform: scale(0.96) translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+.prism-cmd-enter {
+  animation: prism-cmd-in 220ms var(--motion-spring);
+  transform-origin: top center;
+}
+
+/* Premium search input — borderless, bottom divider fades in on focus */
+.prism-cmd-input {
+  background: transparent !important;
+  border: none !important;
+  outline: none !important;
+  box-shadow: inset 0 -1px 0 rgba(255, 255, 255, 0.06) !important;
+  transition: box-shadow var(--motion-med) var(--motion-ease) !important;
+}
+.prism-cmd-input:focus {
+  box-shadow: inset 0 -1px 0 rgba(10, 132, 255, 0.5) !important;
+}
+
+/* Active command row — accent tinted background + subtle left accent */
+.prism-cmd-row-active {
+  background: rgba(10, 132, 255, 0.12) !important;
+  box-shadow: inset 2px 0 0 var(--accent), inset 0 0.5px 0 rgba(255, 255, 255, 0.04) !important;
+}
+
+/* ---- Settings drawer premium drag handle ---- */
+.prism-drag-handle {
+  width: 36px;
+  height: 4px;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.2);
+  margin: 8px auto 0;
+  flex: none;
+  transition: background var(--motion-fast) var(--motion-ease),
+    width var(--motion-fast) var(--motion-spring);
+}
+.prism-drag-handle:hover {
+  background: rgba(255, 255, 255, 0.35);
+  width: 44px;
+}
+
+/* Premium drawer entrance — spring from right */
+@keyframes prism-drawer-premium-in {
+  from {
+    transform: translateX(100%);
+    opacity: 0.4;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+.prism-drawer-enter {
+  animation: prism-drawer-premium-in 360ms var(--motion-spring) forwards;
+}
+
+/* ---- iOS-style toggle switch (premium) ---- */
+.prism-toggle-track {
+  width: 38px;
+  height: 22px;
+  flex: none;
+  border-radius: var(--radius-pill);
+  background: rgba(255, 255, 255, 0.1);
+  position: relative;
+  transition: background var(--motion-med) var(--motion-ease),
+    box-shadow var(--motion-fast) var(--motion-ease);
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.3),
+    inset 0 0 0 0.5px rgba(255, 255, 255, 0.04);
+}
+.prism-toggle-track[data-on="true"] {
+  background: var(--ok);
+  box-shadow: 0 0 12px rgba(48, 209, 88, 0.45),
+    inset 0 1px 1px rgba(255, 255, 255, 0.2);
+}
+.prism-toggle-knob {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #fff;
+  transform: translateX(0);
+  transition: transform var(--motion-med) var(--motion-spring);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4), 0 0 0 0.5px rgba(0, 0, 0, 0.04);
+}
+.prism-toggle-track[data-on="true"] .prism-toggle-knob {
+  transform: translateX(16px);
+}
+
+/* ---- Toast premium polish ---- */
+.prism-toast {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 11px 14px 11px 16px;
+  background: var(--glass-3);
+  -webkit-backdrop-filter: blur(28px) saturate(180%);
+  backdrop-filter: blur(28px) saturate(180%);
+  border: 1px solid var(--glass-line);
+  border-radius: var(--radius-md);
+  box-shadow: var(--glass-highlight), var(--glass-top-edge),
+    0 0 24px var(--toast-hue-glow, rgba(0, 0, 0, 0.3)),
+    0 8px 24px rgba(0, 0, 0, 0.45);
+  color: var(--hud-fg);
+  font-family: var(--font-ui);
+  font-size: 13px;
+  line-height: 1.4;
+  pointer-events: auto;
+  position: relative;
+  overflow: hidden;
+  animation: prism-toast-in 380ms var(--motion-spring);
+  transition: transform var(--motion-med) var(--motion-spring),
+    opacity var(--motion-med) var(--motion-ease);
+}
+.prism-toast.stacked {
+  transform: scale(0.98);
+  opacity: 0.92;
+}
+.prism-toast .prism-toast-accent {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  background: var(--toast-hue, var(--accent));
+  box-shadow: 0 0 12px var(--toast-hue, var(--accent));
+}
+.prism-toast .prism-toast-close {
+  background: transparent;
+  border: none;
+  color: var(--hud-fg-faint);
+  cursor: pointer;
+  padding: 2px;
+  flex: none;
+  display: flex;
+  margin-top: -1px;
+  opacity: 0;
+  transition: opacity var(--motion-fast) var(--motion-ease),
+    color var(--motion-fast) var(--motion-ease);
+}
+.prism-toast:hover .prism-toast-close {
+  opacity: 1;
+}
+.prism-toast .prism-toast-close:hover {
+  color: var(--hud-fg);
+}
+
+@keyframes prism-toast-in {
+  from {
+    opacity: 0;
+    transform: translateX(40px) scale(0.94);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0) scale(1);
+  }
+}
+
+/* ---- Input mode indicator — sonar ping when active ---- */
+@keyframes prism-sonar-ping {
+  0% {
+    transform: scale(0.85);
+    opacity: 0.6;
+  }
+  100% {
+    transform: scale(2.4);
+    opacity: 0;
+  }
+}
+.prism-sonar-ring {
+  position: absolute;
+  inset: -2px;
+  border-radius: 50%;
+  border: 1.5px solid var(--sonar-hue, var(--accent));
+  animation: prism-sonar-ping 1.8s ease-out infinite;
+  pointer-events: none;
+}
+@keyframes prism-mode-breathe-premium {
+  0%, 100% {
+    opacity: 0.6;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.9;
+    transform: scale(1.08);
+  }
+}
+.prism-mode-breathe-premium {
+  animation: prism-mode-breathe-premium 3.6s ease-in-out infinite;
+}
+@keyframes prism-mode-ring-premium {
+  0%, 100% {
+    opacity: 0.18;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.36;
+    transform: scale(1.16);
+  }
+}
+.prism-mode-ring-premium {
+  animation: prism-mode-ring-premium 3.6s ease-in-out infinite;
+}
+
+/* ==========================================================================
    Responsive — recompose, don't just scale
    ========================================================================== */
 
@@ -1341,7 +1781,7 @@ video#prism-webcam.live + #prism-webcam-frame .prism-webcam-placeholder {
 
   #prism-hud-controls button,
   #prism-hud-controls select {
-    min-height: 42px;
+    min-height: 40px;
     font-size: 0.92em;
     padding: 7px 13px;
   }

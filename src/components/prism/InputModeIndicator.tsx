@@ -79,11 +79,11 @@ export default function InputModeIndicator({
         gap: 0,
         padding: "6px 6px 6px 14px",
         background: "var(--glass-2)",
-        backdropFilter: "blur(22px) saturate(160%)",
-        WebkitBackdropFilter: "blur(22px) saturate(160%)",
+        backdropFilter: "blur(28px) saturate(180%)",
+        WebkitBackdropFilter: "blur(28px) saturate(180%)",
         border: "1px solid var(--glass-line)",
         borderRadius: "var(--radius-pill)",
-        boxShadow: `var(--glass-highlight), var(--glass-edge), 0 0 20px rgba(${hue}, 0.18), 0 6px 20px rgba(0,0,0,0.4)`,
+        boxShadow: `var(--glass-highlight), var(--glass-top-edge), 0 0 24px rgba(${hue}, 0.18), 0 6px 20px rgba(0,0,0,0.4), var(--glass-rim)`,
         pointerEvents: "none",
         transition: "box-shadow 240ms cubic-bezier(0.2,0,0,1)",
         animation: "prism-mode-in 320ms cubic-bezier(0.34,1.56,0.64,1)",
@@ -93,18 +93,6 @@ export default function InputModeIndicator({
         @keyframes prism-mode-in {
           from { opacity: 0; transform: translateX(-50%) translateY(8px) scale(0.94); }
           to { opacity: 1; transform: translateX(-50%) translateY(0) scale(1); }
-        }
-        @keyframes prism-mode-pulse {
-          0%, 100% { opacity: 0.55; transform: scale(1); }
-          50% { opacity: 1; transform: scale(1.12); }
-        }
-        @keyframes prism-mode-breathe {
-          0%, 100% { opacity: 0.7; }
-          50% { opacity: 1; }
-        }
-        @keyframes prism-mode-breathe-ring {
-          0%, 100% { opacity: 0.15; transform: scale(1); }
-          50% { opacity: 0.4; transform: scale(1.18); }
         }
       `}</style>
 
@@ -154,6 +142,7 @@ export default function InputModeIndicator({
         }}
       >
         <span
+          className={gesture === "idle" ? "prism-mode-breathe-premium" : undefined}
           style={{
             width: 26,
             height: 26,
@@ -165,33 +154,34 @@ export default function InputModeIndicator({
             color: `rgb(${hue})`,
             position: "relative",
             transition: "all 240ms cubic-bezier(0.34,1.56,0.64,1)",
-            animation:
-              gesture === "idle"
-                ? "prism-mode-breathe 3.5s ease-in-out infinite"
-                : undefined,
           }}
         >
-          {/* Pulsing ring for active gestures */}
+          {/* Sonar ping rings — radiate outward and fade when active */}
           {gesture !== "idle" && (
-            <span
-              style={{
-                position: "absolute",
-                inset: -3,
-                borderRadius: "50%",
-                border: `1px solid rgba(${hue}, 0.45)`,
-                animation: "prism-mode-pulse 1.6s ease-in-out infinite",
-              }}
-            />
+            <>
+              <span
+                className="prism-sonar-ring"
+                style={{ "--sonar-hue": `rgb(${hue})` } as React.CSSProperties}
+              />
+              <span
+                className="prism-sonar-ring"
+                style={{
+                  animationDelay: "0.9s",
+                  "--sonar-hue": `rgb(${hue})`,
+                } as React.CSSProperties}
+              />
+            </>
           )}
           {/* Slow breathing ring for idle state (so it doesn't look frozen) */}
           {gesture === "idle" && (
             <span
+              className="prism-mode-ring-premium"
               style={{
                 position: "absolute",
                 inset: -2,
                 borderRadius: "50%",
-                border: `1px solid rgba(${hue}, 0.18)`,
-                animation: "prism-mode-breathe-ring 3.5s ease-in-out infinite",
+                border: `1px solid rgba(${hue}, 0.22)`,
+                pointerEvents: "none",
               }}
             />
           )}

@@ -244,33 +244,30 @@ export default function CommandPalette({ onClose, state, app }: Props) {
       onClick={onClose}
     >
       <div
-        className="prism-glass"
+        className="prism-glass-premium prism-cmd-shell prism-cmd-enter"
         onClick={(e) => e.stopPropagation()}
         style={{
           width: "min(560px, calc(100vw - 32px))",
           maxHeight: "70vh",
           display: "flex",
           flexDirection: "column",
-          borderRadius: "var(--radius-xl)",
-          background: "var(--glass-3)",
-          boxShadow: "var(--glass-glow-strong), var(--glass-highlight)",
           overflow: "hidden",
-          animation: "prism-help-in 200ms cubic-bezier(0.34,1.56,0.64,1)",
         }}
       >
-        {/* Search header */}
+        {/* Search header — borderless input, divider fades in on focus */}
         <div
           style={{
             display: "flex",
             alignItems: "center",
             gap: 12,
-            padding: "14px 18px",
+            padding: "16px 20px",
             borderBottom: "1px solid var(--glass-line)",
           }}
         >
           <Search size={18} style={{ color: "var(--accent)", flex: "none" }} />
           <input
             ref={inputRef}
+            className="prism-cmd-input"
             value={query}
             onChange={(e) => {
               setQuery(e.target.value);
@@ -279,27 +276,28 @@ export default function CommandPalette({ onClose, state, app }: Props) {
             placeholder="Search actions, presets, settings…"
             style={{
               flex: 1,
-              background: "transparent",
-              border: "none",
-              outline: "none",
               color: "var(--hud-fg)",
               fontFamily: "inherit",
               fontSize: 15,
+              fontWeight: 400,
             }}
           />
           <kbd
             style={{
               fontFamily: "var(--font-mono)",
-              fontSize: 11,
-              color: "var(--hud-fg-faint)",
+              fontSize: 10,
+              fontWeight: 600,
+              color: "var(--hud-fg-dim)",
               background: "rgba(255,255,255,0.06)",
               border: "1px solid var(--glass-line)",
               borderRadius: 6,
-              padding: "2px 7px",
+              padding: "3px 8px",
               flex: "none",
+              letterSpacing: 0.5,
+              textTransform: "uppercase",
             }}
           >
-            esc
+            Esc
           </kbd>
         </div>
 
@@ -311,14 +309,14 @@ export default function CommandPalette({ onClose, state, app }: Props) {
             </div>
           )}
           {groups.map(([group, items]) => (
-            <div key={group} style={{ marginBottom: 6 }}>
+            <div key={group} style={{ marginBottom: 4 }}>
               <div
                 style={{
                   fontSize: 10,
                   letterSpacing: 1.8,
                   textTransform: "uppercase",
-                  color: "var(--hud-fg-faint)",
-                  padding: "8px 10px 4px",
+                  color: "rgba(255, 255, 255, 0.4)",
+                  padding: "10px 12px 4px",
                   fontWeight: 600,
                 }}
               >
@@ -338,21 +336,21 @@ export default function CommandPalette({ onClose, state, app }: Props) {
                       a.run();
                       onClose();
                     }}
+                    className={`prism-pressable ${isActive ? "prism-cmd-row-active" : ""}`}
                     style={{
                       width: "100%",
                       display: "flex",
                       alignItems: "center",
                       gap: 12,
                       padding: "9px 12px",
-                      background: isActive ? "var(--accent-soft)" : "transparent",
+                      background: isActive ? undefined : "transparent",
                       border: "1px solid transparent",
                       borderRadius: "var(--radius-sm)",
                       cursor: "pointer",
                       textAlign: "left",
                       color: "var(--hud-fg)",
                       fontFamily: "inherit",
-                      transition: "all 120ms cubic-bezier(0.2,0,0,1)",
-                      boxShadow: isActive ? "inset 0 0 0 1px var(--glass-line-strong)" : "none",
+                      transition: "background 120ms cubic-bezier(0.2,0,0,1), box-shadow 120ms cubic-bezier(0.2,0,0,1)",
                     }}
                   >
                     <span
@@ -396,7 +394,7 @@ export default function CommandPalette({ onClose, state, app }: Props) {
           ))}
         </div>
 
-        {/* Footer hint */}
+        {/* Footer hint — premium keyboard chips */}
         <div
           style={{
             display: "flex",
@@ -408,16 +406,17 @@ export default function CommandPalette({ onClose, state, app }: Props) {
             color: "var(--hud-fg-faint)",
           }}
         >
-          <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
             <Hand size={12} />
-            <span>Press</span>
+            <span>Navigate</span>
             <Kbd>↑</Kbd>
             <Kbd>↓</Kbd>
-            <span>to navigate</span>
           </span>
           <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
-            <span>select</span>
+            <span>Select</span>
             <Kbd>↵</Kbd>
+            <span style={{ opacity: 0.6 }}>·</span>
+            <Kbd>Esc</Kbd>
           </span>
         </div>
       </div>
@@ -431,14 +430,16 @@ function Kbd({ children }: { children: React.ReactNode }) {
       style={{
         fontFamily: "var(--font-mono)",
         fontSize: 10,
+        fontWeight: 600,
         color: "var(--hud-fg-dim)",
-        background: "rgba(255,255,255,0.06)",
+        background: "rgba(255,255,255,0.05)",
         border: "1px solid var(--glass-line)",
         borderRadius: 5,
-        padding: "1px 6px",
-        minWidth: 18,
+        padding: "2px 7px",
+        minWidth: 22,
         textAlign: "center",
         display: "inline-block",
+        boxShadow: "inset 0 -1px 0 rgba(0,0,0,0.2)",
       }}
     >
       {children}

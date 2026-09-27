@@ -74,47 +74,23 @@ export default function PrismToast() {
       aria-live="polite"
       aria-atomic="false"
     >
-      {toasts.map((t) => {
+      {toasts.map((t, idx) => {
         const meta = KIND_META[t.kind];
         const Icon = meta.icon;
         const hue = t.hue ?? meta.hue;
+        // Stacked toasts behind the front get a subtle 0.98 scale + opacity
+        const isStacked = idx < toasts.length - 1;
         return (
           <div
             key={t.id}
+            className={`prism-toast ${isStacked ? "stacked" : ""}`}
             style={{
-              display: "flex",
-              alignItems: "flex-start",
-              gap: 10,
-              padding: "11px 14px 11px 12px",
-              background: "var(--glass-3)",
-              backdropFilter: "blur(24px) saturate(170%)",
-              WebkitBackdropFilter: "blur(24px) saturate(170%)",
-              border: `1px solid rgba(${hue}, 0.4)`,
-              borderRadius: "var(--radius-md)",
-              boxShadow: `var(--glass-highlight), 0 0 20px rgba(${hue}, 0.22), 0 8px 24px rgba(0,0,0,0.45)`,
-              color: "var(--hud-fg)",
-              fontFamily: "var(--font-ui)",
-              fontSize: 13,
-              lineHeight: 1.4,
-              pointerEvents: "auto",
-              animation: "prism-toast-in 360ms cubic-bezier(0.34,1.56,0.64,1)",
-              position: "relative",
-              overflow: "hidden",
-            }}
+              "--toast-hue": `rgb(${hue})`,
+              "--toast-hue-glow": `rgba(${hue}, 0.22)`,
+            } as React.CSSProperties}
           >
-            <style>{`
-              @keyframes prism-toast-in {
-                from { opacity: 0; transform: translateX(40px) scale(0.92); }
-                to { opacity: 1; transform: translateX(0) scale(1); }
-              }
-              @keyframes prism-toast-out {
-                to { opacity: 0; transform: translateX(40px) scale(0.92); }
-              }
-              @keyframes prism-toast-bar {
-                from { transform: scaleX(1); }
-                to { transform: scaleX(0); }
-              }
-            `}</style>
+            {/* Semantic left accent bar */}
+            <span className="prism-toast-accent" aria-hidden="true" />
             {/* Progress bar showing auto-dismiss countdown */}
             <div
               style={{
@@ -126,6 +102,7 @@ export default function PrismToast() {
                 background: `rgba(${hue}, 0.5)`,
                 transformOrigin: "left",
                 animation: "prism-toast-bar 3200ms linear forwards",
+                zIndex: 1,
               }}
             />
             <span
@@ -148,24 +125,21 @@ export default function PrismToast() {
             </span>
             <button
               type="button"
+              className="prism-toast-close"
               onClick={() => dismiss(t.id)}
               aria-label="Dismiss"
-              style={{
-                background: "transparent",
-                border: "none",
-                color: "var(--hud-fg-faint)",
-                cursor: "pointer",
-                padding: 2,
-                flex: "none",
-                display: "flex",
-                marginTop: -1,
-              }}
             >
               <X size={14} />
             </button>
           </div>
         );
       })}
+      <style>{`
+        @keyframes prism-toast-bar {
+          from { transform: scaleX(1); }
+          to { transform: scaleX(0); }
+        }
+      `}</style>
     </div>
   );
 }

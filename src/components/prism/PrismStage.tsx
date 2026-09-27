@@ -231,17 +231,17 @@ export default function PrismStage() {
       )}
 
       {/* ===== Top HUD — spatial control bar ===== */}
-      <header id="prism-hud" className="prism-glass">
+      <header id="prism-hud" className="prism-glass prism-glass-hover">
         <div id="prism-hud-title">
           <span className="prism-mark" aria-hidden="true" />
-          PRISM
+          <span className="prism-wordmark">PRISM</span>
         </div>
         <div
           id="prism-hud-status"
           ref={setEl("status")}
           role="status"
           aria-live="polite"
-          style={{ display: "flex", alignItems: "center", gap: 7 }}
+          style={{ display: "flex", alignItems: "center", gap: 8 }}
         >
           <span
             className="prism-status-dot"
@@ -250,7 +250,6 @@ export default function PrismStage() {
               width: 7,
               height: 7,
               borderRadius: "50%",
-              flex: "none",
               background: state?.cameraOn
                 ? "var(--ok)"
                 : state?.status && /fault|unavailable/i.test(state.status)
@@ -259,7 +258,6 @@ export default function PrismStage() {
               boxShadow: state?.cameraOn
                 ? "0 0 8px rgba(143,245,180,0.8)"
                 : "0 0 8px rgba(154,220,255,0.5)",
-              transition: "all 200ms cubic-bezier(0.2,0,0,1)",
             }}
           />
           <span className="prism-status-text">Starting…</span>
@@ -270,8 +268,9 @@ export default function PrismStage() {
             type="button"
             ref={setEl("cameraBtn") as React.RefObject<HTMLButtonElement>}
             aria-label="Enable camera for hand tracking"
+            className="prism-pressable"
           >
-            <Camera size={14} style={{ display: "inline", verticalAlign: "-2px", marginRight: 6 }} />
+            <Camera size={14} style={{ marginRight: 6 }} />
             Enable camera
           </button>
 
@@ -279,7 +278,7 @@ export default function PrismStage() {
           <div style={{ position: "relative" }}>
             <button
               type="button"
-              className={presetOpen ? "active" : ""}
+              className={`prism-pressable ${presetOpen ? "active" : ""}`}
               onClick={() => setPresetOpen((v) => !v)}
               aria-label="Choose world preset"
               aria-expanded={presetOpen}
@@ -329,6 +328,7 @@ export default function PrismStage() {
               }}
               title="Trigger the cinematic detonation (B)"
               aria-label="Detonate black hole"
+              className="prism-pressable"
               style={{
                 display: "flex",
                 alignItems: "center",
@@ -360,6 +360,9 @@ export default function PrismStage() {
             title="Easy point-and-go mode (E)"
             aria-label="Toggle easy point-and-go driving"
           />
+
+          {/* Premium separator between primary actions and utility group */}
+          <span className="prism-btn-sep" aria-hidden="true" />
 
           {/* Settings gear — opens drawer with Debug/AI/Quality/Easy */}
           <SettingsPanel state={state} app={app} />
@@ -407,14 +410,17 @@ export default function PrismStage() {
             ref={setEl("helpBtn") as React.RefObject<HTMLButtonElement>}
             title="Show help (H)"
             aria-label="Show help"
+            className="prism-pressable"
+            style={{ padding: "8px 10px" }}
           >
-            <HelpCircle size={13} style={{ display: "inline", verticalAlign: "-2px" }} />
+            <HelpCircle size={14} />
           </button>
           <button
             type="button"
             onClick={() => setCmdOpen(true)}
             title="Command palette (Cmd+K)"
             aria-label="Open command palette"
+            className="prism-pressable"
             style={{
               display: "flex",
               alignItems: "center",
@@ -685,16 +691,15 @@ function PresetGallery({
         aria-hidden="true"
       />
       <div
-        className="prism-glass"
+        className="prism-glass prism-glass-premium prism-dropdown-enter"
         style={{
           position: "absolute",
           top: "calc(100% + 8px)",
           right: 0,
-          minWidth: 320,
+          minWidth: 340,
           padding: 12,
           borderRadius: "var(--radius-lg)",
           zIndex: 31,
-          animation: "prism-fade-in 140ms cubic-bezier(0.2,0,0,1)",
         }}
       >
         <div
@@ -710,36 +715,33 @@ function PresetGallery({
               <button
                 key={id}
                 type="button"
+                className="prism-preset-card"
                 onClick={() => onPick(id)}
                 style={{
-                  display: "flex",
-                  flexDirection: "column",
-                  alignItems: "flex-start",
-                  gap: 6,
-                  padding: "10px 12px",
                   background: active
                     ? `rgba(${v.hue}, 0.22)`
-                    : "rgba(255,255,255,0.04)",
-                  border: `1px solid ${active ? `rgba(${v.hue}, 0.6)` : "var(--glass-line)"}`,
-                  borderRadius: "var(--radius-md)",
-                  cursor: "pointer",
-                  textAlign: "left",
-                  color: "var(--hud-fg)",
-                  fontFamily: "inherit",
-                  transition: "all 140ms cubic-bezier(0.2,0,0,1)",
-                  boxShadow: active ? `0 0 16px rgba(${v.hue}, 0.35)` : "none",
-                  position: "relative",
-                  overflow: "hidden",
-                }}
-                onMouseEnter={(e) => {
-                  if (!active)
-                    (e.currentTarget as HTMLElement).style.background = "rgba(255,255,255,0.08)";
-                }}
-                onMouseLeave={(e) => {
-                  if (!active)
-                    (e.currentTarget as HTMLElement).style.background = "rgba(255,255,255,0.04)";
-                }}
+                    : undefined,
+                  borderColor: active
+                    ? `rgba(${v.hue}, 0.6)`
+                    : undefined,
+                  boxShadow: active
+                    ? `0 0 16px rgba(${v.hue}, 0.35), inset 0 0.5px 0 rgba(255,255,255,0.06)`
+                    : undefined,
+                  // Pass the hue to the CSS accent bar via custom prop
+                  "--accent-hue": `rgb(${v.hue})`,
+                } as React.CSSProperties}
               >
+                {/* Accent bar — preset signature color */}
+                <span
+                  className="prism-preset-accent-bar"
+                  aria-hidden="true"
+                  style={{
+                    background: active
+                      ? `rgb(${v.hue})`
+                      : `linear-gradient(180deg, rgba(${v.hue}, 0.9), rgba(${v.hue}, 0))`,
+                    opacity: active ? 1 : undefined,
+                  }}
+                />
                 {(() => {
                   const GIcon = v.icon;
                   return (
@@ -773,6 +775,7 @@ function PresetGallery({
                       top: 8,
                       right: 8,
                       color: `rgb(${v.hue})`,
+                      filter: `drop-shadow(0 0 4px rgba(${v.hue}, 0.6))`,
                     }}
                   />
                 )}

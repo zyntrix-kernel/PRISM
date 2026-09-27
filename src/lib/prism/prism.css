@@ -1,48 +1,48 @@
 /* ============================================================================
-   PRISM — Professional Design System
+   PRISM — Apple-HIG-Inspired Design System
    ----------------------------------------------------------------------------
-   Identity: a precision instrument. Restrained, dense, confident.
-   Slate-dark surfaces · single restrained cyan accent · no decorative glow.
-   Solid panels (not heavy glass), tight spacing, 6px radii, minimal shadows.
+   One material language. One accent. Strict 8pt grid. SF Pro metrics.
+   Every panel uses the same glass. Every transition uses spring physics.
    ========================================================================== */
 
 :root {
-  /* ---- Color: refined slate + single restrained accent ---- */
-  --prism-bg: #0a0b0f;
-  --prism-bg-2: #0e1014;
-  --hud-fg: #e8eaed;
-  --hud-fg-dim: rgba(232, 234, 237, 0.68);
-  --hud-fg-faint: rgba(232, 234, 237, 0.38);
-  --accent: #7dd3fc;
-  --accent-soft: rgba(125, 211, 252, 0.12);
-  --accent-ink: #0a1a2e;
-  --pink: #7dd3fc; /* remapped to accent for consistency */
-  --pink-deep: #38bdf8;
-  --lavender: #a5b4fc;
-  --peach: #fbbf24;
-  --warn: #fbbf24;
-  --error: #f87171;
-  --ok: #34d399;
+  /* ---- Color: pure dark + single accent (Apple HIG dark mode) ---- */
+  --prism-bg: #000000;
+  --prism-bg-2: #0a0a0c;
+  --hud-fg: #f5f5f7;
+  --hud-fg-dim: rgba(245, 245, 247, 0.72);
+  --hud-fg-faint: rgba(245, 245, 247, 0.45);
+  --accent: #0a84ff;
+  --accent-soft: rgba(10, 132, 255, 0.15);
+  --accent-ink: #ffffff;
+  --pink: #0a84ff;
+  --pink-deep: #0071e3;
+  --lavender: #5e5ce6;
+  --peach: #ff9f0a;
+  --warn: #ff9f0a;
+  --error: #ff453a;
+  --ok: #30d158;
   --violet-glow: transparent;
 
-  /* ---- Surfaces: solid, not blurry glass ---- */
-  --glass-1: rgba(255, 255, 255, 0.03);
-  --glass-2: rgba(18, 20, 26, 0.88); /* standard panel — solid */
-  --glass-3: rgba(12, 14, 18, 0.94); /* modal — near-opaque */
-  --glass-card: rgba(22, 24, 30, 0.9);
-  --glass-line: rgba(255, 255, 255, 0.08);
-  --glass-line-strong: rgba(125, 211, 252, 0.3);
-  --glass-violet-line: rgba(255, 255, 255, 0.1);
-  --glass-highlight: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  /* ---- Surfaces: unified glass (Apple Materials) ---- */
+  --glass-1: rgba(255, 255, 255, 0.04);
+  --glass-2: rgba(28, 28, 30, 0.72);
+  --glass-3: rgba(18, 18, 20, 0.88);
+  --glass-card: rgba(44, 44, 46, 0.72);
+  --glass-line: rgba(255, 255, 255, 0.1);
+  --glass-line-strong: rgba(10, 132, 255, 0.35);
+  --glass-violet-line: rgba(255, 255, 255, 0.08);
+  --glass-highlight: inset 0 0.5px 0 rgba(255, 255, 255, 0.1);
   --glass-edge: none;
-  --glass-glow: 0 1px 3px rgba(0, 0, 0, 0.4), 0 4px 12px rgba(0, 0, 0, 0.3);
-  --glass-glow-strong: 0 0 0 1px rgba(125, 211, 252, 0.15), 0 8px 24px rgba(0, 0, 0, 0.5);
-  --glass-lift: 0 1px 2px rgba(0, 0, 0, 0.4), 0 4px 12px rgba(0, 0, 0, 0.25);
+  --glass-glow: 0 2px 10px rgba(0, 0, 0, 0.4);
+  --glass-glow-strong: 0 4px 20px rgba(0, 0, 0, 0.5);
+  --glass-lift: 0 1px 4px rgba(0, 0, 0, 0.3);
 
-  /* ---- Typography ---- */
-  --font-ui: "Geist", "Segoe UI", system-ui, -apple-system, sans-serif;
-  --font-mono: "Geist Mono", Consolas, "Cascadia Mono", monospace;
-  --text-display: 18px;
+  /* ---- Typography: SF Pro metrics (system font on Apple devices) ---- */
+  --font-ui: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display",
+    "Segoe UI", system-ui, sans-serif;
+  --font-mono: "SF Mono", ui-monospace, "Cascadia Code", Consolas, monospace;
+  --text-display: 17px;
   --text-title: 13px;
   --text-body: 13px;
   --text-small: 11px;
@@ -50,31 +50,31 @@
   --text-debug: 11px;
   --text-lift: none;
 
-  /* ---- Spacing scale (tighter) ---- */
-  --space-xs: 3px;
-  --space-sm: 5px;
-  --space-md: 8px;
-  --space-lg: 12px;
-  --space-xl: 16px;
-  --space-2xl: 22px;
+  /* ---- Spacing: strict 4pt base grid (Apple HIG) ---- */
+  --space-xs: 4px;
+  --space-sm: 8px;
+  --space-md: 12px;
+  --space-lg: 16px;
+  --space-xl: 20px;
+  --space-2xl: 28px;
 
-  /* ---- Shape (smaller radii — more precise) ---- */
-  --radius-xs: 4px;
-  --radius-sm: 6px;
-  --radius-md: 8px;
-  --radius-lg: 10px;
-  --radius-xl: 12px;
-  --radius-pill: 6px;
+  /* ---- Shape: Apple continuous-corner feel ---- */
+  --radius-xs: 6px;
+  --radius-sm: 8px;
+  --radius-md: 10px;
+  --radius-lg: 12px;
+  --radius-xl: 14px;
+  --radius-pill: 8px;
 
-  /* ---- Motion ---- */
-  --motion-fast: 120ms;
-  --motion-med: 200ms;
-  --motion-slow: 340ms;
-  --motion-ease: cubic-bezier(0.2, 0, 0, 1);
-  --motion-dream: cubic-bezier(0.16, 1, 0.3, 1);
-  --motion-spring: cubic-bezier(0.16, 1, 0.3, 1);
-  --motion-out-back: cubic-bezier(0.16, 1, 0.3, 1);
-  --motion-snappy: cubic-bezier(0.16, 1, 0.3, 1);
+  /* ---- Motion: Apple spring physics ---- */
+  --motion-fast: 200ms;
+  --motion-med: 300ms;
+  --motion-slow: 450ms;
+  --motion-ease: cubic-bezier(0.25, 0.1, 0.25, 1);
+  --motion-dream: cubic-bezier(0.25, 0.1, 0.25, 1);
+  --motion-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --motion-out-back: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --motion-snappy: cubic-bezier(0.25, 0.1, 0.25, 1);
 }
 
 /* ==========================================================================
@@ -93,10 +93,7 @@
   width: 100vw;
   height: 100vh;
   overflow: hidden;
-  background:
-    radial-gradient(120% 90% at 20% 0%, #0c0e16 0%, transparent 55%),
-    radial-gradient(120% 90% at 85% 100%, #0e1018 0%, transparent 55%),
-    var(--prism-bg);
+  background: var(--prism-bg);
   color: var(--hud-fg);
   font-family: var(--font-ui);
   font-size: var(--text-body);
@@ -128,7 +125,7 @@
   position: absolute;
   border-radius: 50%;
   filter: blur(60px);
-  opacity: 0.12;
+  opacity: 0.08;
   will-change: transform;
 }
 
@@ -137,7 +134,7 @@
   height: 46vmax;
   left: -14vmax;
   top: -16vmax;
-  background: radial-gradient(circle, rgba(125, 211, 252, 0.4), transparent 65%);
+  background: radial-gradient(circle, rgba(10, 132, 255, 0.5), transparent 65%);
   animation: prism-orb-a 28s ease-in-out infinite alternate;
 }
 
@@ -146,7 +143,7 @@
   height: 48vmax;
   right: -16vmax;
   bottom: -18vmax;
-  background: radial-gradient(circle, rgba(125, 211, 252, 0.3), transparent 65%);
+  background: radial-gradient(circle, rgba(94, 92, 230, 0.4), transparent 65%);
   animation: prism-orb-b 34s ease-in-out infinite alternate;
 }
 
@@ -183,7 +180,7 @@
   position: absolute;
   inset: 0;
   pointer-events: none;
-  opacity: 0.04;
+  opacity: 0.015;
   z-index: 1;
   background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/></filter><rect width='100%25' height='100%25' filter='url(%23n)' opacity='0.7'/></svg>");
   mix-blend-mode: overlay;
@@ -392,10 +389,10 @@ video#prism-webcam.live + #prism-webcam-frame .prism-webcam-placeholder {
 
 .prism-glass {
   background: var(--glass-2);
-  -webkit-backdrop-filter: blur(8px);
-  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  backdrop-filter: blur(20px) saturate(180%);
   border: 1px solid var(--glass-line);
-  box-shadow: var(--glass-highlight), var(--glass-edge), var(--glass-glow);
+  box-shadow: var(--glass-highlight), var(--glass-glow);
 }
 
 /* ==========================================================================
@@ -404,16 +401,16 @@ video#prism-webcam.live + #prism-webcam-frame .prism-webcam-placeholder {
 
 #prism-hud {
   position: absolute;
-  top: 10px;
-  left: 10px;
-  right: 10px;
+  top: 12px;
+  left: 12px;
+  right: 12px;
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: var(--space-sm) var(--space-md);
-  border-radius: var(--radius-md);
+  gap: 12px;
+  padding: 8px 14px;
+  border-radius: 12px;
   z-index: 12;
-  animation: prism-hud-in 500ms var(--motion-dream) both;
+  animation: prism-hud-in 600ms var(--motion-ease) both;
 }
 
 @keyframes prism-hud-in {
@@ -429,20 +426,20 @@ video#prism-webcam.live + #prism-webcam-frame .prism-webcam-placeholder {
 
 #prism-hud-title {
   font-weight: 600;
-  font-size: var(--text-title);
-  letter-spacing: 0.5px;
+  font-size: 15px;
+  letter-spacing: -0.3px;
   color: var(--hud-fg);
   white-space: nowrap;
   text-shadow: none;
   display: flex;
   align-items: center;
-  gap: 7px;
+  gap: 8px;
 }
 
 #prism-hud-title .prism-mark {
-  width: 16px;
-  height: 16px;
-  border-radius: 4px;
+  width: 18px;
+  height: 18px;
+  border-radius: 5px;
   background: var(--accent);
   box-shadow: none;
   position: relative;
@@ -473,47 +470,44 @@ video#prism-webcam.live + #prism-webcam-frame .prism-webcam-placeholder {
 
 #prism-hud-status {
   flex: 1;
-  font-size: 0.88em;
+  font-size: 13px;
   color: var(--hud-fg-dim);
-  text-shadow: var(--text-lift);
+  text-shadow: none;
   overflow: hidden;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  line-height: 1.4;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   min-width: 0;
-  max-height: 2.8em;
-  transition: color var(--motion-fast) var(--motion-ease);
-  cursor: help;
+  transition: color 200ms var(--motion-ease);
+  cursor: default;
 }
 
 #prism-hud-controls {
   display: flex;
-  gap: 5px;
+  gap: 6px;
   align-items: center;
 }
 
-/* ---- Compact controls (button + select) — premium tactile feel ---- */
+/* ---- Controls — Apple-style filled buttons ---- */
 #prism-hud-controls button,
 #prism-hud-controls select {
-  background: rgba(255, 255, 255, 0.04);
-  color: var(--hud-fg-dim);
-  border: 1px solid var(--glass-line);
-  border-radius: var(--radius-sm);
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--hud-fg);
+  border: none;
+  border-radius: 8px;
   box-shadow: none;
-  padding: 5px 10px;
-  min-height: 30px;
-  font-size: 12px;
+  padding: 6px 12px;
+  min-height: 32px;
+  font-size: 13px;
   font-family: inherit;
   font-weight: 500;
-  letter-spacing: 0;
+  letter-spacing: -0.1px;
   cursor: pointer;
-  transition: background 160ms var(--motion-snappy),
-    border-color 160ms var(--motion-snappy),
-    color 160ms var(--motion-snappy),
-    transform 120ms var(--motion-spring),
-    box-shadow 160ms var(--motion-snappy);
+  transition: background 200ms var(--motion-ease),
+    transform 100ms var(--motion-spring),
+    color 200ms var(--motion-ease);
   position: relative;
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
 }
 
 /* Remove the shimmer sweep — too playful */
@@ -523,35 +517,30 @@ video#prism-webcam.live + #prism-webcam-frame .prism-webcam-placeholder {
 }
 
 #prism-hud-controls select option {
-  background: #171224;
+  background: #1c1c1e;
   color: var(--hud-fg);
 }
 
 #prism-hud-controls button:hover,
 #prism-hud-controls select:hover {
-  background: rgba(125, 211, 252, 0.1);
-  border-color: rgba(125, 211, 252, 0.25);
+  background: rgba(255, 255, 255, 0.12);
   color: var(--hud-fg);
-  box-shadow: 0 0 12px rgba(125, 211, 252, 0.08);
 }
 
 #prism-hud-controls button:active {
-  transform: scale(0.95);
-  background: rgba(125, 211, 252, 0.15);
+  transform: scale(0.96);
+  background: rgba(255, 255, 255, 0.06);
 }
 
-/* Active state — solid accent fill, no glow */
+/* Active state — Apple accent blue fill */
 #prism-hud-controls button.active {
   background: var(--accent);
   color: var(--accent-ink);
   font-weight: 600;
-  border-color: var(--accent);
-  box-shadow: none;
 }
 
 #prism-hud-controls button.active:hover {
-  background: #93dcfd;
-  box-shadow: 0 0 12px rgba(125, 211, 252, 0.2);
+  background: #0071e3;
 }
 
 #prism-hud-controls button:disabled {

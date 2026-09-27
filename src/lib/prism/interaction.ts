@@ -24,9 +24,15 @@ const INDEX_TIP = 8;
 const THUMB_TIP = 4;
 
 function pinchPoint2D(landmarks: Landmark[]): Point2D {
+  // Guard against short landmark arrays (MediaPipe can return partial hands
+  // on low-quality cameras — INDEX_TIP=8, THUMB_TIP=4). Fall back to the
+  // wrist (landmark 0, always present) if the tips are missing.
+  const thumb = landmarks[THUMB_TIP] ?? landmarks[0];
+  const index = landmarks[INDEX_TIP] ?? landmarks[0];
+  if (!thumb || !index) return { x: 0.5, y: 0.5 };
   return {
-    x: (landmarks[THUMB_TIP].x + landmarks[INDEX_TIP].x) / 2,
-    y: (landmarks[THUMB_TIP].y + landmarks[INDEX_TIP].y) / 2,
+    x: (thumb.x + index.x) / 2,
+    y: (thumb.y + index.y) / 2,
   };
 }
 
@@ -514,7 +520,10 @@ export class InteractionController {
     );
 
     // Smoothed pointer from the primary index fingertip.
-    const tip = primaryHand.landmarks[INDEX_TIP];
+    // Guard: if landmarks are short (partial hand from a low-quality camera),
+    // fall back to the wrist (landmark 0, always present).
+    const tip = primaryHand.landmarks[INDEX_TIP] ?? primaryHand.landmarks[0];
+    if (!tip) return; // degenerate frame — skip this update entirely
     const raw = this.toNdc(tip);
     if (jumped) {
       // True discontinuity (re-entry elsewhere): snap honestly. Slewing

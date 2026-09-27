@@ -87,12 +87,13 @@ export const PrismConfig = {
   },
 
   bloom: {
-    // Premium cinematic bloom: slightly stronger + softer threshold so more
-    // emissive bodies (planet rims, neon rails, jets) catch the glow without
-    // washing out. Radius stays in the 0.4–0.7 sweet spot for a soft halo.
-    strength: 1.05,
-    radius: 0.55,
-    threshold: 0.7,
+    // Premium cinematic bloom — tuned down so bright presets (singularity
+    // black hole, supernova) stay readable instead of washing out to white.
+    // Threshold raised so only the truly bright pixels (sun core, photon
+    // ring, jet cores) catch the glow; mid-tone emissive bodies stay crisp.
+    strength: 0.75,
+    radius: 0.5,
+    threshold: 0.85,
   },
 
   preset: 'space' as PresetId,

@@ -5,7 +5,26 @@
 
 import * as THREE from 'three';
 
-export function buildGalaxy(quality: string) {
+/** Build a soft radial glow sprite texture for the galactic core. */
+function makeGlowTexture(inner: string, outer: string): THREE.CanvasTexture {
+  const c = document.createElement('canvas');
+  c.width = 128;
+  c.height = 128;
+  const ctx = c.getContext('2d');
+  if (ctx) {
+    const g = ctx.createRadialGradient(64, 64, 2, 64, 64, 64);
+    g.addColorStop(0, inner);
+    g.addColorStop(0.4, inner.replace(',1)', ',0.4)'));
+    g.addColorStop(1, outer);
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, 128, 128);
+  }
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
+}
+
+export function buildGalaxy(quality: string): THREE.Points {
   const count = quality === 'ultra' ? 60_000 : quality === 'high' ? 25_000 : 8_000;
   const arms = 4; // number of spiral arms
   const armSpread = 0.5; // how wide each arm is
@@ -69,5 +88,28 @@ export function buildGalaxy(quality: string) {
     sizeAttenuation: true,
   });
 
-  return new THREE.Points(geo, mat);
+  const galaxy = new THREE.Points(geo, mat);
+
+  // ── Galactic core glow: bright inner sprite + soft outer halo ──────────
+  // These additive sprites give the galaxy a luminous core that reads even
+  // at distance / during the cinematic zoom-out. The galaxy particles alone
+  // look like a flat point cloud; the glow adds volumetric depth.
+  const glowTex = makeGlowTexture('rgba(220,230,255,1)', 'rgba(120,150,255,0)');
+  const coreGlow = new THREE.Sprite(new THREE.SpriteMaterial({
+    map: glowTex, color: 0xdde6ff, transparent: true, opacity: 0.9,
+    blending: THREE.AdditiveBlending, depthWrite: false,
+  }));
+  coreGlow.scale.set(6, 6, 1);
+  coreGlow.position.set(0, 0, 0);
+  galaxy.add(coreGlow);
+
+  const haloGlow = new THREE.Sprite(new THREE.SpriteMaterial({
+    map: glowTex, color: 0x8899ff, transparent: true, opacity: 0.35,
+    blending: THREE.AdditiveBlending, depthWrite: false,
+  }));
+  haloGlow.scale.set(16, 16, 1);
+  haloGlow.position.set(0, 0, 0);
+  galaxy.add(haloGlow);
+
+  return galaxy;
 }

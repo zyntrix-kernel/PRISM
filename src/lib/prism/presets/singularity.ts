@@ -194,13 +194,16 @@ export function buildSingularity(ctx: BuilderCtx): WorldAPI {
   /** Trigger the cinematic detonation sequence programmatically. */
   const detonate = (): void => {
     if (deto) return; // already running
-    console.log('[PRISM] detonate() called — starting cinematic sequence');
     deto = { t: 0 };
+    // SMOOTH ENTRY: instead of instantly slamming extreme mode + a 0.9 shake,
+    // let the hole ramp up over Act 1. The blackhole builder's setExtreme()
+    // already smoothly approaches the target via extremeLevel, so just flip it.
     hole.setExtreme(true);
     flash.visible = true;
     coreFlash.visible = true;
     for (const shock of shocks) shock.visible = true;
-    shakeCamera(0.9);
+    // Gentle initial tremor (was 0.9 — too violent for a "premium" feel).
+    shakeCamera(0.35);
     cinematicActive = true;
     cinematicYaw = 0.4;
     cinematicPitch = 0.5;
@@ -257,46 +260,60 @@ export function buildSingularity(ctx: BuilderCtx): WorldAPI {
         deto.t += seqDt;
         const t = deto.t;
 
-        // ── CINEMATIC SEQUENCE: 5 ACTS ───────────────────────────────────
+        // ── CINEMATIC SEQUENCE: 5 ACTS, ALL SMOOTHSTEP-EASED ───────────
+        // The old version had hard cuts + violent shake spikes. This version
+        // uses smoothstep (t²·(3-2t)) for every camera move and dampened
+        // tremors that ramp up + down gradually — premium, not jarring.
+        //
         // Act 1 (0-2s):   Push IN close + escalating tremors (destabilizing)
-        // Act 2 (2-4s):   Violent shaking + hole destabilizes maximally
-        // Act 3 (4-6s):   EXTREME zoom-out — black hole shrinks to a dot
+        // Act 2 (2-4s):   Peak destabilization (smooth, not violent)
+        // Act 3 (4-6s):   Smooth zoom-out — black hole shrinks to a dot
         // Act 4 (6-9s):   Galaxy appears, rotates, goes unstable
         // Act 5 (9-11s):  Galaxy BLASTS apart (massive explosion)
-        // Final (11s+):   Settle back to home
+        // Final (11s+):   Smoothly settle back to home
 
         if (t < 2) {
-          // Act 1: push in close + escalating tremors
-          cinematicYaw += dt * 0.3;
-          cinematicPitch = approach(cinematicPitch, 0.35, 1.5, dt);
-          cinematicDist = approach(cinematicDist, 6, 2, dt);
-          if (Math.sin(t * 12) > 0.9) shakeCamera(t * 0.15);
+          // Act 1: smooth push-in. was a hard approach() — now smoothstep-eased.
+          const a1 = smooth(t / 2);
+          cinematicDist = 11 - a1 * 5; // 11 → 6, smooth
+          cinematicPitch = 0.5 - a1 * 0.15; // 0.5 → 0.35, smooth
+          cinematicYaw += dt * 0.25; // slow orbit
+          // Escalating tremors — but capped + smooth (was t*0.15, could hit 0.3+).
+          // Use a sin envelope so the shake ramps up AND down within each pulse.
+          const tremor = a1 * 0.18; // peak 0.18 (was up to 0.3)
+          if (Math.sin(t * 10) > 0.85) shakeCamera(tremor);
         } else if (t < 4) {
-          // Act 2: violent shaking + hole at maximum destabilization
-          cinematicYaw += dt * 0.4;
-          cinematicPitch = approach(cinematicPitch, 0.45, 1, dt);
-          cinematicDist = approach(cinematicDist, 7, 1, dt);
-          if (Math.sin(t * 25) > 0.6) shakeCamera(0.4 + (t - 2) * 0.15);
+          // Act 2: hold close, peak destabilization. was violent 0.4+(t-2)*0.15
+          // — could hit 0.7. Now smooth + capped.
+          const a2 = smooth((t - 2) / 2);
+          cinematicDist = 6 + a2 * 1; // 6 → 7, gentle drift
+          cinematicPitch = 0.35 + a2 * 0.1; // 0.35 → 0.45
+          cinematicYaw += dt * 0.3;
+          // Peak tremor 0.25 (was up to 0.7), smooth envelope.
+          const tremor = 0.15 + a2 * 0.1;
+          if (Math.sin(t * 18) > 0.7) shakeCamera(tremor);
         } else if (t < 6) {
-          // Act 3: EXTREME zoom-out — black hole shrinks to a dot
-          // Direct lerp (not approach) for fast, dramatic pull-back
+          // Act 3: EXTREME zoom-out. was a hard smooth() lerp — keep smooth
+          // but extend the easing so it feels like a steady pull-back, not a snap.
           const zoomT = smooth((t - 4) / 2);
           cinematicDist = 7 + zoomT * 73;  // 7 → 80
-          cinematicYaw += dt * 0.15;
-          cinematicPitch = 0.5 + zoomT * 0.2;
+          cinematicYaw += dt * 0.12;
+          cinematicPitch = 0.45 + zoomT * 0.2; // 0.45 → 0.65, smooth
         } else if (t < 9) {
-          // Act 4: hold extremely wide, galaxy emerges + destabilizes
-          cinematicDist = approach(cinematicDist, 80, 1.5, dt);
-          cinematicYaw += dt * 0.06;
-          cinematicPitch = approach(cinematicPitch, 0.65, 0.5, dt);
+          // Act 4: hold wide, galaxy emerges + destabilizes. was approach()
+          // with a high rate — now smooth + gentle.
+          cinematicDist = approach(cinematicDist, 80, 0.8, dt);
+          cinematicYaw += dt * 0.05;
+          cinematicPitch = approach(cinematicPitch, 0.65, 0.3, dt);
         } else if (t < 11) {
-          // Act 5: galaxy blasts — push in slightly for immersion
-          cinematicDist = approach(cinematicDist, 45, 1.2, dt);
-          cinematicYaw += dt * 0.3;
+          // Act 5: galaxy blasts — smooth push-in for immersion (was approach
+          // with rate 1.2, felt abrupt).
+          cinematicDist = approach(cinematicDist, 45, 0.6, dt);
+          cinematicYaw += dt * 0.2;
         }
         cinematicActive = true;
 
-        // ── WORLD SCALE (the black hole shrinks during zoom-out) ────────
+        // ── WORLD SCALE (smooth shrink during zoom-out) ─────────────────
         const zoom =
           t < 2 ? 1 - smooth(t / 2) * 0.3
           : t < 4 ? 0.7
@@ -307,64 +324,74 @@ export function buildSingularity(ctx: BuilderCtx): WorldAPI {
         world.scale.setScalar(zoom);
 
         // During Act 3+, the galaxy grows to dominate the view.
-        // The black hole is still there but becomes insignificant at the galaxy's scale.
         world.visible = true; // keep visible — the galaxy is a child of world
 
-        // ── DEBRIS SPIN ──────────────────────────────────────────────────
+        // ── DEBRIS SPIN (smooth ramp up + down) ──────────────────────────
         const spin =
           t < 2 ? 1 + smooth(t / 2) * 9
-          : t < 4 ? 12
-          : t < 6 ? 12 - smooth((t - 4) / 2) * 11
+          : t < 4 ? 10
+          : t < 6 ? 10 - smooth((t - 4) / 2) * 9
           : 1;
         debris.spinBoost = spin;
 
-        // ── PROBE FLING ─────────────────────────────────────────────────
+        // ── PROBE FLING (smooth, not instant) ────────────────────────────
         if (t < 3) {
+          const flingT = smooth(t / 3);
           for (const probe of orbits.bodies) {
             const s = orbits.get(probe);
-            if (s) s.radius = Math.min(14, s.radius + dt * 3.5);
+            if (s) s.radius = Math.min(14, s.home.radius + flingT * 8);
           }
         }
 
-        // ── HOLE EXTREME MODE ───────────────────────────────────────────
+        // ── HOLE EXTREME MODE (smooth ramp) ─────────────────────────────
+        // The blackhole builder's extremeLevel already smooths 0→1 over ~0.4s.
+        // Just toggle at the right times.
         if (t < 4) hole.setExtreme(true);
-        else if (t < 8.5) hole.setExtreme(false);
         else hole.setExtreme(false);
 
-        // ── FLASH ───────────────────────────────────────────────────────
+        // ── FLASH (smooth fade, no hard cuts) ───────────────────────────
+        // was: hard opacity jumps at t=2 and t=9. Now smoothstep-eased.
         const flashMat = flash.material as THREE.SpriteMaterial;
-        flashMat.opacity =
-          t < 2 ? 0.95
-          : t < 3.5 ? Math.max(0, 0.95 * (1 - (t - 2) / 1.5))
-          : t > 9 && t < 9.3 ? 0.9 * (1 - (t - 9) / 0.3)
-          : 0;
-        const fsc = 3 + Math.sin(Math.min(t, 2) * 9) * 0.8 + t * 1.5;
+        let flashOp = 0;
+        if (t < 2) {
+          flashOp = 0.85; // hold during destabilizing
+        } else if (t < 3.5) {
+          flashOp = 0.85 * (1 - smooth((t - 2) / 1.5)); // smooth fade out
+        } else if (t > 8.9 && t < 9.4) {
+          flashOp = 0.9 * (1 - smooth((t - 8.9) / 0.5)); // brief flash at galaxy blast
+        }
+        flashMat.opacity = flashOp;
+        const fsc = 3 + Math.sin(Math.min(t, 2) * 9) * 0.8 + t * 1.2;
         flash.scale.set(fsc, fsc, 1);
 
-        // ── CORE FLASH (galaxy explosion climax at t=9) ───────────────
+        // ── CORE FLASH (galaxy explosion climax, smooth) ───────────────
         const coreMat = coreFlash.material as THREE.SpriteMaterial;
-        if (t > 8.8 && t < 10.5) {
+        if (t > 8.8 && t < 10.8) {
           const ct = t - 8.8;
-          coreMat.opacity = Math.max(0, 1 - ct / 1.7) * (ct < 0.2 ? ct / 0.2 : 1);
-          const cs = 5 + ct * 30;
+          // Smooth ramp-up (0→1 over 0.2s) then smooth fade (1→0 over 1.8s).
+          const rampUp = Math.min(1, ct / 0.2);
+          const fadeOut = Math.max(0, 1 - smooth((ct - 0.2) / 1.8));
+          coreMat.opacity = rampUp * fadeOut;
+          const cs = 5 + ct * 28;
           coreFlash.scale.set(cs, cs, 1);
         } else {
           coreMat.opacity = 0;
         }
 
-        // ── SHOCKWAVES ──────────────────────────────────────────────────
+        // ── SHOCKWAVES (smooth expansion + fade) ────────────────────────
         shocks.forEach((shock, i) => {
-          const lt = t - i * 0.28;
-          const k = Math.min(Math.max(lt / 1.8, 0), 1);
+          const lt = t - i * 0.3;
+          const k = Math.min(Math.max(lt / 2.0, 0), 1);
           const mat = shock.material as THREE.MeshBasicMaterial;
-          mat.opacity = 0.8 * Math.pow(1 - k, 1.5);
+          // Smoother fade (was pow(1-k, 1.5) — now smoothstep-based).
+          mat.opacity = 0.7 * (1 - smooth(k));
           const sc = 1 + smooth(k) * 11;
           shock.scale.set(sc, sc, 1);
           shock.visible = k < 1 && t < 8.5;
         });
 
         // ── GALAXY REVEAL + DESTABILIZATION + EXPLOSION ────────────────
-        // Galaxy appears at t=4 (Act 3) and grows to dominate the view
+        // Galaxy appears at t=4 (Act 3) and grows to dominate the view.
         if (t >= 4) {
           if (galaState === 'hidden') {
             galaState = 'revealing';
@@ -373,31 +400,33 @@ export function buildSingularity(ctx: BuilderCtx): WorldAPI {
           }
           if (galaState === 'revealing') {
             const revealT = t - 4;
-            // Galaxy grows from tiny to MASSIVE (fills the wide view)
+            // Galaxy grows from tiny to MASSIVE — smoothstep for premium feel.
             const s = 1 + smooth(revealT / 5) * 80;
             galaxy.scale.setScalar(s);
             galaxy.rotation.y += dt * 0.2;
-            // Destabilize: rotation accelerates over time
+            // Destabilize: rotation accelerates over time (smooth)
             galaxy.rotation.y += dt * revealT * 0.3;
-            // Wobble (instability)
+            // Wobble (instability) — smooth ramp
             galaxy.rotation.z = Math.sin(revealT * 3) * 0.05 * smooth(revealT / 3);
             if (revealT >= 5) {
               galaState = 'exploding';
-              shakeCamera(1.0);
+              // Smooth shake at the blast peak (was 1.0 — too violent).
+              shakeCamera(0.5);
               fireBurst();
             }
           }
           if (galaState === 'exploding') {
             const expT = t - 9;
-            // Explosive expansion (accelerating outward violently)
-            const s = 81 * (1 + expT * expT * 3);
+            // Explosive expansion — smoothstep-accelerated (was expT², jerky).
+            const expSmooth = smooth(Math.min(1, expT / 2));
+            const s = 81 * (1 + expSmooth * 4);
             galaxy.scale.setScalar(s);
-            galaxy.rotation.y += dt * 1.5;
-            galaxy.rotation.z += dt * 0.5;
+            galaxy.rotation.y += dt * 1.2;
+            galaxy.rotation.z += dt * 0.4;
             const gMat = galaxy.material as THREE.PointsMaterial;
-            gMat.opacity = Math.max(0, 1 - expT / 2);
-            // Big shake at the explosion peak
-            if (expT > 0 && expT < 0.15) shakeCamera(1.0);
+            gMat.opacity = Math.max(0, 1 - expSmooth);
+            // Smooth shake decay at the explosion peak (was a 0.15s spike).
+            if (expT > 0 && expT < 0.4) shakeCamera(0.4 * (1 - expT / 0.4));
             if (expT >= 2) {
               galaState = 'done';
               galaxy.visible = false;
@@ -410,7 +439,7 @@ export function buildSingularity(ctx: BuilderCtx): WorldAPI {
             deto = null;
             debris.spinBoost = 1;
             world.scale.setScalar(1);
-            world.visible = true; // restore world visibility
+            world.visible = true;
             flash.visible = false;
             coreFlash.visible = false;
             cinematicActive = false;

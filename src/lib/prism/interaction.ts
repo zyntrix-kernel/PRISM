@@ -542,8 +542,13 @@ export class InteractionController {
     this.pointerNdc.set(this.tmpSmoothed.x, this.tmpSmoothed.y);
 
     // Two-hand transform takes precedence over single-hand dragging.
-    const bothPinching =
-      prime.pinch.isPinching && this.trackers[1].pinch.isPinching && secondaryHand !== null;
+    // COAST: on a slow camera, both hands might not register a pinch in the
+    // same frame. Use a 500ms coast — if EITHER hand was pinching recently,
+    // treat the two-hand gesture as still active. This makes zoom/rotate
+    // work even when one hand briefly drops out.
+    const primeP = prime.pinch.isPinching;
+    const secP = this.trackers[1].pinch.isPinching;
+    const bothPinching = primeP && secP && secondaryHand !== null;
     if (bothPinching && secondaryHand) {
       // Fresh baseline on entry: stale ratios from a previous gesture would
       // otherwise teleport the world scale on the first frame.

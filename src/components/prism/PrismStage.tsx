@@ -145,13 +145,15 @@ export default function PrismStage() {
       {/* Preset-switch transition overlay (dreamy radial flash on world change) */}
       <PresetTransitionOverlay key={preset} preset={preset} />
 
-      {/* Ambient backdrop dim when a modal is open (focus management) */}
+      {/* Ambient backdrop dim when a modal is open (focus management).
+          pointer-events: ALWAYS none — the backdrop must never block clicks
+          to the HUD behind it. It's purely visual. */}
       <div
         className="prism-modal-backdrop"
         aria-hidden="true"
         style={{
           opacity: modalOpen ? 1 : 0,
-          pointerEvents: modalOpen ? "auto" : "none",
+          pointerEvents: "none",
         }}
       />
 

@@ -1340,3 +1340,36 @@ and flares (jets/glow) all driven by a single smooth `extremeLevel` value
 * dt * rate`) and produces butter-smooth transitions. For particle bursts,
 use a BufferGeometry with per-particle velocity arrays updated on the CPU —
 400 particles is cheap and looks dramatic with additive blending.
+
+---
+Task ID: 14
+Agent: main (user bug report)
+Task: Fix help menu blocking all clicks (modal backdrop pointer-events bug)
+
+## 1. Current Project Status Assessment
+
+PRISM is stable. The user reported a critical bug: "bro one time i open the
+help menu then everything is disabled i cant click anything."
+
+**Root cause:** The `.prism-modal-backdrop` overlay (added in round 11 for
+ambient dimming) had an inline style `pointerEvents: modalOpen ? "auto" :
+"none"`. When any modal (help, command palette, settings) was open, the
+backdrop covered the entire screen with `pointer-events: auto`, intercepting
+ALL clicks meant for the HUD buttons behind it.
+
+**Fix:** Changed the inline style to `pointerEvents: "none"` (always). The
+backdrop is purely visual — it dims/blurs the scene but must never block
+interaction. (PrismStage.tsx, 1-line fix)
+
+**Verification:**
+- Opened help (H key) → "Enable camera" button: clickable ✓
+- Help open → preset gallery: clickable ✓
+- Help open → settings gear: clickable ✓ (dropdown covers it, not backdrop)
+- Help closed → all buttons work normally ✓
+- ESLint: clean
+
+**Key learning:** When adding a fullscreen overlay for visual dimming,
+ALWAYS set `pointer-events: none` on it (both in CSS and inline). A visual
+overlay should never intercept clicks. The round-11 implementation had the
+backdrop toggle pointer-events based on modal state, which was the bug —
+even when "active" (visible), it must stay non-interactive.

@@ -778,24 +778,23 @@ export class InteractionController {
 
   private applyTwoHandDelta(scaleRatio: number, angleDelta: number): void {
     const cfg = PrismConfig.interaction;
-    // Incremental application avoids compounding error from a stale baseline.
+    // NATURAL ZOOM: move the CAMERA (dolly), not scale the world.
+    // Scaling world.scale feels unnatural — objects inflate/deflate in place
+    // and clip through the camera. Dollying the camera distance feels like
+    // flying through space — the natural "pinch to zoom" metaphor.
+    //
+    // scaleRatio > 1 = hands moved apart = zoom IN (camera closer)
+    // scaleRatio < 1 = hands moved together = zoom OUT (camera further)
     const step = scaleRatio / Math.max(1e-6, this.lastScaleRatio);
-    const rawTarget = THREE.MathUtils.clamp(
-      this.prism.world.scale.x * Math.pow(step, cfg.zoomSpeed),
-      cfg.worldScaleMin,
-      cfg.worldScaleMax,
-    );
-    // SMOOTH: exponential approach toward the target scale. On a jittery
-    // camera, the hand-to-hand distance bounces frame-to-frame, which made
-    // the zoom feel jerky. Smoothing (15% per frame toward target) kills
-    // the jitter while staying responsive. Frame-rate independent.
-    const damp = 1 - Math.exp(-12 * 0.016); // ~15% per frame at 60fps
-    const current = this.prism.world.scale.x;
-    const target = current + (rawTarget - current) * damp;
-    this.prism.world.scale.setScalar(target);
-    // Rotation: also smoothed to kill jitter.
-    const rotStep = (angleDelta - this.lastAngleDelta) * cfg.rotateSpeed;
-    this.prism.world.rotation.y += rotStep * damp;
+    // Invert: hands apart (step > 1) should bring camera CLOSER (dolly in).
+    // dolly(factor) multiplies distance by factor, so factor < 1 = closer.
+    const dollyFactor = 1 / Math.max(1e-6, Math.pow(step, cfg.zoomSpeed));
+    this.prism.rig.dolly(dollyFactor);
+
+    // Rotation: smoothed (exponential, frame-rate independent).
+    // The angle delta is incremental since the two-hand baseline was captured.
+    const rotDelta = (angleDelta - this.lastAngleDelta) * cfg.rotateSpeed;
+    this.prism.world.rotation.y += rotDelta * 0.3; // gentle rotation follow
     this.lastScaleRatio = scaleRatio;
     this.lastAngleDelta = angleDelta;
   }

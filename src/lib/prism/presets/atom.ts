@@ -154,11 +154,11 @@ export function buildAtom(ctx: BuilderCtx): WorldAPI {
     electron.name = `Electron n=${shell.n}`;
     electron.userData.orbitBody = true;
     electron.userData.homeShell = si;
+    // Store the shell group's rotation quaternion so the orbit update can
+    // rotate the flat XZ orbit into the shell's 3D orientation.
+    electron.userData.shellQuat = shellGroup.quaternion.clone();
     const angle = (si / SHELLS.length) * Math.PI * 2 + 0.4;
-    // Add electron to the shellGroup (not world) so it inherits the 3D
-    // orientation — the orbit runs in local XZ, but the group's rotation
-    // tilts it into 3D space.
-    shellGroup.add(electron);
+    world.add(electron);
     grabbables.push(electron);
     orbits.register(electron, shell.radius, angle, shell.period);
     lastShell.set(electron, si);
@@ -208,6 +208,19 @@ export function buildAtom(ctx: BuilderCtx): WorldAPI {
     update(dt: number, elapsed: number): void {
       void elapsed;
       orbits.update(dt); // periods registered in seconds
+      // Apply shell 3D orientation: the orbit system places electrons in
+      // flat XZ, but each shell has a stored quaternion that tilts the
+      // orbit into 3D space. We rotate the flat position by the quaternion.
+      for (const body of orbits.bodies) {
+        if (body.userData.grabbed) continue;
+        const quat = body.userData.shellQuat as THREE.Quaternion | undefined;
+        if (quat) {
+          // The orbit system already set body.position to (x, 0, z).
+          // Rotate that position by the shell's quaternion.
+          tmp.copy(body.position).applyQuaternion(quat);
+          body.position.copy(tmp);
+        }
+      }
       // Core breach: a grabbed electron aimed at the nucleus (< 1.0) and
       // held 0.4 s detonates. Pointer-based: shell snapping keeps the body
       // itself outside r 1.6, so the hand's intent is the only true signal.

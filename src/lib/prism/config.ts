@@ -14,23 +14,25 @@ export const PrismConfig = {
       'https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task',
     wasmUrl: './wasm',
     cdnWasmUrl: 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@1.0.1/wasm',
+    // numHands 2: we need 2 hands for zoom/rotate gestures. MediaPipe
+    // inference with 2 hands takes 200-300ms — too slow for 60fps. The
+    // tracking loop is throttled to 10fps (100ms interval) so each
+    // detection has plenty of CPU time and the render loop stays smooth.
     numHands: 2,
-    // LOWERED confidence thresholds for low-quality cameras. A 0.5 threshold
-    // drops frames on blurry/dark/slow feeds. 0.3 keeps marginal hands alive
-    // (the pinch latch + pointer filter handle the resulting noise).
+    // LOWERED confidence thresholds for low-quality cameras.
     minHandDetectionConfidence: 0.3,
     minHandPresenceConfidence: 0.3,
     minTrackingConfidence: 0.3,
   },
 
   camera: {
-    // Lowered from 1280x720 to 640x480 — HALVES MediaPipe inference time.
-    // The freeze when the 2nd hand appeared was because 2-hand inference at
-    // 1280x720 takes 200-300ms, blocking the main thread. At 640x480 it
-    // drops to ~100-150ms, which the 30fps throttle + render loop can absorb.
-    // 640x480 is plenty for hand tracking (MediaPipe downscales internally).
-    idealWidth: 640,
-    idealHeight: 480,
+    // 320x240: MINIMAL resolution to keep MediaPipe inference fast.
+    // 2-hand inference at 640x480 = ~150ms; at 320x240 = ~80ms.
+    // The render loop needs <16ms per frame to stay at 60fps, so every
+    // millisecond of inference saved matters. 320x240 is enough for hand
+    // tracking — MediaPipe's model was trained on low-res input anyway.
+    idealWidth: 320,
+    idealHeight: 240,
   },
 
   gestures: {

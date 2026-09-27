@@ -97,27 +97,31 @@ export class HandTracker {
   }
 
   /** Begins the detection loop over a playing video element.
-   *  THROTTLED: runs at most 30fps (every 33ms) to leave CPU time for the
-   *  render loop. MediaPipe's detectForVideo is synchronous and blocks the
-   *  main thread — with 2 hands it can take 200-300ms. Running it every
-   *  frame would freeze the render. 30fps tracking is plenty for hand
-   *  interaction (the pointer filter smooths between samples). */
+   *  HEAVY THROTTLE: runs at most 10fps (every 100ms) to leave maximum CPU
+   *  for the render loop. MediaPipe's detectForVideo is SYNCHRONOUS and
+   *  blocks the main thread — with 2 hands it takes 200-300ms. At 10fps
+   *  tracking, there's a 100ms gap between detections for rendering.
+   *  The pointer filter + pinch coast smooth between samples, so 10fps
+   *  tracking feels smooth to the user (no visible stutter).
+   *
+   *  CRITICAL: this is setTimeout-based (NOT rAF) because detectForVideo
+   *  blocks the main thread. If it ran in rAF, the render loop would freeze
+   *  for the duration of each inference call. setTimeout lets the render
+   *  loop (rAF) run between detections. */
   start(video: HTMLVideoElement): void {
     if (!this.landmarker) throw new Error('HandTracker.start() called before init().');
     this.video = video;
     this.running = true;
     this.lastFrameAt = performance.now();
-    const TARGET_INTERVAL_MS = 33; // 30fps max detection rate
+    const TARGET_INTERVAL_MS = 100; // 10fps max detection rate
     const loop = (): void => {
       if (!this.running) return;
       const t0 = performance.now();
       this.pump();
-      // Schedule the next detection. If inference was fast, wait the
-      // remaining time to hit 30fps. If inference was slow (200ms+), run
-      // immediately (setTimeout(0)) — the render loop already got time
-      // during the yield. This prevents the busy-loop starvation that
-      // happened with bare setTimeout(0).
       const elapsed = performance.now() - t0;
+      // Wait the remaining time to hit 10fps. If inference took longer than
+      // 100ms, run immediately (wait=0) — the render loop got time during
+      // the setTimeout yield between detections.
       const wait = Math.max(0, TARGET_INTERVAL_MS - elapsed);
       this.loopHandle = window.setTimeout(loop, wait) as unknown as number;
     };
@@ -164,8 +168,6 @@ export class HandTracker {
     try {
       result = this.landmarker.detectForVideo(video, now);
     } catch (err) {
-      // Count, don't just swallow: a permanently failing delegate used to
-      // look exactly like "no hands" with zero diagnostics.
       this.pumpErrorCount += 1;
       this.lastPumpError = err instanceof Error ? err.message : String(err);
       return;
@@ -179,6 +181,13 @@ export class HandTracker {
     if (this.detectionCount > 30) {
       this.detectionCount = Math.floor(this.detectionCount / 2);
       this.detectionTotalMs /= 2;
+    }
+
+    // ADAPTIVE: if inference is consistently > 150ms (slow camera/CPU),
+    // log it. The debug overlay shows this so the user can see WHY the
+    // tracking is at 10fps. Future: could dynamically drop numHands here.
+    if (elapsed > 150 && this.detectionCount % 10 === 0) {
+      this.lastPumpError = `slow inference: ${elapsed.toFixed(0)}ms (2-hand detection)`;
     }
 
     const hands: TrackedHand[] = (result.landmarks ?? []).map((landmarks, i) => ({

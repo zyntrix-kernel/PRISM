@@ -28,16 +28,20 @@ export const PrismConfig = {
   gestures: {
     // Pinch thresholds are normalized by hand size (wrist->middle-MCP), so
     // they work for adults, children, and varying camera distances.
-    // Calibrated so a real thumb-index touch (~0.05-0.15) grabs, while
-    // fingers held visibly apart (>0.32) never do. Live value shown in
-    // the debug overlay for verification.
-    pinchEnter: 0.22,
-    pinchExit: 0.32,
-    // Time-based debounce: minimum frames (noise rejection) AND minimum
-    // held time (rate invariance from 10 Hz to high-speed cameras).
-    pinchMinFrames: 2,
-    pinchEnterMs: 50,
-    pinchExitMs: 50,
+    //
+    // TUNED FOR FORGIVING + STICKY GRABS:
+    // - enter 0.30: fingers just need to be moderately close (not touching).
+    //   Easier to trigger, especially at camera angles where depth is unclear.
+    // - exit 0.48: wide hysteresis — once grabbed, small finger jitter won't
+    //   release. The user must clearly open their hand to let go.
+    // - minFrames 1 + enterMs 20: instant trigger (was 2 frames / 50ms — laggy).
+    // - exitMs 120: must hold open for 120ms to release (stickier, no flicker).
+    // Live value shown in the debug overlay for verification.
+    pinchEnter: 0.30,
+    pinchExit: 0.48,
+    pinchMinFrames: 1,
+    pinchEnterMs: 20,
+    pinchExitMs: 120,
     // A finger counts as extended when tip is clearly farther from the
     // wrist than its PIP joint.
     extendedRatio: 1.12,
@@ -56,8 +60,10 @@ export const PrismConfig = {
       maxLeadSec: 0.12, // latency-hiding prediction horizon cap
       maxLeadDist: 0.05, // prediction travel cap (can never fling)
     },
-    // Smoothing factor for grabbed-object motion (lower = floatier).
-    grabSmoothing: 0.3,
+    // Smoothing factor for grabbed-object motion (higher = tighter follow,
+    // more responsive to hand movement). Was 0.3 (floaty/disconnected);
+    // bumped to 0.55 so grabbed objects feel glued to the fingertip.
+    grabSmoothing: 0.55,
     // Two-hand zoom sensitivity.
     zoomSpeed: 1.6,
     // Two-hand twist sensitivity (radians of scene rotation per radian).

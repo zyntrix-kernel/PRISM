@@ -170,9 +170,13 @@ export class PinchCalibrator {
     this.openSamples += 1;
     // Warmup: a stray frame must never yank the thresholds. Only publish
     // after enough open samples to trust the baseline.
-    if (this.openSamples < 30) return;
-    const enter = clampNum(this.baseline * 0.35, 0.12, 0.26);
-    const exit = clampNum(this.baseline * 0.5, 0.2, 0.38);
+    // Reduced from 30 → 15 so calibration kicks in faster (the user was
+    // fighting uncalibrated thresholds for too long on first load).
+    if (this.openSamples < 15) return;
+    // Loosened clamps to match the forgiving pinchEnter/pinchExit defaults:
+    // enter can go up to 0.36 (very forgiving), exit up to 0.55 (very sticky).
+    const enter = clampNum(this.baseline * 0.40, 0.18, 0.36);
+    const exit = clampNum(this.baseline * 0.62, 0.32, 0.55);
     const g = PrismConfig.gestures;
     if (Math.abs(g.pinchEnter - enter) > 0.004) g.pinchEnter = enter;
     if (Math.abs(g.pinchExit - exit) > 0.004) g.pinchExit = exit;

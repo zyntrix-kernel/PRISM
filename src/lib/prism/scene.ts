@@ -196,10 +196,21 @@ export class PrismScene {
     );
     this.camera.position.set(0, 4.6, 12);
 
-    this.scene.add(new THREE.AmbientLight(0xbfd4ff, 0.75));
-    const key = new THREE.DirectionalLight(0xffffff, 1.4);
-    key.position.set(3, 5, 4);
-    this.scene.add(key);
+    // Multi-light setup (inspired by sanderblue/solar-system-threejs, Apache 2.0):
+    // 4 directional lights from different angles ensure all sides of
+    // planets/meshes are lit — no dead dark sides. Ambient fills shadows.
+    this.scene.add(new THREE.AmbientLight(0xbfd4ff, 0.4));
+    const lightPositions: Array<[number, number, number]> = [
+      [3, 5, 4],    // key (upper-right-front)
+      [-3, 3, -4],  // fill (upper-left-back)
+      [0, -5, 3],   // bottom bounce
+      [5, 0, -5],   // right rim
+    ];
+    for (const [x, y, z] of lightPositions) {
+      const dl = new THREE.DirectionalLight(0xffffff, 0.4);
+      dl.position.set(x, y, z);
+      this.scene.add(dl);
+    }
 
     // Shared resources (built once; worlds must never dispose these).
     this.glowTex = buildGlowTexture();

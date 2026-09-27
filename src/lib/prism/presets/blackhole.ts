@@ -1,13 +1,14 @@
 // Procedural black hole: event horizon, temperature-ramped accretion disk
-// (original GLSL — white-hot rim cooling outward, streaky turbulence,
-// Keplerian inner-faster swirl), photon ring, glow, and relativistic jets.
+// using real blackbody radiation colors (ported from vlwkaos/threejs-blackhole),
+// Perlin noise turbulence (ported from ggwzrd/threejs-galaxy), photon ring,
+// glow, and relativistic jets.
 //
-// Rebuilt for motion design: the hole PULSES, GROWS, and DESTABILIZES during
-// extreme mode. The disk warps and breaks. Jets flare violently. This is
-// not a static model — it's a living, breathing body that responds to its
-// energy state.
+// Attribution:
+// - Blackbody temp_to_color: https://github.com/vlwkaos/threejs-blackhole (ISC)
+// - Perlin noise: https://github.com/ggwzrd/threejs-galaxy (MIT)
 
 import * as THREE from 'three';
+import { NOISE_GLSL } from './noise_glsl';
 
 export interface BlackHoleOpts {
   /** Event-horizon radius (scene units). */
@@ -50,19 +51,7 @@ const DISK_FRAG = /* glsl */ `
   uniform float uBoost;
   uniform float uWarp;
 
-  float hash(vec2 p) {
-    return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
-  }
-  float vnoise(vec2 p) {
-    vec2 i = floor(p);
-    vec2 f = fract(p);
-    vec2 u = f * f * (3.0 - 2.0 * f);
-    return mix(
-      mix(hash(i), hash(i + vec2(1.0, 0.0)), u.x),
-      mix(hash(i + vec2(0.0, 1.0)), hash(i + vec2(1.0, 1.0)), u.x),
-      u.y
-    );
-  }
+  ${NOISE_GLSL}
 
   void main() {
     float r = length(vLocal);
@@ -70,19 +59,22 @@ const DISK_FRAG = /* glsl */ `
     float ang = atan(vLocal.y, vLocal.x);
 
     // Keplerian swirl: inner material laps the outer material.
-    // During extreme mode, the swirl accelerates dramatically.
     float speedMul = 1.0 + uWarp * 4.0;
     float swirl = uTime * (2.4 / (0.35 + t)) * speedMul;
-    float streaks = vnoise(vec2(ang * 2.5 + swirl, t * 7.0 - uTime * 0.2));
+
+    // Use Perlin noise (cnoise) for more organic turbulence than hash-based.
+    float streaks = cnoise(vec3(ang * 2.5 + swirl, t * 7.0 - uTime * 0.2, 0.0));
     streaks = 0.55 + 0.45 * streaks;
-    float fine = vnoise(vec2(ang * 7.0 - swirl * 0.7, t * 16.0));
+    float fine = cnoise(vec3(ang * 7.0 - swirl * 0.7, t * 16.0, uTime * 0.1));
     float brightness = streaks * (0.8 + 0.2 * fine);
 
-    // Blackbody-ish ramp: blue-white rim -> orange -> ember edge.
-    // During extreme mode, shift hotter (more blue-white, less orange).
-    vec3 hotCol = mix(vec3(0.85, 0.92, 1.0), vec3(1.0, 0.55, 0.15), smoothstep(0.0, 0.4, t) * (1.0 - uWarp * 0.5));
-    vec3 col = mix(hotCol, vec3(0.5, 0.1, 0.03), smoothstep(0.4, 1.0, t));
-    // Super-heated inner rim — brighter and wider during extreme.
+    // Real blackbody temperature color (from vlwkaos/threejs-blackhole).
+    // Temperature falls off with radius: inner = hottest, outer = coolest.
+    float temp = mix(40000.0, 3000.0, smoothstep(0.0, 1.0, t));
+    temp *= (1.0 + uWarp * 0.5); // extreme mode = hotter
+    vec3 col = temp_to_color(temp);
+
+    // Super-heated inner rim (Einstein ring glow)
     float rimWidth = 0.18 + uWarp * 0.12;
     col += vec3(0.9, 0.85, 0.7) * pow(1.0 - smoothstep(0.0, rimWidth, t), 2.0);
 

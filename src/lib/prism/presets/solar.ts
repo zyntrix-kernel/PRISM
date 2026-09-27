@@ -8,6 +8,7 @@ import { MAX_ORBIT_RADIUS, MIN_ORBIT_RADIUS, OrbitingDebris, OrbitSystem, TIME_D
 import { ParticlePool } from './particles';
 import { disposeGroup, type BuilderCtx, type WorldAPI } from './types';
 import { makeLabel } from './labels';
+import { createFresnelGlow } from './fresnel';
 
 interface PlanetSpec {
   name: string;
@@ -101,6 +102,12 @@ export function buildSolar(ctx: BuilderCtx): WorldAPI {
     corona.scale.set(scale, scale, 1);
     sun.add(corona);
   }
+  // Fresnel rim glow on the sun (warm yellow-white edge)
+  sun.add(createFresnelGlow(0.85, 0xffff99, 0x000000));
+  // Point light at the sun (physically-correct: light radiates from center)
+  const sunLight = new THREE.PointLight(0xfff2cc, 3, 50, 1.5);
+  sunLight.position.set(0, 0, 0);
+  world.add(sunLight);
 
   PLANETS.forEach((spec, i) => {
     const mat = new THREE.MeshStandardMaterial({
@@ -123,6 +130,8 @@ export function buildSolar(ctx: BuilderCtx): WorldAPI {
     if (spec.atmosphere !== undefined) {
       planet.add(makeAtmosphere(spec.size, spec.atmosphere));
     }
+    // Fresnel rim glow on each planet (atmospheric edge effect)
+    planet.add(createFresnelGlow(spec.size, spec.color, 0x000000));
     if (spec.ring) {
       const ring = new THREE.Mesh(
         new THREE.RingGeometry(spec.size * 1.3, spec.size * 2.1, 48),

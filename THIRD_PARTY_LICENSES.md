@@ -31,7 +31,15 @@ PRISM incorporates ideas, algorithms, and code from the following open-source pr
 **What was used:**  
 - GPU particle rendering concepts — InstancedBufferGeometry with custom vertex/fragment shaders for GPU-side particle updates (not CPU). The size attenuation formula `gl_PointSize = (size * factor) / -mvPosition.z` is used in the nebula shader.
 
-## 5. Three.js (MIT License)
+## 5. cookieMonsterDev/solar-system-threejs (MIT License)
+**Repository:** https://github.com/cookieMonsterDev/solar-system-threejs  
+**License:** MIT  
+**What was used:**  
+- Fresnel rim glow shader (`createFresnelMaterial`) — creates an atmospheric edge glow on planets and the sun. Used in the solar system preset for every planet + the sun.
+- PointLight at the sun's position — physically-correct lighting radiating from the center of the system.
+- Planet texture concepts from Planetary Pixel Emporium (referenced in their README).
+
+## 6. Three.js (MIT License)
 **Library:** https://github.com/mrdoob/three.js  
 **License:** MIT  
 **What was used:** Core rendering engine (WebGLRenderer, Scene, Camera, shaders, postprocessing).

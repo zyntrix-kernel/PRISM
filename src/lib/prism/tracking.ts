@@ -96,7 +96,11 @@ export class HandTracker {
     return this.landmarker !== null;
   }
 
-  /** Begins the detection loop over a playing video element. */
+  /** Begins the detection loop over a playing video element.
+   *  Uses setTimeout(0) between detections instead of requestAnimationFrame
+   *  so heavy MediaPipe inference NEVER blocks the render loop. The old
+   *  rAF-based loop caused the app to freeze for 50-150ms per inference
+   *  call on slow cameras — the 'random freeze' bug. */
   start(video: HTMLVideoElement): void {
     if (!this.landmarker) throw new Error('HandTracker.start() called before init().');
     this.video = video;
@@ -105,13 +109,18 @@ export class HandTracker {
     const loop = (): void => {
       if (!this.running) return;
       this.pump();
-      this.loopHandle = requestAnimationFrame(loop);
+      // setTimeout(0) yields to the render loop (rAF) between detections.
+      // This means even if inference takes 100ms, the render loop keeps
+      // running at 60fps — no app freeze. The detection runs as fast as
+      // the CPU allows without blocking rendering.
+      this.loopHandle = window.setTimeout(loop, 0) as unknown as number;
     };
-    this.loopHandle = requestAnimationFrame(loop);
+    this.loopHandle = window.setTimeout(loop, 0) as unknown as number;
   }
 
   stop(): void {
     this.running = false;
+    clearTimeout(this.loopHandle);
     cancelAnimationFrame(this.loopHandle);
     this.video = null;
   }

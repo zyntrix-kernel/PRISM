@@ -3,14 +3,12 @@
 /**
  * PresetTransitionOverlay
  * ----------------------------------------------------------------------------
- * Plays a dreamy radial flash + fade whenever the active preset changes.
- * The flash emanates from screen center with the preset's signature hue,
- * then settles into a soft veil that lifts to reveal the new world.
+ * A premium cinematic transition: smooth fade-to-color + fade-in with the
+ * preset's signature hue. The name appears with a gentle spring entrance,
+ * then fades as the new world is revealed.
  *
- * Implementation: the parent passes `key={preset}`, so React remounts this
- * component fresh on every preset change. The CSS animation plays from
- * scratch each mount (animation-fill-mode: forwards → ends invisible).
- * No useState/useEffect needed → no cascading renders, no lint violations.
+ * Implementation: parent passes `key={preset}`, so React remounts on change.
+ * Pure CSS animation, no state, no lint violations.
  */
 const PRESET_HUES: Record<string, string> = {
   space: "154, 220, 255",
@@ -20,6 +18,9 @@ const PRESET_HUES: Record<string, string> = {
   drive: "143, 245, 180",
   atom: "154, 220, 255",
   voxel: "255, 207, 92",
+  gun: "125, 211, 252",
+  supernova: "255, 170, 68",
+  nebula: "165, 180, 252",
 };
 
 export default function PresetTransitionOverlay({
@@ -40,32 +41,32 @@ export default function PresetTransitionOverlay({
         overflow: "hidden",
       }}
     >
-      {/* Radial flash emanating from center */}
+      {/* Smooth cinematic fade overlay */}
       <div
         style={{
           position: "absolute",
           inset: 0,
-          background: `radial-gradient(circle at 50% 50%, rgba(${hue}, 0.28) 0%, rgba(${hue}, 0.12) 30%, transparent 70%)`,
-          animation: "prism-transition-flash 850ms cubic-bezier(0.2, 0, 0, 1) forwards",
+          background: `radial-gradient(circle at 50% 50%, rgba(${hue}, 0.15) 0%, rgba(${hue}, 0.05) 40%, transparent 80%)`,
+          animation: "prism-transition-flash 600ms cubic-bezier(0.16, 1, 0.3, 1) forwards",
         }}
       />
-      {/* Expanding ring (the "iris" of the transition) */}
+      {/* Soft expanding ring */}
       <div
         style={{
           position: "absolute",
           left: "50%",
           top: "50%",
-          width: 40,
-          height: 40,
-          marginLeft: -20,
-          marginTop: -20,
+          width: 20,
+          height: 20,
+          marginLeft: -10,
+          marginTop: -10,
           borderRadius: "50%",
-          border: `2px solid rgba(${hue}, 0.6)`,
-          boxShadow: `0 0 40px rgba(${hue}, 0.5), inset 0 0 20px rgba(${hue}, 0.3)`,
-          animation: "prism-transition-ring 850ms cubic-bezier(0.2, 0, 0, 1) forwards",
+          border: `1.5px solid rgba(${hue}, 0.5)`,
+          boxShadow: `0 0 30px rgba(${hue}, 0.4)`,
+          animation: "prism-transition-ring 600ms cubic-bezier(0.16, 1, 0.3, 1) forwards",
         }}
       />
-      {/* Preset name label — fades in then out, centered */}
+      {/* Preset name — gentle fade with spring-like entrance */}
       <div
         style={{
           position: "absolute",
@@ -73,13 +74,13 @@ export default function PresetTransitionOverlay({
           top: "50%",
           transform: "translate(-50%, -50%)",
           fontFamily: "var(--font-ui)",
-          fontSize: 13,
-          fontWeight: 700,
-          letterSpacing: 6,
+          fontSize: 12,
+          fontWeight: 600,
+          letterSpacing: 4,
           textTransform: "uppercase",
           color: `rgb(${hue})`,
-          textShadow: `0 0 24px rgba(${hue}, 0.7), 0 0 48px rgba(${hue}, 0.4)`,
-          animation: "prism-transition-label 850ms cubic-bezier(0.2, 0, 0, 1) forwards",
+          textShadow: `0 0 20px rgba(${hue}, 0.6)`,
+          animation: "prism-transition-label 600ms cubic-bezier(0.16, 1, 0.3, 1) forwards",
           whiteSpace: "nowrap",
         }}
       >
@@ -88,30 +89,27 @@ export default function PresetTransitionOverlay({
       <style>{`
         @keyframes prism-transition-flash {
           0% { opacity: 0; }
-          15% { opacity: 1; }
+          20% { opacity: 1; }
           100% { opacity: 0; }
         }
         @keyframes prism-transition-ring {
           0% {
             transform: scale(0.1);
             opacity: 0;
-            border-width: 6px;
           }
           25% {
             opacity: 1;
-            border-width: 3px;
           }
           100% {
-            transform: scale(40);
+            transform: scale(30);
             opacity: 0;
-            border-width: 0.5px;
           }
         }
         @keyframes prism-transition-label {
-          0% { opacity: 0; transform: translate(-50%, -50%) scale(0.8); letter-spacing: 12px; }
-          30% { opacity: 1; transform: translate(-50%, -50%) scale(1); letter-spacing: 6px; }
-          70% { opacity: 1; transform: translate(-50%, -50%) scale(1); letter-spacing: 6px; }
-          100% { opacity: 0; transform: translate(-50%, -50%) scale(1.1); letter-spacing: 3px; }
+          0% { opacity: 0; transform: translate(-50%, -50%) scale(0.9); letter-spacing: 8px; }
+          25% { opacity: 1; transform: translate(-50%, -50%) scale(1); letter-spacing: 4px; }
+          75% { opacity: 1; }
+          100% { opacity: 0; transform: translate(-50%, -50%) scale(1.05); letter-spacing: 2px; }
         }
       `}</style>
     </div>

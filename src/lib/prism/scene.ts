@@ -112,12 +112,18 @@ export class CameraRig {
 
   update(dt: number, camera: THREE.PerspectiveCamera): void {
     if (this.autoRotate) this.yaw += dt * PrismConfig.cameraRig.autoRotateSpeed;
+    // PREMIUM: smooth damping toward target position instead of instant set.
+    // This gives the camera weighty inertia — it follows the rig with a
+    // slight lag that feels like a steadicam, not a robotic snap.
     const cp = Math.cos(this.pitch);
-    camera.position.set(
-      this.target.x + this.distance * cp * Math.sin(this.yaw),
-      this.target.y + this.distance * Math.sin(this.pitch),
-      this.target.z + this.distance * cp * Math.cos(this.yaw),
-    );
+    const targetX = this.target.x + this.distance * cp * Math.sin(this.yaw);
+    const targetY = this.target.y + this.distance * Math.sin(this.pitch);
+    const targetZ = this.target.z + this.distance * cp * Math.cos(this.yaw);
+    // Exponential damping: converges at ~15% per frame at 60fps
+    const damp = 1 - Math.exp(-dt * 12);
+    camera.position.x += (targetX - camera.position.x) * damp;
+    camera.position.y += (targetY - camera.position.y) * damp;
+    camera.position.z += (targetZ - camera.position.z) * damp;
     if (this.trauma > 0) {
       const s = this.trauma * this.trauma * 0.4 * this.shakeScale;
       camera.position.x += (Math.random() - 0.5) * 2 * s;

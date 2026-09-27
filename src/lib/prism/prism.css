@@ -89,21 +89,19 @@
 /* Smooth scrolling everywhere within PRISM */
 .prism-root {
   scroll-behavior: smooth;
-}
-
-.prism-root {
   position: relative;
   width: 100vw;
   height: 100vh;
   overflow: hidden;
   background:
-    radial-gradient(120% 90% at 20% 0%, #140a26 0%, transparent 55%),
-    radial-gradient(120% 90% at 85% 100%, #1a0b22 0%, transparent 55%),
+    radial-gradient(120% 90% at 20% 0%, #0c0e16 0%, transparent 55%),
+    radial-gradient(120% 90% at 85% 100%, #0e1018 0%, transparent 55%),
     var(--prism-bg);
   color: var(--hud-fg);
   font-family: var(--font-ui);
   font-size: var(--text-body);
   -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
 }
 
@@ -415,6 +413,7 @@ video#prism-webcam.live + #prism-webcam-frame .prism-webcam-placeholder {
   padding: var(--space-sm) var(--space-md);
   border-radius: var(--radius-md);
   z-index: 12;
+  animation: prism-hud-in 500ms var(--motion-dream) both;
 }
 
 @keyframes prism-hud-in {
@@ -494,7 +493,7 @@ video#prism-webcam.live + #prism-webcam-frame .prism-webcam-placeholder {
   align-items: center;
 }
 
-/* ---- Compact controls (button + select) ---- */
+/* ---- Compact controls (button + select) — premium tactile feel ---- */
 #prism-hud-controls button,
 #prism-hud-controls select {
   background: rgba(255, 255, 255, 0.04);
@@ -509,9 +508,11 @@ video#prism-webcam.live + #prism-webcam-frame .prism-webcam-placeholder {
   font-weight: 500;
   letter-spacing: 0;
   cursor: pointer;
-  transition: background 120ms var(--motion-snappy),
-    border-color 120ms var(--motion-snappy),
-    color 120ms var(--motion-snappy);
+  transition: background 160ms var(--motion-snappy),
+    border-color 160ms var(--motion-snappy),
+    color 160ms var(--motion-snappy),
+    transform 120ms var(--motion-spring),
+    box-shadow 160ms var(--motion-snappy);
   position: relative;
 }
 
@@ -528,13 +529,15 @@ video#prism-webcam.live + #prism-webcam-frame .prism-webcam-placeholder {
 
 #prism-hud-controls button:hover,
 #prism-hud-controls select:hover {
-  background: rgba(255, 255, 255, 0.08);
-  border-color: rgba(255, 255, 255, 0.15);
+  background: rgba(125, 211, 252, 0.1);
+  border-color: rgba(125, 211, 252, 0.25);
   color: var(--hud-fg);
+  box-shadow: 0 0 12px rgba(125, 211, 252, 0.08);
 }
 
 #prism-hud-controls button:active {
-  background: rgba(255, 255, 255, 0.12);
+  transform: scale(0.95);
+  background: rgba(125, 211, 252, 0.15);
 }
 
 /* Active state — solid accent fill, no glow */
@@ -548,6 +551,7 @@ video#prism-webcam.live + #prism-webcam-frame .prism-webcam-placeholder {
 
 #prism-hud-controls button.active:hover {
   background: #93dcfd;
+  box-shadow: 0 0 12px rgba(125, 211, 252, 0.2);
 }
 
 #prism-hud-controls button:disabled {

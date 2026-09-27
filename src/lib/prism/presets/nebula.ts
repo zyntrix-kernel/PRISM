@@ -16,7 +16,9 @@ export function buildNebula(ctx: BuilderCtx): WorldAPI {
 
   const isUltra = quality === 'ultra';
   const isHigh = quality === 'high';
-  const useShader = isUltra || isHigh;
+  // GPU curl-noise shader (soft circular particles) is cheap fragment work —
+  // always enabled so the nebula never shows hard square points.
+  const useShader = true;
 
   const COUNT = isUltra ? 3000 : isHigh ? 1500 : 800;
 

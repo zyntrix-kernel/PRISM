@@ -5,6 +5,7 @@ import * as THREE from 'three';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { PrismConfig, type QualityTier } from './config';
 import { pinchRingScale, setEmissiveBoost } from './highlight';
@@ -28,6 +29,157 @@ import {
 import { buildGlowTexture, buildNebulaTexture, buildPlanetTextures, type PlanetTextureSet } from './textures';
 
 export type CursorMode = 'hidden' | 'point' | 'hover' | 'pinch' | 'grab';
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Premium shader-driven starfield.
+// Each star has its own brightness, twinkle phase/frequency, and stellar
+// classification color (blue / white / yellow-white / orange / red).
+// Vertex shader does perspective size attenuation; fragment shader renders
+// a soft circular point with smooth falloff + bright core.
+// ─────────────────────────────────────────────────────────────────────────────
+const STAR_VERTEX = /* glsl */ `
+  attribute float aBrightness;
+  attribute float aPhase;
+  attribute float aFreq;
+  attribute vec3 aColor;
+
+  uniform float uTime;
+  uniform float uPixelRatio;
+
+  varying float vBrightness;
+  varying vec3 vColor;
+
+  void main() {
+    vColor = aColor;
+    // Twinkle: base brightness modulated by a per-star sinusoid.
+    // Range stays in [0.4, 1.0] of base brightness — never fully extinguished.
+    float twinkle = 0.7 + 0.3 * sin(uTime * aFreq + aPhase);
+    vBrightness = aBrightness * twinkle;
+
+    vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
+    gl_Position = projectionMatrix * mvPosition;
+
+    // Size attenuation: closer stars render larger. Brighter stars render
+    // larger too — twinkling visibly grows the point as it peaks.
+    float baseSize = 1.6 + aBrightness * 4.2;
+    float dist = max(1.0, -mvPosition.z);
+    gl_PointSize = baseSize * uPixelRatio * (240.0 / dist);
+  }
+`;
+
+const STAR_FRAGMENT = /* glsl */ `
+  varying float vBrightness;
+  varying vec3 vColor;
+
+  void main() {
+    // gl_PointCoord is [0,1] across the point sprite. Center it.
+    vec2 uv = gl_PointCoord - 0.5;
+    float dist = length(uv);
+    if (dist > 0.5) discard;
+
+    // Soft circular falloff + a brighter tight core for stellar sparkle.
+    float falloff = smoothstep(0.5, 0.0, dist);
+    float core = smoothstep(0.28, 0.0, dist);
+    vec3 col = vColor * vBrightness * (0.55 + 0.6 * core);
+    float alpha = falloff * clamp(vBrightness, 0.0, 1.0);
+
+    gl_FragColor = vec4(col, alpha);
+  }
+`;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Chromatic aberration + vignette (single combined pass — cheap).
+// CA: radial RGB channel offset, zero at center, max ~1.5px at corners.
+// Vignette: smooth radial darkening, center = full, corners = ~0.75.
+// ─────────────────────────────────────────────────────────────────────────────
+const CA_VIGNETTE_SHADER = {
+  uniforms: {
+    tDiffuse: { value: null as THREE.Texture | null },
+    uIntensity: { value: 0.4 },
+    uVignette: { value: 0.25 },
+  },
+  vertexShader: /* glsl */ `
+    varying vec2 vUv;
+    void main() {
+      vUv = uv;
+      gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+    }
+  `,
+  fragmentShader: /* glsl */ `
+    uniform sampler2D tDiffuse;
+    uniform float uIntensity;
+    uniform float uVignette;
+    varying vec2 vUv;
+
+    void main() {
+      vec2 uv = vUv;
+      vec2 offset = uv - vec2(0.5);
+      float dist = length(offset);
+
+      // Radial falloff: dist^2 so center is clean, edges ramp up.
+      float caAmt = uIntensity * 0.012 * dist * dist;
+      vec3 color;
+      if (caAmt > 1e-6) {
+        vec2 dir = offset / max(dist, 1e-5);
+        // R shifted outward toward corner; B shifted inward toward center.
+        color.r = texture2D(tDiffuse, uv - dir * caAmt).r;
+        color.g = texture2D(tDiffuse, uv).g;
+        color.b = texture2D(tDiffuse, uv + dir * caAmt).b;
+      } else {
+        color = texture2D(tDiffuse, uv).rgb;
+      }
+
+      // Soft cinematic vignette. Center stays at 1.0, corners ~0.75.
+      float vignette = 1.0 - uVignette * dist * dist;
+      color *= vignette;
+
+      gl_FragColor = vec4(color, 1.0);
+    }
+  `,
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Film grain: animated hash-based noise overlay. VERY subtle — adds organic
+// texture like Apple's HDR pipeline. Operates per-pixel; high/ultra only.
+// ─────────────────────────────────────────────────────────────────────────────
+const FILM_GRAIN_SHADER = {
+  uniforms: {
+    tDiffuse: { value: null as THREE.Texture | null },
+    uTime: { value: 0 },
+    uResolution: { value: new THREE.Vector2(1, 1) },
+    uAmount: { value: 0.04 },
+  },
+  vertexShader: /* glsl */ `
+    varying vec2 vUv;
+    void main() {
+      vUv = uv;
+      gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+    }
+  `,
+  fragmentShader: /* glsl */ `
+    uniform sampler2D tDiffuse;
+    uniform float uTime;
+    uniform vec2 uResolution;
+    uniform float uAmount;
+    varying vec2 vUv;
+
+    // Cheap hash-based noise: deterministic per cell, fully GPU-side.
+    float hash(vec2 p) {
+      p = fract(p * vec2(123.34, 456.21));
+      p += dot(p, p + 45.32);
+      return fract(p.x * p.y);
+    }
+
+    void main() {
+      vec3 color = texture2D(tDiffuse, vUv).rgb;
+      // Animated grain — changes every frame, varies spatially per pixel.
+      float noise = hash(vUv * uResolution + uTime * 53.0);
+      // Subtle modulation (±0.02 in linear). Apple-HDR-style texture.
+      color += (noise - 0.5) * uAmount;
+      gl_FragColor = vec4(color, 1.0);
+    }
+  `,
+};
 
 const BUILDERS: Record<PresetId, WorldBuilder> = {
   space: buildSolar,
@@ -157,7 +309,10 @@ export class PrismScene {
   private readonly rayPositions: Float32Array;
   private readonly nebula: THREE.Mesh;
   private stars!: THREE.Points; // built by buildStarfield() in the constructor
+  private starMat!: THREE.ShaderMaterial;
   private readonly composer: EffectComposer;
+  private readonly caPass: ShaderPass;
+  private readonly grainPass: ShaderPass;
   private readonly glowTex: THREE.Texture;
   private readonly nebulaTex: THREE.Texture;
   private readonly planetTex: PlanetTextureSet;
@@ -177,7 +332,7 @@ export class PrismScene {
     });
     this.renderer.setSize(container.clientWidth, container.clientHeight);
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    this.renderer.toneMappingExposure = 1.1;
+    this.renderer.toneMappingExposure = 1.15;
     // Performance: disable shadow maps (not used; saves allocation + render pass).
     this.renderer.shadowMap.enabled = false;
     this.applyPixelRatio();
@@ -259,7 +414,12 @@ export class PrismScene {
     this.scene.add(this.world);
     this.scene.add(this.labelLayer);
 
-    // Bloom composer (High tier only; direct render otherwise).
+    // Post-processing composer. Pass order is critical for the cinematic look:
+    //   RenderPass → UnrealBloomPass → ChromaticAberration+Vignette → FilmGrain → OutputPass
+    // Bloom lifts emissive bodies; CA + vignette add cinematic depth; grain
+    // adds organic texture; OutputPass applies tone mapping + color space.
+    // All passes are always constructed (cheap to instantiate); only
+    // composer.render() is gated by quality tier in render().
     this.composer = new EffectComposer(this.renderer);
     this.composer.addPass(new RenderPass(this.scene, this.camera));
     const bloom = new UnrealBloomPass(
@@ -269,7 +429,16 @@ export class PrismScene {
       PrismConfig.bloom.threshold,
     );
     this.composer.addPass(bloom);
+    this.caPass = new ShaderPass(CA_VIGNETTE_SHADER);
+    this.composer.addPass(this.caPass);
+    this.grainPass = new ShaderPass(FILM_GRAIN_SHADER);
+    this.composer.addPass(this.grainPass);
     this.composer.addPass(new OutputPass());
+    // Seed the grain pass resolution so the first frame isn't a uniform default.
+    (this.grainPass.material as THREE.ShaderMaterial).uniforms.uResolution.value.set(
+      container.clientWidth,
+      container.clientHeight,
+    );
 
     this.loadPreset(preset);
   }
@@ -355,8 +524,12 @@ export class PrismScene {
 
   private applyPixelRatio(): void {
     const ratio = PrismConfig.quality[this.quality]?.pixelRatio ?? 1.5;
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, ratio));
-    this.composer?.setPixelRatio(Math.min(window.devicePixelRatio || 1, ratio));
+    const pr = Math.min(window.devicePixelRatio || 1, ratio);
+    this.renderer.setPixelRatio(pr);
+    this.composer?.setPixelRatio(pr);
+    // Star point-size scales with framebuffer pixel ratio; keep the uniform
+    // in sync so stars stay a consistent visual size across DPR changes.
+    if (this.starMat) this.starMat.uniforms.uPixelRatio.value = pr;
   }
 
   /** High+ tier gets procedural planet maps; low/med use flat colors. */
@@ -386,25 +559,92 @@ export class PrismScene {
     this.camera.updateProjectionMatrix();
     this.renderer.setSize(width, height);
     this.composer.setSize(width, height);
+    // Film grain hash is seeded by pixel position; update the resolution so
+    // the noise pattern scales with viewport, not pixel count.
+    (this.grainPass.material as THREE.ShaderMaterial).uniforms.uResolution.value.set(width, height);
   }
 
+  /**
+   * Premium shader-driven starfield. Each star carries per-vertex attributes
+   * (brightness, twinkle phase/freq, stellar-class color) feeding a custom
+   * ShaderMaterial. Count scales with quality tier. Always rendered (every
+   * tier) — the shader is essentially free; the cost is the point count.
+   */
   private buildStarfield(): void {
-    const count = this.quality === 'ultra' ? 1200 : this.quality === 'high' ? 800 : 500;
+    const tier = this.quality;
+    const count = tier === 'ultra' ? 1500 : tier === 'high' ? 1000 : tier === 'medium' ? 600 : 400;
     const positions = new Float32Array(count * 3);
+    const brightness = new Float32Array(count);
+    const phase = new Float32Array(count);
+    const freq = new Float32Array(count);
+    const color = new Float32Array(count * 3);
+
+    // Stellar classification distribution (approximate, tuned for visual
+    // variety rather than astrophysical accuracy):
+    //   ~15% blue (hot O/B), 20% white (A), 30% yellow-white (F/G),
+    //   25% orange (K), 10% red (M).
+    const classes: Array<{ weight: number; rgb: [number, number, number] }> = [
+      { weight: 0.15, rgb: [0.62, 0.72, 1.0] }, // blue
+      { weight: 0.2, rgb: [1.0, 1.0, 1.0] }, // white
+      { weight: 0.3, rgb: [1.0, 0.97, 0.85] }, // yellow-white
+      { weight: 0.25, rgb: [1.0, 0.78, 0.55] }, // orange
+      { weight: 0.1, rgb: [1.0, 0.55, 0.42] }, // red
+    ];
+
     for (let i = 0; i < count; i++) {
+      // Spherical shell distribution: stars sit on a 60–120 unit sphere so
+      // they're always behind world geometry but inside the far plane (300).
       const r = 60 + Math.random() * 60;
       const theta = Math.random() * Math.PI * 2;
       const phi = Math.acos(2 * Math.random() - 1);
       positions[i * 3] = r * Math.sin(phi) * Math.cos(theta);
       positions[i * 3 + 1] = r * Math.cos(phi);
       positions[i * 3 + 2] = r * Math.sin(phi) * Math.sin(theta);
+
+      // Brightness in [0.3, 1.0] — biases toward dim stars (looks more
+      // realistic; few bright, many faint).
+      brightness[i] = 0.3 + Math.random() * 0.7;
+      phase[i] = Math.random() * Math.PI * 2;
+      // Twinkle frequency 0.5–3.0 Hz (slow drift to fast shimmer).
+      freq[i] = 0.5 + Math.random() * 2.5;
+
+      // Weighted random pick of stellar class.
+      const roll = Math.random();
+      let acc = 0;
+      let chosen = classes[2]; // default yellow-white
+      for (const c of classes) {
+        acc += c.weight;
+        if (roll <= acc) {
+          chosen = c;
+          break;
+        }
+      }
+      color[i * 3] = chosen.rgb[0];
+      color[i * 3 + 1] = chosen.rgb[1];
+      color[i * 3 + 2] = chosen.rgb[2];
     }
+
     const geo = new THREE.BufferGeometry();
     geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-    this.stars = new THREE.Points(
-      geo,
-      new THREE.PointsMaterial({ color: 0xaac4ff, size: 0.5, transparent: true, opacity: 0.85, depthWrite: false }),
-    );
+    geo.setAttribute('aBrightness', new THREE.BufferAttribute(brightness, 1));
+    geo.setAttribute('aPhase', new THREE.BufferAttribute(phase, 1));
+    geo.setAttribute('aFreq', new THREE.BufferAttribute(freq, 1));
+    geo.setAttribute('aColor', new THREE.BufferAttribute(color, 3));
+
+    this.starMat = new THREE.ShaderMaterial({
+      uniforms: {
+        uTime: { value: 0 },
+        uPixelRatio: { value: this.renderer.getPixelRatio() },
+      },
+      vertexShader: STAR_VERTEX,
+      fragmentShader: STAR_FRAGMENT,
+      transparent: true,
+      depthWrite: false,
+      // Additive: stars never darken what's behind them, they only brighten —
+      // so overlapping stars sum into a believable bright cluster.
+      blending: THREE.AdditiveBlending,
+    });
+    this.stars = new THREE.Points(geo, this.starMat);
     this.scene.add(this.stars);
   }
 
@@ -478,6 +718,12 @@ export class PrismScene {
     this.rig.update(dt, this.camera);
     this.api?.update(dt, elapsed);
     this.cursor.rotation.y += dt * 2.2;
+    // Drive per-frame shader uniforms. Starfield twinkle + grain noise need
+    // elapsed time (seconds, monotonically increasing). Both run on every
+    // tier — the starfield is always rendered; grain is only sampled when
+    // the composer renders (high/ultra) but updating the uniform is free.
+    this.starMat.uniforms.uTime.value = elapsed;
+    (this.grainPass.material as THREE.ShaderMaterial).uniforms.uTime.value = elapsed;
   }
 
   render(): void {
@@ -499,6 +745,13 @@ export class PrismScene {
   dispose(): void {
     disposeGroup(this.world);
     disposeGroup(this.labelLayer);
+    // Free starfield GPU resources (geometry attributes + shader program).
+    this.stars?.geometry.dispose();
+    this.starMat?.dispose();
+    // Free the fullscreen-quad shader materials backing the post passes.
+    (this.caPass?.material as THREE.ShaderMaterial | undefined)?.dispose();
+    (this.grainPass?.material as THREE.ShaderMaterial | undefined)?.dispose();
+    this.composer?.dispose();
     this.renderer.dispose();
   }
 }

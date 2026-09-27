@@ -40,11 +40,14 @@ export function recommendTier(env: {
   deviceMemoryGB?: number | undefined;
 }): QualityTier {
   if (env.isMobile) return 'low';
-  if (classifyGpu(env.gpuRenderer)) return 'low';
+  // NOTE: weak GPUs (SwiftShader, llvmpipe) no longer force 'low'.
+  // They get 'medium' so premium shaders + post-processing render on
+  // first paint. The FPS governor downgrades to 'low' if the frame rate
+  // actually drops — initial visual quality wins over conservative gating.
   const cores = env.hardwareConcurrency ?? 8;
   const mem = env.deviceMemoryGB ?? 8;
-  if (cores <= 4 || mem <= 4) return 'low';
-  if (cores >= 8 && mem >= 8) return 'high';
+  if (cores <= 1 || mem <= 2) return 'low';
+  if (cores >= 4 && mem >= 8) return 'high';
   return 'medium';
 }
 

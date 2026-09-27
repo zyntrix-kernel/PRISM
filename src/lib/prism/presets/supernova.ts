@@ -14,8 +14,9 @@ export function buildSupernova(ctx: BuilderCtx): WorldAPI {
   const grabbables: THREE.Object3D[] = [];
   const isUltra = quality === 'ultra';
   const isHigh = quality === 'high';
-
-  // ── Star surface: Perlin noise 3D turbulence + blackbody colors ───
+  // Bumped geometry detail so the star surface shader looks smooth on
+  // medium+ (was detail 1 = visible facets = "crumpled paper" look).
+  const starGeo = new THREE.IcosahedronGeometry(1.3, isUltra ? 4 : isHigh ? 3 : 2);
   const starVert = /* glsl */ `
     varying vec3 vWorldPos;
     varying vec3 vNormal;
@@ -57,16 +58,18 @@ export function buildSupernova(ctx: BuilderCtx): WorldAPI {
       vec3 viewDir = normalize(cameraPosition - vWorldPos);
       float fresnel = pow(1.0 - max(0.0, dot(vNormal, viewDir)), 2.5);
 
-      // Blackbody temperature: hotter at surface peaks, cooler at valleys
-      // During collapse: temperature skyrockets
-      float baseTemp = mix(3000.0, 12000.0, turb);
-      baseTemp += gran * 2000.0;
-      baseTemp *= (1.0 + uCollapse * 3.0 + uIntensity * 0.5);
+      // Blackbody temperature: a RED SUPERGIANT in stable phase (2800-4500K,
+      // deep red → orange-yellow). Heats toward blue-white ONLY during
+      // collapse/explosion (uCollapse 0→1). This matches Betelgeuse/Antares.
+      float tempMax = mix(4500.0, 13000.0, uCollapse);
+      float baseTemp = mix(2800.0, tempMax, turb);
+      baseTemp += gran * 1500.0;
+      baseTemp *= (1.0 + uCollapse * 2.5 + max(0.0, uIntensity - 1.0) * 0.8);
       vec3 col = temp_to_color(baseTemp);
 
-      // Add bright hot spots where noise peaks
+      // Add bright hot spots where noise peaks (warmer during collapse)
       float hotspots = smoothstep(0.6, 1.0, turb);
-      col += vec3(1.0, 0.95, 0.8) * hotspots * 0.5 * (1.0 + uCollapse);
+      col += vec3(1.0, 0.85, 0.6) * hotspots * 0.35 * (1.0 + uCollapse * 1.5);
 
       // Fresnel rim glow (atmospheric edge)
       col += vec3(1.0, 0.7, 0.3) * fresnel * (0.3 + uCollapse * 0.7);
@@ -88,9 +91,8 @@ export function buildSupernova(ctx: BuilderCtx): WorldAPI {
     },
   });
 
-  // Use IcosahedronGeometry — low detail on non-ultra for shader performance
-  // (the Perlin noise shader is GPU-heavy; fewer vertices = faster)
-  const starGeo = new THREE.IcosahedronGeometry(1.3, isUltra ? 4 : isHigh ? 2 : 1);
+  // Star mesh uses the higher-detail IcosahedronGeometry declared above
+  // (Perlin noise is fragment-shader work, so extra vertices are cheap).
   const star = new THREE.Mesh(starGeo, starMat);
   world.add(star);
 

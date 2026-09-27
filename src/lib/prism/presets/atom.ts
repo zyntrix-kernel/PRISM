@@ -134,14 +134,15 @@ export function buildAtom(ctx: BuilderCtx): WorldAPI {
     shellGroups.push(shellGroup);
     world.add(shellGroup);
 
-    // Visible torus orbit ring (from matt765/atom-animation — much nicer
-    // than a thin line)
+    // Visible torus orbit ring — rotated to XZ plane to match the orbit system
+    // (TorusGeometry defaults to XY plane, but orbits run in XZ)
     const orbitRing = new THREE.Mesh(
-      new THREE.TorusGeometry(shell.radius, 0.008, 8, 64),
+      new THREE.TorusGeometry(shell.radius, 0.03, 12, 96),
       new THREE.MeshBasicMaterial({
-        color: 0x4a8aaa, transparent: true, opacity: 0.3, side: THREE.DoubleSide,
+        color: 0x4a8aaa, transparent: true, opacity: 0.4, side: THREE.DoubleSide,
       }),
     );
+    orbitRing.rotation.x = Math.PI / 2; // rotate from XY to XZ to match orbit plane
     shellGroup.add(orbitRing);
 
     const label = makeLabel(`n=${shell.n}`, 0.8);

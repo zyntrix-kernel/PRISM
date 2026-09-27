@@ -110,6 +110,15 @@ export class InteractionController {
   actionHeld = false;
   actionPressed = false;
   actionReleased = false;
+  /** TAP: a quick pinch (down + up within tapMaxMs, minimal drift). Fires on
+   *  release — separate from actionPressed (which fires on pinch-down). This
+   *  makes clicking UI / shooting feel instant: a quick pinch-tap is a tap,
+   *  a held pinch is a grab. */
+  tap = false;
+  private tapStartTime = 0;
+  private tapStartX = 0;
+  private tapStartY = 0;
+  private tapArmed = false;
   private prevActionHeld = false;
   /** Space key doubles as the brake pedal. */
   spaceDown = false;
@@ -298,6 +307,8 @@ export class InteractionController {
     this.actionHeld = false;
     this.actionPressed = false;
     this.actionReleased = false;
+    this.tap = false;
+    this.tapArmed = false;
     this.prevActionHeld = false;
     this.mouseClicked = false;
     this.spaceDown = false;
@@ -397,6 +408,40 @@ export class InteractionController {
     this.actionPressed = (held && !this.prevActionHeld) || this.mouseClicked;
     this.actionReleased = !held && this.prevActionHeld;
     this.actionHeld = held;
+
+    // ── TAP DETECTION ──────────────────────────────────────────────────
+    // A tap = quick pinch down + up within tapMaxMs, with minimal drift.
+    // Fires on RELEASE (not press) so we know it was quick. This is
+    // separate from actionPressed (grab) so worlds can distinguish:
+    //   - tap (quick) → shoot / click UI / place block
+    //   - held (grab) → drag / grab object
+    this.tap = false;
+    const nowMs = performance.now();
+    if (this.actionPressed && this.mode === 'hand') {
+      // Pinch just started — arm the tap, record start time + position.
+      this.tapArmed = true;
+      this.tapStartTime = nowMs;
+      this.tapStartX = this.pointerNX;
+      this.tapStartY = this.pointerNY;
+    }
+    if (this.actionReleased) {
+      if (this.tapArmed) {
+        const dur = nowMs - this.tapStartTime;
+        const dx = this.pointerNX - this.tapStartX;
+        const dy = this.pointerNY - this.tapStartY;
+        const drift = Math.hypot(dx, dy);
+        const cfg = PrismConfig.interaction;
+        const maxMs = cfg.tapMaxMs ?? 350;
+        const maxMove = cfg.tapMaxMove ?? 0.04;
+        if (dur <= maxMs && drift <= maxMove) {
+          this.tap = true;
+        }
+      }
+      this.tapArmed = false;
+    }
+    // Mouse click also counts as a tap (for parity).
+    if (this.mouseClicked) this.tap = true;
+
     this.prevActionHeld = held;
     this.mouseClicked = false;
   }

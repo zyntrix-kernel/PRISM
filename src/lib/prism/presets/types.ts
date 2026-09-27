@@ -76,8 +76,11 @@ export interface WorldAPI {
   capturesPointer?(): boolean;
   /** Optional: 3D focus point for the shared cursor. */
   pointerFocus?(out: THREE.Vector3): boolean;
-  /** Optional: tap/hold/release action edges (voxel place/break). */
-  setPointerAction?(pressed: boolean, held: boolean, released: boolean): void;
+  /** Optional: tap/hold/release action edges (voxel place/break).
+   *  `tap` is a quick pinch (down + up within 350ms) — distinct from a
+   *  held grab. Worlds use `tap` for instant actions (shoot, place block,
+   *  click UI) and `held` for drag/grab. */
+  setPointerAction?(pressed: boolean, held: boolean, released: boolean, tap?: boolean): void;
   /** Optional: block palette (voxel preset). */
   blockPalette?(): Array<{ name: string; color: string }>;
   selectBlock?(index: number): void;
@@ -102,6 +105,8 @@ export interface DriveFrameInput {
   brake: boolean;
   /** Rising edge of pinch / click (easy-mode pin drop). */
   actionPressed: boolean;
+  /** Quick pinch-tap (down + up within 350ms). Used for boost in drive. */
+  tap?: boolean;
   /** World-local ground point under the pointer (null if none). */
   ground: { x: number; z: number } | null;
 }

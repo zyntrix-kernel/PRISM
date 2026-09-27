@@ -861,8 +861,11 @@ export function buildDrive(ctx: BuilderCtx): WorldAPI {
     }
 
     // ── Boost logic ──────────────────────────────────────────────────
-    // In manual mode, a rising edge of actionPressed triggers a boost burst.
-    if (!easy && input.actionPressed && !prevActionPressed) triggerBoost();
+    // Boost fires on a quick pinch-TAP (down + up within 350ms) — distinct
+    // from a held pinch (which is the gas pedal). This lets the user tap
+    // to boost while holding gas, without conflicting. Falls back to
+    // actionPressed for mouse users (who don't have tap).
+    if (!easy && (input.tap || (input.actionPressed && !prevActionPressed))) triggerBoost();
     prevActionPressed = input.actionPressed;
     if (boostActive) {
       boostTimer -= dt;

@@ -460,6 +460,7 @@ export class PrismApp {
             : 0,
           brake: this.interaction.spaceDown,
           actionPressed: this.interaction.actionPressed,
+          tap: this.interaction.tap,
           ground: this.interaction.groundXZ(),
         });
       }
@@ -467,6 +468,7 @@ export class PrismApp {
         this.interaction.actionPressed,
         this.interaction.actionHeld,
         this.interaction.actionReleased,
+        this.interaction.tap,
       );
       this.scene.update(dt, this.elapsed);
       if (now - this.lastUiAt >= 250) {

@@ -53,12 +53,12 @@ export const PrismConfig = {
     // feed holds still while a 120 fps clean feed stays wide open.
     pointerAdaptive: {
       maxSpeed: 3.5, // fastest plausible fingertip travel, NDC/sec
-      slowCutoff: 0.42, // rest smoothing at very low tracking rates
-      fastCutoff: 2.8, // rest smoothing at 60+ fps tracking
-      betaBase: 0.09, // speed-opening base (lively fast motion)
-      betaRate: 0.08, // extra opening that fades out on slow cameras
-      maxLeadSec: 0.12, // latency-hiding prediction horizon cap
-      maxLeadDist: 0.05, // prediction travel cap (can never fling)
+      slowCutoff: 0.25, // HEAVIER rest smoothing (was 0.42 — too lively, jittery)
+      fastCutoff: 2.2, // slightly smoother at high fps (was 2.8)
+      betaBase: 0.06, // less speed-opening (was 0.09 — felt twitchy)
+      betaRate: 0.05, // less extra opening (was 0.08)
+      maxLeadSec: 0.10, // shorter prediction horizon (was 0.12 — led to overshoot)
+      maxLeadDist: 0.035, // tighter travel cap (was 0.05 — flung on fast moves)
     },
     // Smoothing factor for grabbed-object motion (higher = tighter follow,
     // more responsive to hand movement). Was 0.3 (floaty/disconnected);
@@ -73,12 +73,17 @@ export const PrismConfig = {
     // Voxel preset: drag snap grid (scene units).
     gridSnap: 0.6,
     // Grab assist: near-misses within this NDC radius snap to the body.
-    hoverRadius: 0.07,
+    hoverRadius: 0.09, // wider (was 0.07) — easier to lock onto bodies
     // Hover must miss this long before un-highlighting (rate-independent).
     hoverClearMs: 120,
     // After tracking loss, keep the cursor alive this long (ms) instead of
     // blinking out instantly.
     coastMs: 350,
+    // TAP DETECTION: a quick pinch (down + up within tapMaxMs) fires a
+    // 'tap' action — separate from grab. This makes clicking UI / shooting
+    // feel instant without needing to hold the pinch.
+    tapMaxMs: 350, // pinch must release within 350ms to count as a tap
+    tapMaxMove: 0.04, // pinch point can't drift more than 4% of screen
   },
 
   cameraRig: {

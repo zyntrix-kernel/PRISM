@@ -1213,7 +1213,12 @@ export function buildGunGame(ctx: BuilderCtx): WorldAPI {
     },
     capturesPointer: () => true,
     pointerFocus(out: THREE.Vector3) { if (!hasAim) return false; out.copy(aimPoint); return true; },
-    setPointerAction(pressed: boolean) { if (pressed) fire(); },
+    // Fire on EITHER a quick tap (instant pinch-tap) OR a press (held pinch
+    // down / mouse click). The tap makes rapid pinch-tapping feel instant;
+    // the press covers held-fire / mouse users.
+    setPointerAction(pressed: boolean, _held: boolean, _released: boolean, tap?: boolean) {
+      if (pressed || tap) fire();
+    },
     bodyInfo(name: string | null) { return name === 'Target' ? `Target · ${score} pts` : null; },
     coachHint() {
       if (score === 0) return 'Point at a target · pinch or click to fire';

@@ -174,14 +174,18 @@ export default function PrismStage() {
       {/* Toast notifications (action feedback) */}
       <PrismToast />
 
-      {/* Atmospheric layers — depth below everything */}
+      {/* Atmospheric layers — depth below everything.
+          NOTE: prism-grain and prism-vignette CSS overlays were REMOVED.
+          Film grain + vignette are now handled GPU-side by the post-processing
+          pipeline (animated, resolution-aware, in scene.ts). The old CSS
+          versions were STATIC and sat on top of the canvas as a frozen noise
+          texture + dark gradient — they were the "static thing covering the
+          whole three.js" the user reported. */}
       <div className="prism-atmosphere" aria-hidden="true">
         <div className="prism-orb prism-orb-a" />
         <div className="prism-orb prism-orb-b" />
         <div className="prism-orb prism-orb-c" />
       </div>
-      <div className="prism-grain" aria-hidden="true" />
-      <div className="prism-vignette" aria-hidden="true" />
 
       {/* Parallax depth layer — pointer-responsive drifting stars */}
       <ParallaxDepthLayer />

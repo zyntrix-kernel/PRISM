@@ -175,25 +175,13 @@
   }
 }
 
-/* Fine grain overlay — adds tactile texture to the glass */
-.prism-grain {
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  opacity: 0.015;
-  z-index: 1;
-  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/></filter><rect width='100%25' height='100%25' filter='url(%23n)' opacity='0.7'/></svg>");
-  mix-blend-mode: overlay;
-}
-
-/* Vignette — pulls focus inward, adds depth */
-.prism-vignette {
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  z-index: 2;
-  background: radial-gradient(120% 100% at 50% 50%, transparent 55%, rgba(0, 0, 0, 0.55) 100%);
-}
+/* DEPRECATED: prism-grain + prism-vignette CSS overlays removed.
+   Film grain + vignette are now handled GPU-side by the post-processing
+   pipeline in scene.ts (animated film grain + radial vignette in the
+   chromatic-aberration ShaderPass). The CSS versions were STATIC DOM
+   overlays sitting on top of the canvas — a frozen noise texture +
+   dark gradient that users perceived as "a static thing covering the
+   whole three.js". The divs were also removed from PrismStage.tsx. */
 
 /* ==========================================================================
    Scene container + webcam + landmark overlay

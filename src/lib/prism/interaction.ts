@@ -548,20 +548,24 @@ export class InteractionController {
 
     // Two-hand transform takes precedence over single-hand dragging.
     // COAST for slow cameras: the second hand often drops out for 1-3 frames.
-    // Cache its last position + use it for up to 500ms so the zoom/rotate
-    // keeps working through brief tracking gaps. This makes double-pinch
-    // zoom actually usable on a low-quality camera.
+    // Cache its last pinch point + use it for up to 500ms so the zoom/rotate
+    // keeps working through brief tracking gaps.
     const primeP = prime.pinch.isPinching;
     const secP = this.trackers[1].pinch.isPinching;
     const now = performance.now();
+    // Always work with Point2D (pinch point), never the raw TrackedHand —
+    // the TwoHandGesture.update expects {x, y} not a hand object.
+    const primePoint = pinchPoint2D(primaryHand.landmarks);
     if (secondaryHand) {
       this.cachedSecHand = pinchPoint2D(secondaryHand);
       this.cachedSecHandAt = now;
     }
     const secCoastAlive = this.cachedSecHand && (now - this.cachedSecHandAt < 500);
-    const secHandOrCoast = secondaryHand ?? (secCoastAlive ? this.cachedSecHand : null);
-    const bothPinching = primeP && secP && secHandOrCoast !== null;
-    if (bothPinching && secHandOrCoast) {
+    const secPoint = secondaryHand
+      ? this.cachedSecHand  // fresh — just cached above
+      : (secCoastAlive ? this.cachedSecHand : null);
+    const bothPinching = primeP && secP && secPoint !== null;
+    if (bothPinching && secPoint) {
       // Fresh baseline on entry: stale ratios from a previous gesture would
       // otherwise teleport the world scale on the first frame.
       if (!this.prevTwoHand) {
@@ -569,10 +573,7 @@ export class InteractionController {
         this.lastAngleDelta = 0;
       }
       this.prevTwoHand = true;
-      const delta = this.twoHand.update(
-        pinchPoint2D(primaryHand.landmarks),
-        secHandOrCoast,
-      );
+      const delta = this.twoHand.update(primePoint, secPoint);
       this.twoHandActive = true;
       if (delta) this.applyTwoHandDelta(delta.scaleRatio, delta.angleDelta);
       if (this.grabbed) this.release(); // two-hand mode owns the world, not an orb

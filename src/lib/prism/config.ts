@@ -24,8 +24,13 @@ export const PrismConfig = {
   },
 
   camera: {
-    idealWidth: 1280,
-    idealHeight: 720,
+    // Lowered from 1280x720 to 640x480 — HALVES MediaPipe inference time.
+    // The freeze when the 2nd hand appeared was because 2-hand inference at
+    // 1280x720 takes 200-300ms, blocking the main thread. At 640x480 it
+    // drops to ~100-150ms, which the 30fps throttle + render loop can absorb.
+    // 640x480 is plenty for hand tracking (MediaPipe downscales internally).
+    idealWidth: 640,
+    idealHeight: 480,
   },
 
   gestures: {

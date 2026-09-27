@@ -97,25 +97,31 @@ export class HandTracker {
   }
 
   /** Begins the detection loop over a playing video element.
-   *  Uses setTimeout(0) between detections instead of requestAnimationFrame
-   *  so heavy MediaPipe inference NEVER blocks the render loop. The old
-   *  rAF-based loop caused the app to freeze for 50-150ms per inference
-   *  call on slow cameras — the 'random freeze' bug. */
+   *  THROTTLED: runs at most 30fps (every 33ms) to leave CPU time for the
+   *  render loop. MediaPipe's detectForVideo is synchronous and blocks the
+   *  main thread — with 2 hands it can take 200-300ms. Running it every
+   *  frame would freeze the render. 30fps tracking is plenty for hand
+   *  interaction (the pointer filter smooths between samples). */
   start(video: HTMLVideoElement): void {
     if (!this.landmarker) throw new Error('HandTracker.start() called before init().');
     this.video = video;
     this.running = true;
     this.lastFrameAt = performance.now();
+    const TARGET_INTERVAL_MS = 33; // 30fps max detection rate
     const loop = (): void => {
       if (!this.running) return;
+      const t0 = performance.now();
       this.pump();
-      // setTimeout(0) yields to the render loop (rAF) between detections.
-      // This means even if inference takes 100ms, the render loop keeps
-      // running at 60fps — no app freeze. The detection runs as fast as
-      // the CPU allows without blocking rendering.
-      this.loopHandle = window.setTimeout(loop, 0) as unknown as number;
+      // Schedule the next detection. If inference was fast, wait the
+      // remaining time to hit 30fps. If inference was slow (200ms+), run
+      // immediately (setTimeout(0)) — the render loop already got time
+      // during the yield. This prevents the busy-loop starvation that
+      // happened with bare setTimeout(0).
+      const elapsed = performance.now() - t0;
+      const wait = Math.max(0, TARGET_INTERVAL_MS - elapsed);
+      this.loopHandle = window.setTimeout(loop, wait) as unknown as number;
     };
-    this.loopHandle = window.setTimeout(loop, 0) as unknown as number;
+    this.loopHandle = window.setTimeout(loop, TARGET_INTERVAL_MS) as unknown as number;
   }
 
   stop(): void {

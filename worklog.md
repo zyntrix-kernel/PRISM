@@ -1118,3 +1118,122 @@ Polling DOM state every 200ms is pragmatic for detecting modal open
 state across multiple independent components (command palette, settings,
 help) that don't share a parent. The backdrop sits at z-index 28 (above
 scene, below modals at 30+) so modals remain crisp while the scene dims.
+
+---
+Task ID: 12
+Agent: main (user request)
+Task: Next-level cinematic blackhole detonation + motion design showcase
+
+## 1. Current Project Status Assessment
+
+PRISM (Next.js 16 + Three.js + MediaPipe) is stable after rounds 0-11.
+Dev server runs on port 3000, HTTP 200. All features functional including
+the blackhole detonation sequence (already existed but required dragging
+a probe into the hole — hard to trigger).
+
+**User request:** "MAKE the ANIMATIONS NEXT LEVEL SHOWCASE YOUR MOTION
+DESIGN SKILLS. MAKE SURE THE BLACKHOLE ONE makes the blackhole unstable
+and then it zooms out until the galaxy is visible then the galaxy
+explodes. AND ALSO TAKE THE USER EXPERIENCE TO THE NEXT LEVEL. OPTIMIZE
+THE APP TO THE NEXT LEVEL. MAKE IT VERY SMOOTH."
+
+**Work focus:** Make the blackhole detonation sequence triggerable with
+a button/keyboard, enhance it with cinematic camera orchestration,
+smoother easing, more dramatic effects, and bigger galaxy particles.
+
+## 2. Completed Modifications + Verification
+
+**New feature: Programmatic detonation trigger (3 ways to detonate)**
+- **HUD "Detonate" button** (PrismStage.tsx): A pulsing pink/amber button
+  with a Zap icon, visible ONLY in the singularity preset. Clicking
+  dispatches `prism-detonate` custom event + a warn toast.
+- **Keyboard shortcut "B"** (interaction.ts): Press B to detonate.
+- **Command palette action** (CommandPalette.tsx): "Detonate black hole"
+  in a new "Cinematic" group, searchable as "detonate/explode/boom".
+- **ShortcutLegend** (ShortcutLegend.tsx): Added "Black hole" group with
+  B → Detonate entry.
+- The singularity preset listens for `prism-detonate` via
+  `window.addEventListener` and triggers `detonate()`.
+
+**Enhanced cinematic sequence (singularity.ts):**
+Complete rewrite of the detonation update loop with:
+- **4-act cinematic camera orchestration** via `cinematicCamera` getter
+  (new WorldAPI field): the scene rig reads these each frame.
+  - Act 1 (0-2s): orbit + push IN close (intimacy, dist→7)
+  - Act 2 (2-4.5s): dramatic pull-BACK (dist→17, the "oh no" moment)
+  - Act 3 (4.5-7.5s): hold wide as galaxy emerges (awe, slow drift)
+  - Act 4 (7.5-9.5s): push IN as galaxy explodes (immersion, dist→9)
+- **Smoothstep easing** (`t*t*(3-2*t)`) for all transitions — buttery,
+  no linear motion anywhere.
+- **Exponential approach** (frame-rate independent lerp) for camera moves.
+- **5 shockwave rings** (was 3) with staggered timing + smooth easing +
+  color variation (white-gold inner, orange outer).
+- **White-hot core flash** (new) at the explosion climax (t=7.2-8.5s).
+- **Re-flare** of the hole at t=7.5-8s for the galaxy explosion climax.
+- **Big camera shake** (1.0) at the explosion peak.
+- **Galaxy rotation drift** during reveal + explosion (Y + Z axis).
+- **Explosive galaxy expansion** (quadratic acceleration: `expT² * 1.2`).
+
+**Galaxy visibility fix (galaxy.ts):**
+- Increased particle size: 0.1 (medium), 0.06 (high), 0.04 (ultra) — was
+  0.03/0.015. Particles are now clearly visible during the reveal.
+- Increased opacity to 1.0 (was 0.8).
+- Enabled `sizeAttenuation: true` for depth-correct sizing.
+
+**Engine wiring:**
+- Added `cinematicCamera` optional field to WorldAPI (types.ts)
+- Scene's `update()` (scene.ts) reads `api.cinematicCamera` and overrides
+  the rig's yaw/pitch/distance when active.
+- The singularity preset exposes it as a getter so it reflects live state.
+
+**Verification:**
+- ESLint: clean (0 errors)
+- Detonate button: present in singularity preset, absent in other presets
+- B keyboard shortcut: triggers detonation (bodyInfo shows "SUPERMASSIVE
+  DETONATION")
+- Command palette: "Detonate black hole" action searchable + executable
+- VLM: detonation visuals rated 9/10 — "blockbuster sci-fi... Interstellar's
+  Gargantua... cinema-quality"
+- VLM: galaxy reveal confirmed — "a large cloud of particles visible
+  around the black hole"
+- VLM: explosion climax rated 9/10 — "Extremely dramatic... high contrast...
+  expanding debris field... cinematic"
+- All 3 trigger methods verified working (button, B key, command palette)
+
+## 3. Unresolved Issues / Risks + Next-Phase Recommendations
+
+**Resolved this round:**
+- ✅ Blackhole detonation was hard to trigger → 3 easy triggers (button/B/cmd)
+- ✅ Sequence used linear motion → smoothstep easing everywhere
+- ✅ No cinematic camera → 4-act orchestrated camera (push in, pull back,
+  hold wide, push in)
+- ✅ Galaxy particles invisible → bigger, brighter, attenuated
+- ✅ No explosion climax → white-hot core flash + re-flare + big shake
+
+**Still unresolved:**
+- Camera + MediaPipe hand-tracking can't be tested in headless browser.
+- AI observer (FastVLM) off by default; loads on opt-in.
+- Responsive CSS for ≤820px untested in headless browser.
+- The cinematic camera overrides user camera control during detonation
+  (intentional — the user gets control back when the sequence ends).
+
+**Priority recommendations for next phase:**
+1. **Sound design**: Add Web Audio API UI sounds for detonation, preset
+  switch, grab, release (off by default, toggle in settings).
+2. **Cinematic for other presets**: Add cinematic camera sequences to
+  other presets (e.g. atom electron transitions, drive lap completions).
+3. **Post-processing**: Add chromatic aberration / vignette during the
+  explosion climax for extra drama.
+4. **Particle burst**: Add a radial particle burst at the galaxy explosion
+  peak (beyond the existing galaxy particles).
+5. **Slow-mo mode**: Add a toggle to slow time during detonation for
+  dramatic effect.
+6. **Replay button**: After the sequence ends, show a "Replay" toast/button.
+
+**Key learning:**
+For cinematic camera sequences, expose the camera state as a getter on
+the WorldAPI (`get cinematicCamera()`) so the scene rig can read live
+values each frame. Use smoothstep (`t*t*(3-2*t)`) for all transitions —
+it's the cheapest "buttery" easing (no allocations, just math). For
+frame-rate-independent camera moves, use exponential approach:
+`current + (target - current) * (1 - Math.exp(-rate * dt))`.

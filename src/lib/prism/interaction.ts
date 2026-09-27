@@ -262,6 +262,10 @@ export class InteractionController {
         case 'q': case 'Q':
           window.dispatchEvent(new CustomEvent('prism-cycle', { detail: -1 }));
           break;
+        case 'b': case 'B':
+          // Detonate the singularity (cinematic blackhole sequence).
+          window.dispatchEvent(new CustomEvent('prism-detonate'));
+          break;
         case ' ': this.spaceDown = true; e.preventDefault(); break;
         case '1': case '2': case '3': case '4': case '5': case '6': case '7': {
           const id = PRESET_ORDER[Number(e.key) - 1];

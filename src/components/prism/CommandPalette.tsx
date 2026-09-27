@@ -12,6 +12,7 @@ import {
   Gauge,
   Hand,
   CornerDownLeft,
+  Zap,
 } from "lucide-react";
 
 export interface CommandAction {
@@ -146,6 +147,17 @@ export default function CommandPalette({ onClose, state, app }: Props) {
       keywords: "reset view camera home",
       run: () => {
         if (typeof window !== "undefined") window.dispatchEvent(new KeyboardEvent("keydown", { key: "r" }));
+      },
+    });
+    out.push({
+      id: "detonate",
+      label: "Detonate black hole",
+      hint: "B · cinematic sequence",
+      group: "Cinematic",
+      icon: (s) => <Zap size={s ?? 15} />,
+      keywords: "detonate explode blackhole singularity cinematic boom",
+      run: () => {
+        if (typeof window !== "undefined") window.dispatchEvent(new CustomEvent("prism-detonate"));
       },
     });
     return out;

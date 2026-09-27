@@ -55,12 +55,23 @@ export function buildSingularity(ctx: BuilderCtx): WorldAPI {
   );
   flash.visible = false;
   world.add(flash);
+
+  // Secondary white-hot core flash for the explosion climax
+  const coreFlash = new THREE.Sprite(
+    new THREE.SpriteMaterial({
+      map: glowTex, color: 0xffffff, transparent: true, opacity: 0,
+      blending: THREE.AdditiveBlending, depthWrite: false,
+    }),
+  );
+  coreFlash.visible = false;
+  world.add(coreFlash);
+
   const shocks: THREE.Mesh[] = [];
-  for (let i = 0; i < 3; i++) {
+  for (let i = 0; i < 5; i++) {
     const ring = new THREE.Mesh(
-      new THREE.RingGeometry(1.9, 2.05, 96),
+      new THREE.RingGeometry(1.9, 2.05, 128),
       new THREE.MeshBasicMaterial({
-        color: 0xffb37a, transparent: true, opacity: 0,
+        color: i < 2 ? 0xffe6b8 : 0xff9a4d, transparent: true, opacity: 0,
         blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide,
       }),
     );
@@ -71,6 +82,11 @@ export function buildSingularity(ctx: BuilderCtx): WorldAPI {
   }
   let deto: { t: number } | null = null;
   let galaState: 'hidden' | 'revealing' | 'exploding' | 'done' = 'hidden';
+  // Cinematic camera auto-orbit during detonation (set by detonate()).
+  let cinematicYaw = 0.4;
+  let cinematicPitch = 0.5;
+  let cinematicDist = 11;
+  let cinematicActive = false;
 
   const probeGeo = new THREE.SphereGeometry(0.14, 24, 18);
   PROBES.forEach((p, i) => {
@@ -90,10 +106,48 @@ export function buildSingularity(ctx: BuilderCtx): WorldAPI {
     facts.set(p.name, 'Survey probe · expendable, apparently');
   });
 
+  /** Smoothstep easing for cinematic transitions (ease-in-out). */
+  const smooth = (t: number) => t * t * (3 - 2 * t);
+  /** Exponential approach (frame-rate independent lerp). */
+  const approach = (current: number, target: number, rate: number, dt: number) =>
+    current + (target - current) * (1 - Math.exp(-rate * dt));
+
+  /** Trigger the cinematic detonation sequence programmatically. */
+  const detonate = (): void => {
+    if (deto) return; // already running
+    deto = { t: 0 };
+    hole.setExtreme(true);
+    flash.visible = true;
+    coreFlash.visible = true;
+    for (const shock of shocks) shock.visible = true;
+    shakeCamera(0.9);
+    cinematicActive = true;
+    cinematicYaw = 0.4;
+    cinematicPitch = 0.5;
+    cinematicDist = 11;
+  };
+
+  // Listen for programmatic detonation (button / command palette / keyboard).
+  const onDetonate = (): void => detonate();
+  if (typeof window !== 'undefined') {
+    window.addEventListener('prism-detonate', onDetonate);
+  }
+
   return {
     grabbables,
     background: 'nebula',
     view: { distance: 11, pitch: 0.5, yaw: 0.4 },
+    /** Cinematic camera override: when active, the scene rig uses these.
+     *  Evaluated as a getter so it reflects the live cinematicActive state. */
+    get cinematicCamera() {
+      return cinematicActive
+        ? { yaw: cinematicYaw, pitch: cinematicPitch, distance: cinematicDist }
+        : null;
+    },
+    coachHint(): string | null {
+      if (deto) return null; // let the visuals speak
+      return 'Drag a probe into the hole · or press Detonate';
+    },
     update(dt: number, elapsed: number): void {
       // Detonation trigger: grabbed probe held inside r 2.6 charges 0.5 s.
       if (!deto) {
@@ -104,62 +158,143 @@ export function buildSingularity(ctx: BuilderCtx): WorldAPI {
             const charge = ((probe.userData.diveT as number | undefined) ?? 0) + dt;
             probe.userData.diveT = charge;
             if (charge >= 0.5) {
-              probe.userData.diveT = 0;
-              deto = { t: 0 };
-              hole.setExtreme(true);
-              flash.visible = true;
-              for (const shock of shocks) shock.visible = true;
-              shakeCamera(0.8);
+              detonate();
             }
           } else {
             probe.userData.diveT = 0;
           }
         }
+        // Idle cinematic: slow drift when not detonating
+        if (cinematicActive) {
+          cinematicYaw = approach(cinematicYaw, 0.4, 1, dt);
+          cinematicPitch = approach(cinematicPitch, 0.5, 1, dt);
+          cinematicDist = approach(cinematicDist, 11, 1, dt);
+          if (Math.abs(cinematicYaw - 0.4) < 0.01) cinematicActive = false;
+        }
       } else {
         deto.t += dt;
         const t = deto.t;
-        // Act 1 (0–2 s): spin up, fling probes, pull the world back.
-        // Act 2 (2–3.2 s): hold the wide shot, flash pulses.
-        // Act 3 (3.2–4.5 s): settle everything home.
-        const spin = t < 2 ? 1 + (t / 2) * 7 : t < 3.2 ? 8 : Math.max(1, 8 - (t - 3.2) * 5.4);
-        debris.spinBoost = spin;
-        const zoom = t < 2 ? 1 - (t / 2) * 0.45 : t < 3.2 ? 0.55 : 0.55 + ((t - 3.2) / 1.3) * 0.45;
+
+        // ── CINEMATIC CAMERA ORCHESTRATION ──────────────────────────────
+        // Act 1 (0-2s): slowly orbit + push in close (dramatic intimacy)
+        // Act 2 (2-4.5s): pull WAY back as the hole destabilizes (reveal scale)
+        // Act 3 (4.5-7.5s): hold wide as galaxy emerges (awe)
+        // Act 4 (7.5-9.5s): push in as galaxy explodes (immersion)
+        // Final (9.5s+): settle back to home
+        if (t < 2) {
+          // Act 1: orbit + push in
+          cinematicYaw += dt * 0.3;
+          cinematicPitch = approach(cinematicPitch, 0.35, 1.5, dt);
+          cinematicDist = approach(cinematicDist, 7, 2, dt);
+        } else if (t < 4.5) {
+          // Act 2: dramatic pull-back (the "oh no" moment)
+          const pullT = smooth((t - 2) / 2.5);
+          cinematicYaw += dt * 0.5;
+          cinematicDist = approach(cinematicDist, 7 + pullT * 10, 1.5, dt);
+          cinematicPitch = approach(cinematicPitch, 0.6, 1, dt);
+        } else if (t < 7.5) {
+          // Act 3: hold wide, slow drift (galaxy reveal awe)
+          cinematicYaw += dt * 0.12;
+          cinematicDist = approach(cinematicDist, 17, 0.8, dt);
+        } else if (t < 9.5) {
+          // Act 4: push in as galaxy explodes
+          cinematicYaw += dt * 0.8;
+          cinematicDist = approach(cinematicDist, 9, 1.2, dt);
+        }
+        cinematicActive = true;
+
+        // ── WORLD SCALE (zoom effect) ───────────────────────────────────
+        const zoom =
+          t < 2 ? 1 - smooth(t / 2) * 0.45
+          : t < 3.2 ? 0.55
+          : t < 4.5 ? 0.55 + smooth((t - 3.2) / 1.3) * 0.45
+          : 1;
         world.scale.setScalar(zoom);
+
+        // ── DEBRIS SPIN (dramatic acceleration then settle) ────────────
+        const spin =
+          t < 2 ? 1 + smooth(t / 2) * 9
+          : t < 3.2 ? 10
+          : t < 4.5 ? 10 - smooth((t - 3.2) / 1.3) * 9
+          : 1;
+        debris.spinBoost = spin;
+
+        // ── PROBE FLING (outward during Act 1-2) ──────────────────────
         if (t < 2.5) {
           for (const probe of orbits.bodies) {
             const s = orbits.get(probe);
-            if (s) s.radius = Math.min(14, s.radius + dt * 3);
+            if (s) s.radius = Math.min(14, s.radius + dt * 3.5);
           }
         }
-        if (t > 3.2 && hole) hole.setExtreme(false);
-        (flash.material as THREE.SpriteMaterial).opacity = t < 2 ? 0.95 : Math.max(0, 0.95 * (1 - (t - 2) / 1.2));
+
+        // ── HOLE EXTREME MODE ──────────────────────────────────────────
+        if (t > 3.2 && t < 7.5) hole.setExtreme(false);
+        if (t >= 7.5 && t < 8) {
+          // Re-flare for the galaxy explosion climax
+          hole.setExtreme(true);
+          shakeCamera(0.6);
+        }
+        if (t >= 8) hole.setExtreme(false);
+
+        // ── FLASH (main detonation flash) ───────────────────────────────
+        const flashMat = flash.material as THREE.SpriteMaterial;
+        flashMat.opacity =
+          t < 2 ? 0.95
+          : t < 3.2 ? Math.max(0, 0.95 * (1 - (t - 2) / 1.2))
+          : t > 7.5 && t < 8.5 ? 0.7 * (1 - (t - 7.5))
+          : 0;
         const fsc = 3 + Math.sin(Math.min(t, 2) * 9) * 0.8 + t * 1.5;
         flash.scale.set(fsc, fsc, 1);
+
+        // ── CORE FLASH (white-hot explosion climax at t=7.5) ───────────
+        const coreMat = coreFlash.material as THREE.SpriteMaterial;
+        if (t > 7.2 && t < 8.5) {
+          const ct = t - 7.2;
+          coreMat.opacity = Math.max(0, 1 - ct / 1.3) * (ct < 0.3 ? ct / 0.3 : 1);
+          const cs = 2 + ct * 8;
+          coreFlash.scale.set(cs, cs, 1);
+        } else {
+          coreMat.opacity = 0;
+        }
+
+        // ── SHOCKWAVES (5 expanding rings, staggered) ──────────────────
         shocks.forEach((shock, i) => {
-          const lt = t - i * 0.3;
-          const k = Math.min(Math.max(lt / 1.6, 0), 1);
+          const lt = t - i * 0.28;
+          const k = Math.min(Math.max(lt / 1.8, 0), 1);
           const mat = shock.material as THREE.MeshBasicMaterial;
-          mat.opacity = 0.75 * (1 - k);
-          const sc = 1 + k * 9;
+          mat.opacity = 0.8 * Math.pow(1 - k, 1.5);
+          const sc = 1 + smooth(k) * 11;
           shock.scale.set(sc, sc, 1);
           shock.visible = k < 1;
         });
+
+        // ── GALAXY REVEAL + EXPLOSION SEQUENCE ──────────────────────────
         if (t >= 4.5) {
           if (galaState === 'hidden') {
             galaState = 'revealing';
             galaxy.visible = true;
+            // Gentle rotation drift
+            galaxy.rotation.z = 0;
           }
           if (galaState === 'revealing') {
             const revealT = t - 4.5;
-            const s = 0.1 + (revealT / 3) * 19;
+            // Smooth ease-out reveal (starts fast, decelerates)
+            const s = 0.1 + smooth(revealT / 3) * 19;
             galaxy.scale.setScalar(s);
+            galaxy.rotation.y += dt * 0.15;
             if (revealT >= 3) galaState = 'exploding';
           }
           if (galaState === 'exploding') {
             const expT = t - 7.5;
-            const s = 20 * (1 + expT * 2);
+            // Explosive expansion (accelerating outward)
+            const s = 20 * (1 + expT * expT * 1.2);
             galaxy.scale.setScalar(s);
-            galaxy.material.opacity = Math.max(0, 1 - expT / 1.5);
+            galaxy.rotation.y += dt * 0.8;
+            galaxy.rotation.z += dt * 0.3;
+            const gMat = galaxy.material as THREE.PointsMaterial;
+            gMat.opacity = Math.max(0, 1 - expT / 1.5);
+            // Big shake at the explosion peak
+            if (expT > 0 && expT < 0.1) shakeCamera(1.0);
             if (expT >= 1.5) {
               galaState = 'done';
               galaxy.visible = false;
@@ -173,6 +308,8 @@ export function buildSingularity(ctx: BuilderCtx): WorldAPI {
             debris.spinBoost = 1;
             world.scale.setScalar(1);
             flash.visible = false;
+            coreFlash.visible = false;
+            cinematicActive = false;
             for (const probe of orbits.bodies) {
               const s = orbits.get(probe);
               if (s) {
@@ -205,6 +342,9 @@ export function buildSingularity(ctx: BuilderCtx): WorldAPI {
       return `${name} — ${f}`;
     },
     dispose(): void {
+      if (typeof window !== 'undefined') {
+        window.removeEventListener('prism-detonate', onDetonate);
+      }
       disposeGroup(world);
     },
   };

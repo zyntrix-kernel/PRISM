@@ -35,6 +35,10 @@ const SHORTCUTS = [
     group: "Drive",
     keys: [{ k: "Space", label: "Brake" }],
   },
+  {
+    group: "Black hole",
+    keys: [{ k: "B", label: "Detonate" }],
+  },
 ];
 
 export default function ShortcutLegend({ onPickPreset }: Props) {

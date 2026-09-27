@@ -439,6 +439,13 @@ export class PrismScene {
   }
 
   update(dt: number, elapsed: number): void {
+    // Honor cinematic camera override from worlds (e.g. blackhole detonation).
+    const cam = this.api?.cinematicCamera;
+    if (cam) {
+      this.rig.yaw = cam.yaw;
+      this.rig.pitch = cam.pitch;
+      this.rig.distance = cam.distance;
+    }
     this.rig.update(dt, this.camera);
     this.api?.update(dt, elapsed);
     this.cursor.rotation.y += dt * 2.2;

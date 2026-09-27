@@ -25,6 +25,7 @@ import {
   ChevronRight,
   ChevronDown,
   Command,
+  Zap,
 } from "lucide-react";
 
 const PRESET_VISUALS: Record<
@@ -270,6 +271,34 @@ export default function PrismStage() {
               />
             )}
           </div>
+
+          {/* Detonate button — only visible in the singularity preset.
+              Triggers the cinematic blackhole detonation sequence. */}
+          {preset === "singularity" && (
+            <button
+              type="button"
+              onClick={() => {
+                window.dispatchEvent(new CustomEvent("prism-detonate"));
+                window.__prismToast?.({
+                  message: "Singularity destabilizing…",
+                  kind: "warn",
+                });
+              }}
+              title="Trigger the cinematic detonation (B)"
+              aria-label="Detonate black hole"
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 6,
+                background: "linear-gradient(135deg, rgba(255,154,165,0.2), rgba(255,207,92,0.16))",
+                borderColor: "rgba(255,154,165,0.5)",
+                animation: "prism-invite-pulse 2.5s ease-in-out infinite",
+              }}
+            >
+              <Zap size={13} style={{ color: "var(--pink-deep)" }} />
+              <span style={{ fontWeight: 700, letterSpacing: 0.5 }}>Detonate</span>
+            </button>
+          )}
 
           {/* Hidden native select kept in sync for the engine's change events */}
           <select

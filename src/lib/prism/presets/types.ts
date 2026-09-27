@@ -51,6 +51,8 @@ export interface WorldAPI {
   stars?: boolean;
   /** Camera framing on preset load. */
   view: WorldView;
+  /** Optional: cinematic camera override (when active, rig uses these). */
+  cinematicCamera?: { yaw: number; pitch: number; distance: number } | null;
   /** Advance the world simulation (called every frame). */
   update(dt: number, elapsed: number): void;
   /** Optional: orbit retargeting (solar system, black-hole probes). */

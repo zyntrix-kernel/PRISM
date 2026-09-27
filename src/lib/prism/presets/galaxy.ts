@@ -30,12 +30,13 @@ export function buildGalaxy(quality: string) {
   geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
 
   const mat = new THREE.PointsMaterial({
-    size: quality === 'ultra' ? 0.015 : 0.03,
+    size: quality === 'ultra' ? 0.04 : quality === 'high' ? 0.06 : 0.1,
     vertexColors: true,
     transparent: true,
-    opacity: 0.8,
+    opacity: 1.0,
     blending: THREE.AdditiveBlending,
     depthWrite: false,
+    sizeAttenuation: true,
   });
 
   return new THREE.Points(geo, mat);

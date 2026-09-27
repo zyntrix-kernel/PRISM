@@ -34,6 +34,8 @@ import {
   Atom,
   Grid3x3,
   Crosshair,
+  Sun,
+  Cloud,
   type LucideIcon,
 } from "lucide-react";
 
@@ -49,6 +51,8 @@ const PRESET_VISUALS: Record<
   atom: { icon: Atom, hue: "154, 220, 255", blurb: "Bohr model photon lab" },
   voxel: { icon: Grid3x3, hue: "255, 207, 92", blurb: "Place & break blocks" },
   gun: { icon: Crosshair, hue: "125, 211, 252", blurb: "Target shooting range" },
+  supernova: { icon: Sun, hue: "255, 170, 68", blurb: "Stellar explosion" },
+  nebula: { icon: Cloud, hue: "165, 180, 252", blurb: "Living gas cloud" },
 };
 
 export default function PrismStage() {

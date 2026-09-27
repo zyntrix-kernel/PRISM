@@ -21,6 +21,8 @@ import {
   Atom,
   Grid3x3,
   Crosshair,
+  Sun,
+  Cloud,
   type LucideIcon,
 } from "lucide-react";
 
@@ -59,6 +61,8 @@ const PRESETS: Array<{ id: PrismState["preset"]; label: string; icon: LucideIcon
   { id: "atom", label: "Atom", icon: Atom, blurb: "Bohr model photon lab" },
   { id: "voxel", label: "Voxel", icon: Grid3x3, blurb: "Place & break blocks" },
   { id: "gun", label: "Gun game", icon: Crosshair, blurb: "Target shooting range" },
+  { id: "supernova", label: "Supernova", icon: Sun, blurb: "Stellar explosion" },
+  { id: "nebula", label: "Nebula", icon: Cloud, blurb: "Living gas cloud" },
 ];
 
 const QUALITIES = [

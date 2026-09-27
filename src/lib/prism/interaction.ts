@@ -267,8 +267,14 @@ export class InteractionController {
           window.dispatchEvent(new CustomEvent('prism-detonate'));
           break;
         case ' ': this.spaceDown = true; e.preventDefault(); break;
-        case '1': case '2': case '3': case '4': case '5': case '6': case '7': {
+        case '1': case '2': case '3': case '4': case '5':
+        case '6': case '7': case '8': case '9': {
           const id = PRESET_ORDER[Number(e.key) - 1];
+          if (id) window.dispatchEvent(new CustomEvent('prism-preset', { detail: id }));
+          break;
+        }
+        case '0': {
+          const id = PRESET_ORDER[9]; // nebula
           if (id) window.dispatchEvent(new CustomEvent('prism-preset', { detail: id }));
           break;
         }

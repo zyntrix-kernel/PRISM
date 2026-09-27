@@ -8,7 +8,7 @@ interface Props {
 }
 
 const SHORTCUTS = [
-  { group: "Worlds", keys: [{ k: "1-7", label: "Switch presets" }] },
+  { group: "Worlds", keys: [{ k: "1-0", label: "Switch presets (10 worlds)" }] },
   {
     group: "Camera",
     keys: [

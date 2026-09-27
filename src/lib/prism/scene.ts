@@ -16,6 +16,8 @@ import { buildVoxel } from './presets/voxel';
 import { buildSolar } from './presets/solar';
 import { buildTest } from './presets/test';
 import { buildGunGame } from './presets/gun';
+import { buildSupernova } from './presets/supernova';
+import { buildNebula } from './presets/nebula';
 import {
   disposeGroup,
   type PresetId,
@@ -36,6 +38,8 @@ const BUILDERS: Record<PresetId, WorldBuilder> = {
   atom: buildAtom,
   voxel: buildVoxel,
   gun: buildGunGame,
+  supernova: buildSupernova,
+  nebula: buildNebula,
 };
 
 /** Orbit/pan/zoom camera rig (mouse, touch-drag, wheel, arrow keys). */

@@ -866,9 +866,11 @@ export function buildSupernova(ctx: BuilderCtx): WorldAPI {
   world.add(bgStars);
 
   // ───────────────────────────────────────────────────────────────────
-  // 11. ANIMATION STATE MACHINE — stable → destabilizing → exploding → aftermath
+  // 11. ANIMATION STATE MACHINE — stable → destabilizing → exploding → aftermath → fading
+  // After the aftermath, everything smoothly fades to black over FADE_DURATION,
+  // then dispatches a preset switch to 'nebula' — the remnant becomes a nebula.
   // ───────────────────────────────────────────────────────────────────
-  type Phase = 'stable' | 'destabilizing' | 'exploding' | 'aftermath';
+  type Phase = 'stable' | 'destabilizing' | 'exploding' | 'aftermath' | 'fading';
   let phase: Phase = 'stable';
   let phaseT = 0;
   let shakeJoltsScheduled = 0;
@@ -877,6 +879,9 @@ export function buildSupernova(ctx: BuilderCtx): WorldAPI {
   const DESTABILIZE_DURATION = 2;
   const EXPLODE_DURATION = 2;
   const AFTERMATH_DURATION = 3.2;
+  const FADE_DURATION = 2.5; // smooth fade-to-black before preset switch
+  let fadeLevel = 1; // 1 = full visibility, 0 = fully black (fading phase only)
+  let nebulaSwitchDispatched = false;
 
   // Cinematic camera: returns null during stable (user has full rig control),
   // overrides during the cinematic phases for zoom-in / pull-back drama.
@@ -1321,72 +1326,83 @@ export function buildSupernova(ctx: BuilderCtx): WorldAPI {
         explosionLight.intensity *= Math.exp(-seqDt * 2);
 
         if (phaseT >= AFTERMATH_DURATION) {
-          phase = 'stable';
+          // Transition to the FADING phase instead of looping back to stable.
+          // The remnant disperses into what will become a nebula.
+          phase = 'fading';
           phaseT = 0;
-          cinematicActive = false;
-          // Reset star & chromosphere.
-          star.visible = true;
-          fresnelGlow.visible = true;
-          chromosphere.visible = true;
-          for (const p of prominences) p.mesh.visible = true;
-          godRayGroup.visible = GODRAY_COUNT > 0;
-          star.scale.setScalar(1);
-          starMat.uniforms.uIntensity.value = 1;
-          starMat.uniforms.uCollapse.value = 0;
-          chromoMat.uniforms.uIntensity.value = 1;
-          chromoMat.uniforms.uCollapse.value = 0;
-          for (let i = 0; i < coronaLayers.length; i++) {
-            const base = 4 + i * 2.5;
-            coronaLayers[i].scale.set(base, base, 1);
-            (coronaLayers[i].material as THREE.SpriteMaterial).opacity = 0.25 - i * 0.05;
+          fadeLevel = 1;
+          nebulaSwitchDispatched = false;
+        }
+      }
+      // ── Fading phase ──────────────────────────────────────────────────
+      // Smoothly fade ALL materials/sprites to black over FADE_DURATION,
+      // then dispatch a preset switch to 'nebula' once. The remnant becomes
+      // a living nebula — the supernova's afterlife.
+      else if (phase === 'fading') {
+        const t = phaseT / FADE_DURATION;
+        // Exponential fade feels cinematic (slow start, quick finish, holds black).
+        fadeLevel = Math.max(0, 1 - t * t);
+
+        // Keep the camera drifting slowly during the fade.
+        cinematicDist += (18 - cinematicDist) * Math.min(1, seqDt * 0.4);
+        cinematicYaw += seqDt * 0.04;
+
+        // Continue remnant drift (so it doesn't freeze mid-fade).
+        for (let i = 0; i < REMNANT_COUNT; i++) {
+          remnantPos[i * 3] += remnantVel[i].x * seqDt;
+          remnantPos[i * 3 + 1] += remnantVel[i].y * seqDt;
+          remnantPos[i * 3 + 2] += remnantVel[i].z * seqDt;
+          remnantVel[i].multiplyScalar(1 + seqDt * 0.015);
+        }
+        remnantGeo.attributes.position.needsUpdate = true;
+        remnantMat.uniforms.uOpacity.value = fadeLevel * 0.8;
+
+        // Fade every emissive layer by fadeLevel.
+        debrisMat.uniforms.uOpacity.value *= Math.exp(-seqDt * 1.2);
+        puffMat.uniforms.uOpacity.value *= Math.exp(-seqDt * 2.0);
+        for (const c of coronaLayers) {
+          (c.material as THREE.SpriteMaterial).opacity *= Math.exp(-seqDt * 2.5);
+        }
+        for (const p of prominences) {
+          p.mat.opacity *= Math.exp(-seqDt * 2.5);
+        }
+        flashCore.visible = false;
+        flashHalo.visible = false;
+        (flashCore.material as THREE.SpriteMaterial).opacity *= Math.exp(-seqDt * 4);
+        (flashHalo.material as THREE.SpriteMaterial).opacity *= Math.exp(-seqDt * 4);
+        explosionLight.intensity *= Math.exp(-seqDt * 3);
+
+        // Fade the star itself (in case it's visible) + background.
+        starMat.uniforms.uIntensity.value = fadeLevel;
+        chromoMat.uniforms.uIntensity.value = fadeLevel;
+        bgStarMat.uniforms.uBoost.value = fadeLevel;
+        nebulaBgMat.opacity = 0.55 * fadeLevel;
+
+        // Solar wind fades too.
+        windMat.opacity = 0.7 * fadeLevel;
+
+        // Once we're nearly black and haven't dispatched yet, switch to nebula.
+        if (fadeLevel < 0.04 && !nebulaSwitchDispatched) {
+          nebulaSwitchDispatched = true;
+          if (typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent('prism-preset', { detail: 'nebula' }));
           }
-          for (let i = 0; i < DEBRIS_COUNT; i++) {
-            debrisPos[i * 3 + 1] = -999;
-            debrisLife[i] = 0;
-          }
-          debrisGeo.attributes.position.needsUpdate = true;
-          debrisMat.uniforms.uOpacity.value = 0;
-          for (let i = 0; i < PUFF_COUNT; i++) {
-            puffPos[i * 3 + 1] = -999;
-            puffLife[i] = 0;
-          }
-          puffGeo.attributes.position.needsUpdate = true;
-          puffMat.uniforms.uOpacity.value = 0;
-          for (let i = 0; i < REMNANT_COUNT; i++) {
-            remnantPos[i * 3 + 1] = -999;
-            remnantLife[i] = 0;
-          }
-          remnantGeo.attributes.position.needsUpdate = true;
-          remnantMat.uniforms.uOpacity.value = 0;
-          for (let i = 0; i < WIND_COUNT; i++) {
-            windPos[i * 3 + 1] = -999;
-            windLife[i] = 0;
-          }
-          windGeo.attributes.position.needsUpdate = true;
-          windMat.opacity = 0.7;
-          flashCore.visible = true;
-          flashHalo.visible = true;
-          for (const s of shocks) s.visible = false;
-          for (const s of shockSpheres) s.visible = false;
-          for (const m of microShocks) m.visible = false;
-          for (const m of microShockState) { m.fired = false; m.t = 0; }
-          explosionLight.intensity = 0;
-          bgStarMat.uniforms.uBoost.value = 1.0;
-          nebulaBgMat.opacity = 0.55;
         }
       }
     },
     bodyInfo() {
       if (phase === 'exploding') return 'SUPERNOVA — core collapse in progress';
       if (phase === 'destabilizing') return 'Star destabilizing — supernova imminent';
-      if (phase === 'aftermath') return 'Stellar remnant dispersing';
+      if (phase === 'aftermath') return 'Stellar remnant dispersing — becoming a nebula…';
+      if (phase === 'fading') return 'The remnant fades — a nebula is born';
       return 'Red supergiant — stable';
     },
     coachHint() {
       if (phase === 'stable') return 'A red supergiant — waiting to go supernova';
       if (phase === 'destabilizing') return 'The star is collapsing…';
       if (phase === 'exploding') return 'SUPERNOVA — core collapse!';
-      return 'Stellar debris dispersing into the void…';
+      if (phase === 'aftermath') return 'Stellar debris dispersing — becoming a nebula…';
+      return 'The remnant fades into a living nebula…';
     },
     dispose() { disposeGroup(world); },
   };

@@ -75,6 +75,8 @@
   --motion-ease: cubic-bezier(0.2, 0, 0, 1);
   --motion-dream: cubic-bezier(0.34, 0, 0.2, 1);
   --motion-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --motion-out-back: cubic-bezier(0.16, 1, 0.3, 1);
+  --motion-snappy: cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 /* ==========================================================================
@@ -84,6 +86,11 @@
 .prism-root,
 .prism-root * {
   box-sizing: border-box;
+}
+
+/* Smooth scrolling everywhere within PRISM */
+.prism-root {
+  scroll-behavior: smooth;
 }
 
 .prism-root {
@@ -509,11 +516,37 @@ video#prism-webcam.live + #prism-webcam-frame .prism-webcam-placeholder {
   font-weight: 500;
   letter-spacing: 0.2px;
   cursor: pointer;
-  transition: background var(--motion-fast) var(--motion-ease),
-    box-shadow var(--motion-fast) var(--motion-ease),
-    transform var(--motion-fast) var(--motion-spring),
-    border-color var(--motion-fast) var(--motion-ease);
+  transition: background 180ms var(--motion-snappy),
+    box-shadow 180ms var(--motion-snappy),
+    transform 180ms var(--motion-spring),
+    border-color 180ms var(--motion-snappy),
+    color 180ms var(--motion-snappy);
   position: relative;
+  overflow: hidden;
+}
+
+/* Subtle shimmer sweep on hover (professional, not gimmicky) */
+#prism-hud-controls button::after,
+#prism-hud-controls select::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.08),
+    transparent
+  );
+  transition: left 480ms var(--motion-ease);
+  pointer-events: none;
+}
+
+#prism-hud-controls button:hover::after,
+#prism-hud-controls select:hover::after {
+  left: 100%;
 }
 
 #prism-hud-controls select option {
@@ -1027,6 +1060,17 @@ video#prism-webcam.live + #prism-webcam-frame .prism-webcam-placeholder {
   color: var(--ok);
   box-shadow: 0 0 12px rgba(143, 245, 180, 0.55);
   transform: scale(1.05);
+}
+
+/* Professional CSS checkmark (no emoji) for completed steps */
+#prism-onboard li.done .tick::after {
+  content: "";
+  width: 6px;
+  height: 10px;
+  border: solid var(--ok);
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg) translate(-1px, -1px);
+  margin-top: -2px;
 }
 
 /* Dreamy progress bar — fills as onboarding steps complete */

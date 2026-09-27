@@ -26,19 +26,27 @@ import {
   ChevronDown,
   Command,
   Zap,
+  Orbit,
+  Boxes,
+  Circle as CircleIcon,
+  Disc,
+  Car,
+  Atom,
+  Grid3x3,
+  type LucideIcon,
 } from "lucide-react";
 
 const PRESET_VISUALS: Record<
   string,
-  { icon: string; hue: string; blurb: string }
+  { icon: LucideIcon; hue: string; blurb: string }
 > = {
-  space: { icon: "🪐", hue: "154, 220, 255", blurb: "Keplerian solar system" },
-  blocks: { icon: "🧱", hue: "255, 179, 217", blurb: "Voxel stacking rig" },
-  test: { icon: "◌", hue: "201, 184, 255", blurb: "3-orb calibration" },
-  singularity: { icon: "●", hue: "255, 214, 170", blurb: "Accretion disk + jets" },
-  drive: { icon: "🏎", hue: "143, 245, 180", blurb: "Neon circuit arcade" },
-  atom: { icon: "⚛", hue: "154, 220, 255", blurb: "Bohr model photon lab" },
-  voxel: { icon: "▦", hue: "255, 207, 92", blurb: "Place & break blocks" },
+  space: { icon: Orbit, hue: "154, 220, 255", blurb: "Keplerian solar system" },
+  blocks: { icon: Boxes, hue: "255, 179, 217", blurb: "Voxel stacking rig" },
+  test: { icon: CircleIcon, hue: "201, 184, 255", blurb: "3-orb calibration" },
+  singularity: { icon: Disc, hue: "255, 214, 170", blurb: "Accretion disk + jets" },
+  drive: { icon: Car, hue: "143, 245, 180", blurb: "Neon circuit arcade" },
+  atom: { icon: Atom, hue: "154, 220, 255", blurb: "Bohr model photon lab" },
+  voxel: { icon: Grid3x3, hue: "255, 207, 92", blurb: "Place & break blocks" },
 };
 
 export default function PrismStage() {
@@ -252,7 +260,15 @@ export default function PrismStage() {
               aria-expanded={presetOpen}
               style={{ display: "flex", alignItems: "center", gap: 7 }}
             >
-              <span style={{ fontSize: 13 }}>{PRESET_VISUALS[preset].icon}</span>
+              {(() => {
+                const PIcon = PRESET_VISUALS[preset].icon;
+                return (
+                  <PIcon
+                    size={14}
+                    style={{ color: `rgb(${PRESET_VISUALS[preset].hue})` }}
+                  />
+                );
+              })()}
               <span style={{ textTransform: "capitalize" }}>{preset}</span>
               <ChevronRight
                 size={13}
@@ -482,15 +498,15 @@ export default function PrismStage() {
             <p className="prism-onboard-sub">Three steps to lift off.</p>
             <ol>
               <li data-step="camera">
-                <span className="tick">✓</span>
+                <span className="tick" />
                 <span>Enable the camera</span>
               </li>
               <li data-step="hand">
-                <span className="tick">✓</span>
+                <span className="tick" />
                 <span>Show your hand</span>
               </li>
               <li data-step="grab">
-                <span className="tick">✓</span>
+                <span className="tick" />
                 <span>Pinch to grab</span>
               </li>
             </ol>
@@ -517,7 +533,7 @@ export default function PrismStage() {
             </button>
           </div>
         )}
-        <div className="celebrate hidden">Ready to explore ✓</div>
+        <div className="celebrate hidden">Ready to explore</div>
       </aside>
 
       {/* ===== Help card ===== */}
@@ -679,14 +695,18 @@ function PresetGallery({
                     (e.currentTarget as HTMLElement).style.background = "rgba(255,255,255,0.04)";
                 }}
               >
-                <span
-                  style={{
-                    fontSize: 20,
-                    filter: `drop-shadow(0 0 8px rgba(${v.hue}, 0.6))`,
-                  }}
-                >
-                  {v.icon}
-                </span>
+                {(() => {
+                  const GIcon = v.icon;
+                  return (
+                    <GIcon
+                      size={22}
+                      style={{
+                        color: `rgb(${v.hue})`,
+                        filter: `drop-shadow(0 0 8px rgba(${v.hue}, 0.6))`,
+                      }}
+                    />
+                  );
+                })()}
                 <span
                   style={{
                     fontSize: 13,

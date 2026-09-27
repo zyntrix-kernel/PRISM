@@ -13,6 +13,14 @@ import {
   Hand,
   CornerDownLeft,
   Zap,
+  Orbit,
+  Boxes,
+  Circle as CircleIcon,
+  Disc,
+  Car,
+  Atom,
+  Grid3x3,
+  type LucideIcon,
 } from "lucide-react";
 
 export interface CommandAction {
@@ -41,14 +49,14 @@ interface Props {
   } | null;
 }
 
-const PRESETS: Array<{ id: PrismState["preset"]; label: string; glyph: string; blurb: string }> = [
-  { id: "space", label: "Space", glyph: "🪐", blurb: "Keplerian solar system" },
-  { id: "blocks", label: "Blocks", glyph: "🧱", blurb: "Voxel stacking rig" },
-  { id: "test", label: "Test", glyph: "◌", blurb: "3-orb calibration" },
-  { id: "singularity", label: "Black hole", glyph: "●", blurb: "Accretion disk + jets" },
-  { id: "drive", label: "Drive", glyph: "🏎", blurb: "Neon circuit arcade" },
-  { id: "atom", label: "Atom", glyph: "⚛", blurb: "Bohr model photon lab" },
-  { id: "voxel", label: "Voxel", glyph: "▦", blurb: "Place & break blocks" },
+const PRESETS: Array<{ id: PrismState["preset"]; label: string; icon: LucideIcon; blurb: string }> = [
+  { id: "space", label: "Space", icon: Orbit, blurb: "Keplerian solar system" },
+  { id: "blocks", label: "Blocks", icon: Boxes, blurb: "Voxel stacking rig" },
+  { id: "test", label: "Test", icon: CircleIcon, blurb: "3-orb calibration" },
+  { id: "singularity", label: "Black hole", icon: Disc, blurb: "Accretion disk + jets" },
+  { id: "drive", label: "Drive", icon: Car, blurb: "Neon circuit arcade" },
+  { id: "atom", label: "Atom", icon: Atom, blurb: "Bohr model photon lab" },
+  { id: "voxel", label: "Voxel", icon: Grid3x3, blurb: "Place & break blocks" },
 ];
 
 const QUALITIES = [
@@ -58,11 +66,6 @@ const QUALITIES = [
   { id: "medium", label: "Medium", desc: "Balanced" },
   { id: "low", label: "Low", desc: "Speed" },
 ];
-
-// Stable glyph components (defined once, never recreated)
-function Glyph({ children, size = 15 }: { children: React.ReactNode; size?: number }) {
-  return <span style={{ fontSize: size, lineHeight: 1 }}>{children}</span>;
-}
 
 export default function CommandPalette({ onClose, state, app }: Props) {
   const [query, setQuery] = useState("");
@@ -76,12 +79,13 @@ export default function CommandPalette({ onClose, state, app }: Props) {
   const actions = useMemo<CommandAction[]>(() => {
     const out: CommandAction[] = [];
     for (const p of PRESETS) {
+      const PIcon = p.icon;
       out.push({
         id: `preset-${p.id}`,
         label: `Switch to ${p.label}`,
         hint: p.blurb,
         group: "Worlds",
-        icon: (s) => <Glyph size={s ?? 15}>{p.glyph}</Glyph>,
+        icon: (s) => <PIcon size={s ?? 15} />,
         keywords: `preset world ${p.id} ${p.label}`,
         run: () => app?.setPreset(p.id),
         isActive: (s) => s?.preset === p.id,

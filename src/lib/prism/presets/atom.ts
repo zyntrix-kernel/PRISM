@@ -62,18 +62,41 @@ export function buildAtom(ctx: BuilderCtx): WorldAPI {
   const lastShell = new Map<THREE.Mesh, number>();
   let lastEmission: string | null = null;
 
-  // Nucleus: proton/neutron cluster + glow (info only).
+  // Nucleus: Fibonacci sphere distribution for nucleons (from matt765/atom-animation).
+  // The golden-angle distribution gives perfectly uniform packing — much
+  // better than the old hardcoded positions.
   const nucleus = new THREE.Group();
   const nucleonGeo = new THREE.SphereGeometry(0.16, 16, 12);
   const protonMat = new THREE.MeshStandardMaterial({ color: 0xe04848, emissive: 0xe04848, emissiveIntensity: 0.5, roughness: 0.5 });
   const neutronMat = new THREE.MeshStandardMaterial({ color: 0xd8dce8, emissive: 0x888899, emissiveIntensity: 0.3, roughness: 0.6 });
-  const spots: Array<[number, number, number]> = [
-    [0, 0, 0], [0.26, 0.1, 0.05], [-0.24, 0.12, -0.08], [0.05, -0.25, 0.1],
-    [-0.08, 0.05, 0.26], [0.12, 0.2, -0.22], [-0.2, -0.18, 0.12], [0.22, -0.12, -0.14],
-  ];
-  spots.forEach(([x, y, z], i) => {
-    const nucleon = new THREE.Mesh(nucleonGeo, i % 2 === 0 ? protonMat : neutronMat);
-    nucleon.position.set(x, y, z);
+
+  const PROTONS = 4;
+  const NEUTRONS = 4;
+  const totalNucleons = PROTONS + NEUTRONS;
+  const clusterRadius = 0.35;
+  const phi = Math.PI * (3 - Math.sqrt(5)); // golden angle
+
+  // Fibonacci sphere distribution
+  const nucleonPositions: THREE.Vector3[] = [];
+  for (let i = 0; i < totalNucleons; i++) {
+    const y = 1 - (i / (totalNucleons - 1)) * 2;
+    const radiusAtY = Math.sqrt(1 - y * y);
+    const theta = phi * i;
+    const x = Math.cos(theta) * radiusAtY;
+    const z = Math.sin(theta) * radiusAtY;
+    nucleonPositions.push(new THREE.Vector3(x, y, z).multiplyScalar(clusterRadius));
+  }
+  // Shuffle proton/neutron assignment (Fisher-Yates)
+  const types: Array<'P' | 'N'> = [];
+  for (let i = 0; i < PROTONS; i++) types.push('P');
+  for (let i = 0; i < NEUTRONS; i++) types.push('N');
+  for (let i = types.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [types[i], types[j]] = [types[j], types[i]];
+  }
+  nucleonPositions.forEach((pos, i) => {
+    const nucleon = new THREE.Mesh(nucleonGeo, types[i] === 'P' ? protonMat : neutronMat);
+    nucleon.position.copy(pos);
     nucleus.add(nucleon);
   });
   const coreGlow = new THREE.Sprite(
@@ -90,20 +113,36 @@ export function buildAtom(ctx: BuilderCtx): WorldAPI {
   grabbables.push(nucleus);
   facts.set('Nucleus', 'Protons + neutrons · 99.97% of atomic mass');
 
-  // Shells + electrons.
+  // Shells + electrons with golden-angle orientations (from matt765/atom-animation).
+  // Each shell gets a different 3D orientation so they don't all lie in the
+  // same plane — this looks much more like a real 3D atom.
   const electronGeo = new THREE.SphereGeometry(0.13, 24, 18);
+  const goldenAngle = Math.PI * (3 - Math.sqrt(5));
+  const shellGroups: THREE.Group[] = [];
+
   SHELLS.forEach((shell, si) => {
-    const pts: THREE.Vector3[] = [];
-    for (let k = 0; k <= 96; k++) {
-      const a = (k / 96) * Math.PI * 2;
-      pts.push(new THREE.Vector3(Math.cos(a) * shell.radius, 0, Math.sin(a) * shell.radius));
+    // Shell group with golden-angle orientation
+    const shellGroup = new THREE.Group();
+    if (si === 0) shellGroup.rotation.set(Math.PI / 2, 0, 0);
+    else if (si === 1) shellGroup.rotation.set(0, 0, 0);
+    else if (si === 2) shellGroup.rotation.set(Math.PI / 4, Math.PI / 4, 0);
+    else {
+      const angle = (si - 2) * goldenAngle;
+      shellGroup.rotation.set(angle, angle * 0.5, angle * 0.25);
     }
-    world.add(
-      new THREE.Line(
-        new THREE.BufferGeometry().setFromPoints(pts),
-        new THREE.LineBasicMaterial({ color: 0x2a6a8a, transparent: true, opacity: 0.7 }),
-      ),
+    shellGroups.push(shellGroup);
+    world.add(shellGroup);
+
+    // Visible torus orbit ring (from matt765/atom-animation — much nicer
+    // than a thin line)
+    const orbitRing = new THREE.Mesh(
+      new THREE.TorusGeometry(shell.radius, 0.008, 8, 64),
+      new THREE.MeshBasicMaterial({
+        color: 0x4a8aaa, transparent: true, opacity: 0.3, side: THREE.DoubleSide,
+      }),
     );
+    shellGroup.add(orbitRing);
+
     const label = makeLabel(`n=${shell.n}`, 0.8);
     labelLayer.add(label);
     labels.push(label);

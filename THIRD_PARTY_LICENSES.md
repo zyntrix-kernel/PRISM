@@ -39,7 +39,15 @@ PRISM incorporates ideas, algorithms, and code from the following open-source pr
 - PointLight at the sun's position — physically-correct lighting radiating from the center of the system.
 - Planet texture concepts from Planetary Pixel Emporium (referenced in their README).
 
-## 6. Three.js (MIT License)
+## 6. matt765/atom-animation (Personal Use License)
+**Repository:** https://github.com/matt765/atom-animation  
+**License:** Personal Use License  
+**What was used:**  
+- Fibonacci sphere distribution (golden angle) for nucleon packing — protons and neutrons are uniformly distributed on a sphere using the golden angle (π(3-√5)), replacing hardcoded positions.
+- Golden-angle shell orientations — each electron shell gets a different 3D orientation so shells don't all lie in the same plane, creating a proper 3D atom.
+- Visible torus orbit rings — thin TorusGeometry rings replace flat Line objects for visible orbital paths.
+
+## 7. Three.js (MIT License)
 **Library:** https://github.com/mrdoob/three.js  
 **License:** MIT  
 **What was used:** Core rendering engine (WebGLRenderer, Scene, Camera, shaders, postprocessing).

@@ -8,7 +8,6 @@ import ShortcutLegend from "./ShortcutLegend";
 import PresetTransitionOverlay from "./PresetTransitionOverlay";
 import InputModeIndicator from "./InputModeIndicator";
 import PrismToast from "./PrismToast";
-import ParallaxDepthLayer from "./ParallaxDepthLayer";
 import SettingsPanel from "./SettingsPanel";
 import {
   Camera,
@@ -187,8 +186,14 @@ export default function PrismStage() {
         <div className="prism-orb prism-orb-c" />
       </div>
 
-      {/* Parallax depth layer — pointer-responsive drifting stars */}
-      <ParallaxDepthLayer />
+      {/* ParallaxDepthLayer REMOVED — it was a CSS/DOM 2D starfield that sat
+          behind the canvas (z-index 2 < canvas z-index 3). On presets with a
+          transparent canvas (background: 'nebula' → scene.background = null),
+          the CSS stars showed THROUGH the canvas as a frozen 2D layer that
+          doesn't move with the 3D camera — the "static thing covering the
+          whole three.js". The 3D scene now has its own GPU-twinkling
+          starfield (scene.ts STAR_VERTEX/STAR_FRAGMENT shader) that lives in
+          real 3D space and moves correctly with the camera. */}
 
       {/* 3D scene */}
       <main

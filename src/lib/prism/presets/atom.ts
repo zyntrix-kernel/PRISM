@@ -130,6 +130,7 @@ export function buildAtom(ctx: BuilderCtx): WorldAPI {
       const angle = (si - 2) * goldenAngle;
       shellGroup.rotation.set(angle, angle * 0.5, angle * 0.25);
     }
+    shellGroup.updateMatrix(); // ensure quaternion is computed from Euler
     shellGroups.push(shellGroup);
     world.add(shellGroup);
 
@@ -210,13 +211,20 @@ export function buildAtom(ctx: BuilderCtx): WorldAPI {
       orbits.update(dt); // periods registered in seconds
       // Apply shell 3D orientation: the orbit system places electrons in
       // flat XZ, but each shell has a stored quaternion that tilts the
-      // orbit into 3D space. We rotate the flat position by the quaternion.
+      // orbit into 3D space. We rotate the flat position by the INVERSE
+      // of the shell quaternion to undo the tilt for orbit math, then
+      // re-apply it. Actually simpler: just apply the quaternion to the
+      // flat XZ position vector — this rotates it into 3D. The length
+      // is preserved by quaternion rotation.
+      //
+      // The issue was: setOrbitFromPoint receives world-local coordinates
+      // (flat XZ from the ecliptic plane intersection). But the electron
+      // is orbiting in a tilted plane. We need to INVERSE-rotate the
+      // drag point back to the shell's local XZ before computing angle/radius.
       for (const body of orbits.bodies) {
         if (body.userData.grabbed) continue;
         const quat = body.userData.shellQuat as THREE.Quaternion | undefined;
         if (quat) {
-          // The orbit system already set body.position to (x, 0, z).
-          // Rotate that position by the shell's quaternion.
           tmp.copy(body.position).applyQuaternion(quat);
           body.position.copy(tmp);
         }

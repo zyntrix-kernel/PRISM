@@ -86,7 +86,7 @@ export function buildSupernova(ctx: BuilderCtx): WorldAPI {
   });
 
   // Use IcosahedronGeometry for more uniform tessellation (from cookieMonster repo)
-  const starGeo = new THREE.IcosahedronGeometry(1.3, isUltra ? 8 : isHigh ? 6 : 4);
+  const starGeo = new THREE.IcosahedronGeometry(1.3, isUltra ? 5 : isHigh ? 3 : 2);
   const star = new THREE.Mesh(starGeo, starMat);
   world.add(star);
 
@@ -110,7 +110,7 @@ export function buildSupernova(ctx: BuilderCtx): WorldAPI {
 
   // ── Volumetric shockwave (3D expanding sphere, not just flat ring) ─
   const shockSphere = new THREE.Mesh(
-    new THREE.SphereGeometry(1, 48, 32),
+    new THREE.SphereGeometry(1, 24, 16),
     new THREE.MeshBasicMaterial({
       color: 0xfff2a8, transparent: true, opacity: 0,
       blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.BackSide,

@@ -82,7 +82,7 @@ export function buildSolar(ctx: BuilderCtx): WorldAPI {
   // Sun: info-only, textured + double corona on High.
   const sunMat = new THREE.MeshBasicMaterial({ color: 0xffc766 });
   sunMat.userData.texMap = ctx.planetTex.sun;
-  const sun = new THREE.Mesh(new THREE.SphereGeometry(0.85, 48, 32), sunMat);
+  const sun = new THREE.Mesh(new THREE.SphereGeometry(0.85, 32, 24), sunMat);
   sun.name = 'Sol';
   sun.userData.grabbable = false;
   world.add(sun);
@@ -118,7 +118,7 @@ export function buildSolar(ctx: BuilderCtx): WorldAPI {
       metalness: 0.05,
     });
     if (spec.texKey) mat.userData.texMap = ctx.planetTex[spec.texKey];
-    const planet = new THREE.Mesh(new THREE.SphereGeometry(spec.size, 40, 28), mat);
+    const planet = new THREE.Mesh(new THREE.SphereGeometry(spec.size, 24, 16), mat);
     planet.name = spec.name;
     planet.userData.orbitBody = true;
     const angle = (i / PLANETS.length) * Math.PI * 2 + 0.6;

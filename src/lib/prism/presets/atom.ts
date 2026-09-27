@@ -66,7 +66,7 @@ export function buildAtom(ctx: BuilderCtx): WorldAPI {
   // The golden-angle distribution gives perfectly uniform packing — much
   // better than the old hardcoded positions.
   const nucleus = new THREE.Group();
-  const nucleonGeo = new THREE.SphereGeometry(0.16, 16, 12);
+  const nucleonGeo = new THREE.SphereGeometry(0.16, 12, 8);
   const protonMat = new THREE.MeshStandardMaterial({ color: 0xe04848, emissive: 0xe04848, emissiveIntensity: 0.5, roughness: 0.5 });
   const neutronMat = new THREE.MeshStandardMaterial({ color: 0xd8dce8, emissive: 0x888899, emissiveIntensity: 0.3, roughness: 0.6 });
 
@@ -116,7 +116,7 @@ export function buildAtom(ctx: BuilderCtx): WorldAPI {
   // Shells + electrons with golden-angle orientations (from matt765/atom-animation).
   // Each shell gets a different 3D orientation so they don't all lie in the
   // same plane — this looks much more like a real 3D atom.
-  const electronGeo = new THREE.SphereGeometry(0.13, 24, 18);
+  const electronGeo = new THREE.SphereGeometry(0.13, 16, 12);
   const goldenAngle = Math.PI * (3 - Math.sqrt(5));
   const shellGroups: THREE.Group[] = [];
 
@@ -137,7 +137,7 @@ export function buildAtom(ctx: BuilderCtx): WorldAPI {
     // Visible torus orbit ring — rotated to XZ plane to match the orbit system
     // (TorusGeometry defaults to XY plane, but orbits run in XZ)
     const orbitRing = new THREE.Mesh(
-      new THREE.TorusGeometry(shell.radius, 0.03, 12, 96),
+      new THREE.TorusGeometry(shell.radius, 0.02, 8, 48),
       new THREE.MeshBasicMaterial({
         color: 0x4a8aaa, transparent: true, opacity: 0.4, side: THREE.DoubleSide,
       }),

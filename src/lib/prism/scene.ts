@@ -195,20 +195,16 @@ export class PrismScene {
     this.camera.position.set(0, 4.6, 12);
 
     // Multi-light setup (inspired by sanderblue/solar-system-threejs, Apache 2.0):
-    // 4 directional lights from different angles ensure all sides of
-    // planets/meshes are lit — no dead dark sides. Ambient fills shadows.
-    this.scene.add(new THREE.AmbientLight(0xbfd4ff, 0.4));
-    const lightPositions: Array<[number, number, number]> = [
-      [3, 5, 4],    // key (upper-right-front)
-      [-3, 3, -4],  // fill (upper-left-back)
-      [0, -5, 3],   // bottom bounce
-      [5, 0, -5],   // right rim
-    ];
-    for (const [x, y, z] of lightPositions) {
-      const dl = new THREE.DirectionalLight(0xffffff, 0.4);
-      dl.position.set(x, y, z);
-      this.scene.add(dl);
-    }
+    // OPTIMIZED: reduced from 4 directional lights to 2 (key + fill) — each
+    // light adds a full render pass for every MeshStandardMaterial. 2 lights
+    // + ambient covers all angles with half the cost.
+    this.scene.add(new THREE.AmbientLight(0xbfd4ff, 0.5));
+    const key = new THREE.DirectionalLight(0xffffff, 0.8);
+    key.position.set(3, 5, 4);
+    this.scene.add(key);
+    const fill = new THREE.DirectionalLight(0x8899bb, 0.3);
+    fill.position.set(-3, 2, -4);
+    this.scene.add(fill);
 
     // Shared resources (built once; worlds must never dispose these).
     this.glowTex = buildGlowTexture();
@@ -217,7 +213,7 @@ export class PrismScene {
     this.buildStarfield();
 
     this.nebula = new THREE.Mesh(
-      new THREE.SphereGeometry(120, 32, 24),
+      new THREE.SphereGeometry(120, 24, 16),
       new THREE.MeshBasicMaterial({ map: this.nebulaTex, side: THREE.BackSide, depthWrite: false, fog: false }),
     );
     this.nebula.visible = false;
@@ -238,7 +234,7 @@ export class PrismScene {
       side: THREE.DoubleSide,
       depthTest: false,
     });
-    this.cursorRing = new THREE.Mesh(new THREE.RingGeometry(0.13, 0.16, 40), this.cursorRingMat);
+    this.cursorRing = new THREE.Mesh(new THREE.RingGeometry(0.13, 0.16, 24), this.cursorRingMat);
     this.cursorRing.visible = false;
     this.cursorRing.renderOrder = 5;
     this.scene.add(this.cursorRing);

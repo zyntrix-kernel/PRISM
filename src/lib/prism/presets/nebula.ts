@@ -18,7 +18,7 @@ export function buildNebula(ctx: BuilderCtx): WorldAPI {
   const isHigh = quality === 'high';
   const useShader = isUltra || isHigh;
 
-  const COUNT = isUltra ? 6000 : isHigh ? 3000 : 1500;
+  const COUNT = isUltra ? 4000 : isHigh ? 2000 : 1000;
 
   // ── Particle cloud ──────────────────────────────────────────────────
   const pos = new Float32Array(COUNT * 3);
@@ -155,14 +155,17 @@ export function buildNebula(ctx: BuilderCtx): WorldAPI {
         (mat as THREE.ShaderMaterial).uniforms.uTime.value = elapsed;
       } else {
         // CPU path: sinusoidal drift (cheap, no noise)
-        const positions = geo.attributes.position.array as Float32Array;
-        for (let i = 0; i < COUNT; i++) {
-          const s = seed[i];
-          positions[i * 3] = basePos[i * 3] + Math.sin(elapsed * 0.3 + s) * 0.3;
-          positions[i * 3 + 1] = basePos[i * 3 + 1] + Math.cos(elapsed * 0.25 + s * 1.3) * 0.2;
-          positions[i * 3 + 2] = basePos[i * 3 + 2] + Math.sin(elapsed * 0.2 + s * 0.7) * 0.3;
+        // OPTIMIZED: update every other frame to halve CPU cost
+        if (Math.floor(elapsed * 30) % 2 === 0) {
+          const positions = geo.attributes.position.array as Float32Array;
+          for (let i = 0; i < COUNT; i++) {
+            const s = seed[i];
+            positions[i * 3] = basePos[i * 3] + Math.sin(elapsed * 0.3 + s) * 0.3;
+            positions[i * 3 + 1] = basePos[i * 3 + 1] + Math.cos(elapsed * 0.25 + s * 1.3) * 0.2;
+            positions[i * 3 + 2] = basePos[i * 3 + 2] + Math.sin(elapsed * 0.2 + s * 0.7) * 0.3;
+          }
+          geo.attributes.position.needsUpdate = true;
         }
-        geo.attributes.position.needsUpdate = true;
       }
 
       cloud.rotation.y += dt * 0.05;

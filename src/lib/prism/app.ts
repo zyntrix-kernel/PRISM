@@ -99,6 +99,8 @@ export class PrismApp {
   private lastCoachText = '\0';
   private cachedCandidates: string[] = [];
   private cachedCandidatePreset = '';
+  private _lastInfoName: string | null = null;
+  private _overlayDirty = false;
 
   // Onboarding state
   private readonly ONBOARD_KEY = 'prism:onboarded:v1';
@@ -472,13 +474,25 @@ export class PrismApp {
         this.updateRailAndCoach(now);
         this.updateOnboard(now, frame?.hands.length ?? 0, this.interaction.grabbedName);
       }
-      if (this.overlayCtx) drawLandmarkOverlay(this.overlayCtx, frame);
-      const info = this.scene.bodyInfo(this.interaction.grabbedName ?? this.interaction.hoveredName);
-      if (info) {
-        this.el.planetInfo.textContent = info;
-        this.el.planetInfo.classList.remove('hidden');
-      } else {
-        this.el.planetInfo.classList.add('hidden');
+      // OPTIMIZED: skip landmark overlay when no hands detected (saves canvas redraw)
+      if (this.overlayCtx && frame && frame.hands.length > 0) {
+        drawLandmarkOverlay(this.overlayCtx, frame);
+        this._overlayDirty = true;
+      } else if (this.overlayCtx && this._overlayDirty) {
+        this.overlayCtx.clearRect(0, 0, this.overlayCtx.canvas.width, this.overlayCtx.canvas.height);
+        this._overlayDirty = false;
+      }
+      // OPTIMIZED: only update bodyInfo when hovered/grabbed name changes
+      const infoName = this.interaction.grabbedName ?? this.interaction.hoveredName;
+      if (infoName !== this._lastInfoName) {
+        this._lastInfoName = infoName;
+        const info = this.scene.bodyInfo(infoName);
+        if (info) {
+          this.el.planetInfo.textContent = info;
+          this.el.planetInfo.classList.remove('hidden');
+        } else {
+          this.el.planetInfo.classList.add('hidden');
+        }
       }
       this.debug.update(
         now,

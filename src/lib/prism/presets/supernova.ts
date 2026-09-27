@@ -676,8 +676,11 @@ export function buildSupernova(ctx: BuilderCtx): WorldAPI {
   }));
   world.add(flashHalo);
 
-  // Nebula remnant — slowly expanding element-colored cloud (aftermath).
-  const REMNANT_COUNT = isUltra ? 400 : isHigh ? 240 : 130;
+  // Nebula remnant — grows from the explosion into a full nebula cloud.
+  // Count MATCHES the nebula preset (800/1500/3000) so the particle-to-particle
+  // handoff is seamless: the remnant fills the same volume with the same density
+  // and color palette as the nebula preset that will load after the fade.
+  const REMNANT_COUNT = isUltra ? 3000 : isHigh ? 1500 : 800;
   const remnantPos = new Float32Array(REMNANT_COUNT * 3);
   const remnantCol = new Float32Array(REMNANT_COUNT * 3);
   const remnantSize = new Float32Array(REMNANT_COUNT);
@@ -733,22 +736,34 @@ export function buildSupernova(ctx: BuilderCtx): WorldAPI {
   world.add(remnant);
 
   function fireRemnant(): void {
+    // Spawn remnant particles in a tight cluster at the star's core, then let
+    // them expand outward. The fade phase will grow them into a full nebula-
+    // sized volume (radius ~8) matching the nebula preset's distribution.
     for (let i = 0; i < REMNANT_COUNT; i++) {
       remnantPos[i * 3] = (Math.random() - 0.5) * 1.2;
       remnantPos[i * 3 + 1] = (Math.random() - 0.5) * 1.2;
       remnantPos[i * 3 + 2] = (Math.random() - 0.5) * 1.2;
       const theta = Math.random() * Math.PI * 2;
       const phi = (Math.PI / 2) + (Math.random() - 0.5) * 1.2;
-      // Slow drift so the nebula stays in frame during the aftermath pull-back.
-      const speed = 0.3 + Math.random() * 1.0;
+      // Higher outward speed so the cloud reaches nebula volume by end of fade.
+      const speed = 1.2 + Math.random() * 2.0;
       remnantVel[i].set(
         Math.sin(phi) * Math.cos(theta) * speed,
         Math.cos(phi) * speed * 0.7,
         Math.sin(phi) * Math.sin(theta) * speed,
       );
       remnantLife[i] = 1;
+      // Nebula-matching color palette: blue core / magenta mid / orange edge.
+      // Assigned by radial distance from center (will settle as cloud expands).
+      const distNorm = Math.random();
+      const c = new THREE.Color();
+      if (distNorm < 0.3) c.setHSL(0.55, 0.8, 0.6);      // blue core
+      else if (distNorm < 0.6) c.setHSL(0.85, 0.7, 0.5); // magenta mid
+      else c.setHSL(0.08, 0.7, 0.45);                    // orange edge
+      remnantCol[i * 3] = c.r; remnantCol[i*3+1] = c.g; remnantCol[i*3+2] = c.b;
     }
     remnantGeo.attributes.position.needsUpdate = true;
+    remnantGeo.attributes.color.needsUpdate = true;
     remnantMat.uniforms.uOpacity.value = 1;
   }
 
@@ -880,7 +895,6 @@ export function buildSupernova(ctx: BuilderCtx): WorldAPI {
   const EXPLODE_DURATION = 2;
   const AFTERMATH_DURATION = 3.2;
   const FADE_DURATION = 2.5; // smooth fade-to-black before preset switch
-  let fadeLevel = 1; // 1 = full visibility, 0 = fully black (fading phase only)
   let nebulaSwitchDispatched = false;
 
   // Cinematic camera: returns null during stable (user has full rig control),
@@ -1269,23 +1283,26 @@ export function buildSupernova(ctx: BuilderCtx): WorldAPI {
         }
       }
       // ── Aftermath phase ──────────────────────────────────────────────
+      // Debris + remnant disperse. The remnant is GROWING into a nebula-sized
+      // cloud (3000 particles at nebula colors). Camera holds steady — no
+      // movement, no preset switch yet. This phase just lets the cloud settle.
       else if (phase === 'aftermath') {
         const t = phaseT / AFTERMATH_DURATION;
 
-        // Slow camera pull-back to reveal the dispersing remnant.
-        targetDist = 16;
-        cinematicDist += (targetDist - cinematicDist) * Math.min(1, seqDt * 0.6);
-        cinematicYaw = 0.3 + elapsed * 0.03;
-        cinematicPitch = 0.4;
+        // Camera: HOLD STEADY. No pull-back, no yaw drift. The user complained
+        // about camera movement during the transition — keep it locked so the
+        // particle cloud is the only thing changing.
+        // (cinematicDist / cinematicYaw stay at their post-explosion values.)
 
-        // Continuing debris drift + fade.
+        // Debris: keep drifting + cooling, but fade SLOWER so there's no
+        // particle-density drop between explosion and remnant.
         for (let i = 0; i < DEBRIS_COUNT; i++) {
           if (debrisLife[i] <= 0) continue;
-          debrisLife[i] -= seqDt * 0.18;
+          debrisLife[i] -= seqDt * 0.10; // was 0.18 — slower fade = more particles visible longer
           debrisPos[i * 3] += debrisVel[i].x * seqDt;
           debrisPos[i * 3 + 1] += debrisVel[i].y * seqDt;
           debrisPos[i * 3 + 2] += debrisVel[i].z * seqDt;
-          debrisVel[i].multiplyScalar(1 - seqDt * 0.18);
+          debrisVel[i].multiplyScalar(1 - seqDt * 0.12);
           debrisAngle[i] += debrisRotVel[i] * seqDt * 0.5;
           debrisHeat[i] = Math.max(0, debrisHeat[i] - seqDt * 0.12);
           heatToColor(debrisHeat[i], tmpCol);
@@ -1297,9 +1314,11 @@ export function buildSupernova(ctx: BuilderCtx): WorldAPI {
         debrisGeo.attributes.position.needsUpdate = true;
         debrisGeo.attributes.aColor.needsUpdate = true;
         debrisGeo.attributes.aAngle.needsUpdate = true;
-        debrisMat.uniforms.uOpacity.value *= Math.exp(-seqDt * 0.35);
+        // Debris fades MUCH slower — stays visible alongside the remnant
+        // so there's no moment where the screen suddenly has "less particles."
+        debrisMat.uniforms.uOpacity.value *= Math.exp(-seqDt * 0.12);
 
-        // Puffs fade quickly.
+        // Puffs fade quickly (they're hot gas, not the remnant).
         for (let i = 0; i < PUFF_COUNT; i++) {
           if (puffLife[i] <= 0) continue;
           puffLife[i] -= seqDt / puffMaxLife[i];
@@ -1311,78 +1330,104 @@ export function buildSupernova(ctx: BuilderCtx): WorldAPI {
         puffGeo.attributes.position.needsUpdate = true;
         puffMat.uniforms.uOpacity.value *= Math.exp(-seqDt * 1.0);
 
-        // Remnant continues to drift outward (slow, visible, colorful).
+        // Remnant: drift outward, gaining speed. By the end of aftermath the
+        // cloud should fill a volume ~radius 4, on its way to nebula size (8).
         for (let i = 0; i < REMNANT_COUNT; i++) {
           remnantPos[i * 3] += remnantVel[i].x * seqDt;
           remnantPos[i * 3 + 1] += remnantVel[i].y * seqDt;
           remnantPos[i * 3 + 2] += remnantVel[i].z * seqDt;
-          // Subtle drift acceleration (remnant is still expanding).
-          remnantVel[i].multiplyScalar(1 + seqDt * 0.02);
+          // Gentle acceleration so the cloud keeps expanding.
+          remnantVel[i].multiplyScalar(1 + seqDt * 0.15);
         }
         remnantGeo.attributes.position.needsUpdate = true;
-        remnantMat.uniforms.uOpacity.value = Math.max(0.15, 1 - t * 0.3);
+        // Remnant opacity RISES as debris fades — cross-fade in particle space.
+        remnantMat.uniforms.uOpacity.value = Math.min(1, 0.6 + t * 0.4);
 
         // Explosion light fades to zero.
         explosionLight.intensity *= Math.exp(-seqDt * 2);
 
         if (phaseT >= AFTERMATH_DURATION) {
-          // Transition to the FADING phase instead of looping back to stable.
-          // The remnant disperses into what will become a nebula.
+          // Transition to the FADING phase: the remnant grows into a full
+          // nebula-sized cloud, then the preset switches seamlessly.
           phase = 'fading';
           phaseT = 0;
-          fadeLevel = 1;
           nebulaSwitchDispatched = false;
         }
       }
       // ── Fading phase ──────────────────────────────────────────────────
-      // Smoothly fade ALL materials/sprites to black over FADE_DURATION,
-      // then dispatch a preset switch to 'nebula' once. The remnant becomes
-      // a living nebula — the supernova's afterlife.
+      // PARTICLE-TO-PARTICLE MORPH: the remnant cloud keeps growing until it
+      // fills a nebula-sized volume (radius ~8) with nebula colors. The camera
+      // DOES NOT MOVE. Once the cloud looks like a nebula, we switch presets —
+      // the nebula loads with particles in roughly the same distribution, so
+      // the handoff is visually continuous (insanely smooth sync).
       else if (phase === 'fading') {
         const t = phaseT / FADE_DURATION;
-        // Exponential fade feels cinematic (slow start, quick finish, holds black).
-        fadeLevel = Math.max(0, 1 - t * t);
+        // Smoothstep for buttery expansion rate (ease-in + ease-out).
+        const smoothT = t * t * (3 - 2 * t);
 
-        // Keep the camera drifting slowly during the fade.
-        cinematicDist += (18 - cinematicDist) * Math.min(1, seqDt * 0.4);
-        cinematicYaw += seqDt * 0.04;
+        // Camera: LOCKED. No movement at all. The user explicitly complained
+        // about the camera changing — keep it dead still so the only motion
+        // is the particle cloud morphing.
+        // (cinematicDist / cinematicYaw / cinematicPitch untouched.)
 
-        // Continue remnant drift (so it doesn't freeze mid-fade).
+        // Remnant: keep expanding. By t=1 the cloud fills radius ~8 (nebula).
         for (let i = 0; i < REMNANT_COUNT; i++) {
           remnantPos[i * 3] += remnantVel[i].x * seqDt;
           remnantPos[i * 3 + 1] += remnantVel[i].y * seqDt;
           remnantPos[i * 3 + 2] += remnantVel[i].z * seqDt;
-          remnantVel[i].multiplyScalar(1 + seqDt * 0.015);
+          // Acceleration tapers off as we approach nebula size (settles).
+          remnantVel[i].multiplyScalar(1 + seqDt * (0.15 * (1 - smoothT)));
         }
         remnantGeo.attributes.position.needsUpdate = true;
-        remnantMat.uniforms.uOpacity.value = fadeLevel * 0.8;
+        // Remnant stays at full opacity — it IS the nebula now.
+        remnantMat.uniforms.uOpacity.value = 1;
 
-        // Fade every emissive layer by fadeLevel.
-        debrisMat.uniforms.uOpacity.value *= Math.exp(-seqDt * 1.2);
-        puffMat.uniforms.uOpacity.value *= Math.exp(-seqDt * 2.0);
+        // Debris: continues to fade but slowly — by end of fade it's gone,
+        // fully replaced by the remnant cloud. Cross-fade in particle space.
+        for (let i = 0; i < DEBRIS_COUNT; i++) {
+          if (debrisLife[i] <= 0) continue;
+          debrisLife[i] -= seqDt * 0.15;
+          debrisPos[i * 3] += debrisVel[i].x * seqDt;
+          debrisPos[i * 3 + 1] += debrisVel[i].y * seqDt;
+          debrisPos[i * 3 + 2] += debrisVel[i].z * seqDt;
+          if (debrisLife[i] <= 0) debrisPos[i * 3 + 1] = -999;
+        }
+        debrisGeo.attributes.position.needsUpdate = true;
+        debrisMat.uniforms.uOpacity.value = Math.max(0, 1 - smoothT) * 0.5;
+
+        // All the explosion FX (corona, prominences, flash, shockwaves) fade
+        // out quickly — they're not part of the nebula.
         for (const c of coronaLayers) {
-          (c.material as THREE.SpriteMaterial).opacity *= Math.exp(-seqDt * 2.5);
+          (c.material as THREE.SpriteMaterial).opacity *= Math.exp(-seqDt * 3);
         }
         for (const p of prominences) {
-          p.mat.opacity *= Math.exp(-seqDt * 2.5);
+          p.mat.opacity *= Math.exp(-seqDt * 3);
         }
         flashCore.visible = false;
         flashHalo.visible = false;
-        (flashCore.material as THREE.SpriteMaterial).opacity *= Math.exp(-seqDt * 4);
-        (flashHalo.material as THREE.SpriteMaterial).opacity *= Math.exp(-seqDt * 4);
+        (flashCore.material as THREE.SpriteMaterial).opacity *= Math.exp(-seqDt * 5);
+        (flashHalo.material as THREE.SpriteMaterial).opacity *= Math.exp(-seqDt * 5);
         explosionLight.intensity *= Math.exp(-seqDt * 3);
+        for (const s of shocks) (s.material as THREE.MeshBasicMaterial).opacity *= Math.exp(-seqDt * 4);
+        for (const s of shockSpheres) (s.material as THREE.MeshBasicMaterial).opacity *= Math.exp(-seqDt * 4);
 
-        // Fade the star itself (in case it's visible) + background.
-        starMat.uniforms.uIntensity.value = fadeLevel;
-        chromoMat.uniforms.uIntensity.value = fadeLevel;
-        bgStarMat.uniforms.uBoost.value = fadeLevel;
-        nebulaBgMat.opacity = 0.55 * fadeLevel;
+        // The star itself is long gone — keep it hidden + faded.
+        starMat.uniforms.uIntensity.value = Math.max(0, 1 - smoothT * 2);
+        chromoMat.uniforms.uIntensity.value = Math.max(0, 1 - smoothT * 2);
 
-        // Solar wind fades too.
-        windMat.opacity = 0.7 * fadeLevel;
+        // Background: cross-fade from the supernova's dark red bg to the
+        // nebula's dark blue bg (0x050308 → 0x020308). The scene background
+        // is owned by PrismScene (we can't lerp it from here), but the
+        // remnant cloud fills the view so the bg is barely visible — the
+        // cross-fade happens naturally when the nebula preset loads.
 
-        // Once we're nearly black and haven't dispatched yet, switch to nebula.
-        if (fadeLevel < 0.04 && !nebulaSwitchDispatched) {
+        // Solar wind fades (it was streaming from the star, now the star is gone).
+        windMat.opacity = 0.7 * Math.max(0, 1 - smoothT * 2);
+
+        // Once the cloud has fully expanded (smoothT near 1) and we haven't
+        // switched yet, dispatch the preset change. The nebula will load with
+        // its particles in a similar distribution — visually continuous.
+        if (smoothT > 0.85 && !nebulaSwitchDispatched) {
           nebulaSwitchDispatched = true;
           if (typeof window !== 'undefined') {
             window.dispatchEvent(new CustomEvent('prism-preset', { detail: 'nebula' }));

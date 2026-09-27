@@ -100,6 +100,11 @@ export class InteractionController {
   private readonly activePointers = new Map<number, { x: number; y: number }>();
   private pinchMode = false;
   private lastPinchDist = 0;
+  // Cached secondary hand landmarks for two-hand coast. On a slow camera,
+  // the second hand often drops out for 1-3 frames mid-gesture. We cache
+  // its last position + timestamp so the zoom/rotate keeps working.
+  private cachedSecHand: { x: number; y: number } | null = null;
+  private cachedSecHandAt = 0;
   private lastPinchMid = { x: 0, y: 0 };
 
   // Debug snapshot (updated every frame, read by the overlay)
@@ -542,14 +547,21 @@ export class InteractionController {
     this.pointerNdc.set(this.tmpSmoothed.x, this.tmpSmoothed.y);
 
     // Two-hand transform takes precedence over single-hand dragging.
-    // COAST: on a slow camera, both hands might not register a pinch in the
-    // same frame. Use a 500ms coast — if EITHER hand was pinching recently,
-    // treat the two-hand gesture as still active. This makes zoom/rotate
-    // work even when one hand briefly drops out.
+    // COAST for slow cameras: the second hand often drops out for 1-3 frames.
+    // Cache its last position + use it for up to 500ms so the zoom/rotate
+    // keeps working through brief tracking gaps. This makes double-pinch
+    // zoom actually usable on a low-quality camera.
     const primeP = prime.pinch.isPinching;
     const secP = this.trackers[1].pinch.isPinching;
-    const bothPinching = primeP && secP && secondaryHand !== null;
-    if (bothPinching && secondaryHand) {
+    const now = performance.now();
+    if (secondaryHand) {
+      this.cachedSecHand = pinchPoint2D(secondaryHand);
+      this.cachedSecHandAt = now;
+    }
+    const secCoastAlive = this.cachedSecHand && (now - this.cachedSecHandAt < 500);
+    const secHandOrCoast = secondaryHand ?? (secCoastAlive ? this.cachedSecHand : null);
+    const bothPinching = primeP && secP && secHandOrCoast !== null;
+    if (bothPinching && secHandOrCoast) {
       // Fresh baseline on entry: stale ratios from a previous gesture would
       // otherwise teleport the world scale on the first frame.
       if (!this.prevTwoHand) {
@@ -559,7 +571,7 @@ export class InteractionController {
       this.prevTwoHand = true;
       const delta = this.twoHand.update(
         pinchPoint2D(primaryHand.landmarks),
-        pinchPoint2D(secondaryHand.landmarks),
+        secHandOrCoast,
       );
       this.twoHandActive = true;
       if (delta) this.applyTwoHandDelta(delta.scaleRatio, delta.angleDelta);
@@ -567,6 +579,11 @@ export class InteractionController {
       this.applyHover(null, dtMs);
       this.updateCursor();
       return;
+    }
+    // If we were in two-hand mode but lost it, reset the two-hand baseline
+    // so the next entry doesn't jump.
+    if (this.prevTwoHand && !bothPinching) {
+      this.twoHand.reset();
     }
     this.prevTwoHand = false;
     this.twoHand.reset();
@@ -753,13 +770,22 @@ export class InteractionController {
     const cfg = PrismConfig.interaction;
     // Incremental application avoids compounding error from a stale baseline.
     const step = scaleRatio / Math.max(1e-6, this.lastScaleRatio);
-    const target = THREE.MathUtils.clamp(
+    const rawTarget = THREE.MathUtils.clamp(
       this.prism.world.scale.x * Math.pow(step, cfg.zoomSpeed),
       cfg.worldScaleMin,
       cfg.worldScaleMax,
     );
+    // SMOOTH: exponential approach toward the target scale. On a jittery
+    // camera, the hand-to-hand distance bounces frame-to-frame, which made
+    // the zoom feel jerky. Smoothing (15% per frame toward target) kills
+    // the jitter while staying responsive. Frame-rate independent.
+    const damp = 1 - Math.exp(-12 * 0.016); // ~15% per frame at 60fps
+    const current = this.prism.world.scale.x;
+    const target = current + (rawTarget - current) * damp;
     this.prism.world.scale.setScalar(target);
-    this.prism.world.rotation.y += (angleDelta - this.lastAngleDelta) * cfg.rotateSpeed;
+    // Rotation: also smoothed to kill jitter.
+    const rotStep = (angleDelta - this.lastAngleDelta) * cfg.rotateSpeed;
+    this.prism.world.rotation.y += rotStep * damp;
     this.lastScaleRatio = scaleRatio;
     this.lastAngleDelta = angleDelta;
   }

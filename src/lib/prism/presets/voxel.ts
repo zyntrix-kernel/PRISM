@@ -583,10 +583,30 @@ export function buildVoxel(ctx: BuilderCtx): WorldAPI {
       out.set(target.point[0], target.point[1], target.point[2]);
       return true;
     },
-    setPointerAction(pressed: boolean, held: boolean, released: boolean): void {
+    setPointerAction(pressed: boolean, held: boolean, released: boolean, tap?: boolean): void {
       pressEdge = pressed;
       holdNow = held;
       releaseEdge = released;
+      // The `tap` signal from the interaction system is the most reliable
+      // way to detect a quick pinch-tap (it accounts for slow cameras with
+      // a 600ms window). If we get a tap, place the block immediately.
+      // Use the anchor (where the pinch started) if available, else the
+      // current target (where the cursor is now).
+      if (tap) {
+        const place = anchor ?? target;
+        if (place) {
+          const [bx, by, bz] = place.cell;
+          const [nx, ny, nz] = place.normal;
+          const px = bx + nx;
+          const py = by + ny;
+          const pz = bz + nz;
+          if (py >= 1 && py < HEIGHT - 1 && getW(px, py, pz) === AIR) {
+            if (setW(px, py, pz, PLACEABLE[selected])) rebuildAround(px, pz);
+          }
+        }
+        anchor = null;
+        progress = 0;
+      }
     },
     selectBlock(index: number): void {
       selected = ((index % PLACEABLE.length) + PLACEABLE.length) % PLACEABLE.length;

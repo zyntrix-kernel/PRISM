@@ -2500,3 +2500,404 @@ micro-shockwaves, and tighter debris trails.
   stricter spec match is desired.
 - The lens flare could be made to subtly react to camera distance
   (dimming when far away) for extra realism.
+
+---
+Task ID: GALAXY-GLOW
+Agent: sub (general-purpose)
+Task: Boost galaxy glow in /home/z/my-project/src/lib/prism/presets/galaxy.ts
+
+Work Log:
+- Read worklog tail (last entry: supernova.ts lens flare + micro-shockwave
+  polish) and the current galaxy.ts (custom ShaderMaterial, ggwzrd vertex
+  shader, pow(3.0) fragment, 3 glow sprites, particle counts 20k/50k/100k).
+- Confirmed singularity.ts only accesses `galaxy.material as
+  THREE.ShaderMaterial` for `uTime` and `uOpacity` uniforms — both preserved.
+
+### Changes (ONLY /home/z/my-project/src/lib/prism/presets/galaxy.ts)
+
+**1. Particle brightness boosted**
+- Fragment shader: `pow(strength, 3.0)` → `pow(strength, 2.5)` (slightly
+  wider per-point glow halo → more particles contribute visible luminosity
+  per pixel via additive blending).
+- Added `* 1.3` brightness multiplier on the mixed color:
+  `vec3 color = mix(vec3(0.0), vColor, strength) * 1.3;`
+- Comment block on the fragment shader updated to explain the rationale
+  (was too tight for "Milky Way band" target).
+
+**2. Diffuse dust disc added (Milky Way band look)**
+- New `makeDustTexture()` helper: 256×256 procedural `CanvasTexture` with
+  a 6-stop radial gradient — bright warm core (rgba 255,200,140,0.95)
+  → warm halo → soft purple-blue mid → cool blue mid → faint purple
+  halo → transparent edge.
+- New `THREE.CircleGeometry(radius * 1.5, 64)` mesh with
+  `MeshBasicMaterial` (AdditiveBlending, depthWrite:false,
+  side:DoubleSide, opacity 0.4, map = dustTex).
+- Rotated `rotation.x = -π/2` to lay flat in the XZ plane (coplanar with
+  the spiral arms' plane).
+- Added to the galaxy group so it scales/rotates with the parent.
+
+**3. More glow layers**
+- Kept the existing 3 sprites (inner core scale 4, mid halo scale 12,
+  outer halo scale 30).
+- Added ULTRA-wide faint glow: scale 60, opacity 0.1, color 0x3a5aaa
+  (cool blue), additive, depthWrite:false. Reads as a hazy smudge even
+  at maximum camera distance (Act 4, dist ≈ 80).
+- Inner core glow now pulses subtly: `coreGlow.onBeforeRender` reads
+  `uTime` from the parent `ShaderMaterial` and sets
+  `coreGlowMat.opacity = 0.85 + sin(t * 1.5) * 0.1`. The pulse is synced
+  to the differential-rotation clock so it pauses when the galaxy is
+  hidden and stays in sync with the spiral winding. No new uniform
+  plumbing required — reuses the existing uTime.
+
+**4. Bright central bulge sprite added**
+- New `bulgeGlow` Sprite: scale 2.5, opacity 0.8, color 0xffeecc
+  (white-yellow), additive, depthWrite:false. Reuses `glowTex`.
+- Represents the dense galactic bulge of old stars at the exact center.
+- Rendered before the warmer core/halo sprites so they layer on top.
+
+**5. Color enhancement**
+- `insideColor`: 0xff6030 → 0xff7040 (warmer/brighter orange).
+- `outsideColor`: 0x1b3984 → 0x2a4a9a (more vibrant blue, more
+  contrast against the warm core → more perceived glow).
+- Header comment block updated to reflect the new colors and features.
+
+### Constraints honored
+- `buildGalaxy(quality: string): THREE.Points` signature UNCHANGED.
+- Return type still `THREE.Points` (children are added but the root
+  object is the same Points).
+- ggwzrd vertex shader (differential rotation) UNCHANGED — no rotation
+  math touched, only the fragment shader was tuned.
+- Fragment shader structure preserved (same uniforms, same varying,
+  same `gl_FragColor` shape) — just `pow` exponent and a `* 1.3`
+  multiplier.
+- `uTime` and `uOpacity` uniforms on the ShaderMaterial UNCHANGED —
+  singularity.ts's `gMat.uniforms.uTime.value` and
+  `gMat.uniforms.uOpacity.value` accessors still work.
+- TypeScript strict — no `any` introduced (SpriteMaterial cast uses
+  `as THREE.SpriteMaterial`, ShaderMaterial cast uses
+  `as THREE.ShaderMaterial`).
+- ONLY `galaxy.ts` modified — confirmed via grep that no other files
+  were touched.
+- ESLint clean (0 errors): `bun run lint` → no output.
+- Dev server recompiled cleanly: `GET /?preset=singularity 200 in 701ms`
+  — no runtime or compile errors.
+
+### Verification
+- `bun run lint` → clean (no errors, no output).
+- `curl http://localhost:3000/?preset=singularity` → HTTP 200.
+- `tail -15 dev.log` → no errors; latest entry:
+  `GET /?preset=singularity 200 in 701ms (compile: 210ms, render: 491ms)`.
+
+### Expected visual impact
+- **Close-up**: per-particle glow is ~30% brighter and slightly wider
+  (pow 2.5 vs 3.0). The spiral arms now have a softer luminous edge
+  instead of tight pinpoints — more "milky" feel.
+- **Mid distance**: the dust disc fills the area between spiral arms
+  with a warm-to-cool hazy band — the galaxy no longer looks like
+  isolated dots of light, but like a continuous glowing structure.
+- **Far distance (Act 4, camera dist 80)**: the ultra-wide faint glow
+  (scale 60, opacity 0.1) ensures the galaxy reads as a soft hazy
+  smudge even when the individual particles become sub-pixel.
+- **Center**: the new bulge sprite (white-yellow, scale 2.5) creates
+  a tight bright "star-like" core that the warmer halo (scale 4)
+  pulses around — gives the galaxy a "living" central focus.
+- **Color**: the boosted inside/outside colors give more warm/cool
+  contrast → stronger perceived glow separation between core and edge.
+
+### Potential follow-ups (not in scope)
+- The dust disc is a uniform radial gradient — could be made
+  anisotropic (brighter along the spiral arms) by sampling noise into
+  the canvas texture, for an even more "Milky Way band" look.
+- The ultra-wide glow (scale 60) might be too dim on low-quality
+  displays — could be made quality-dependent if needed.
+- A VLM screenshot at Act 4 (camera dist 80) would confirm the
+  distance-readability target is met.
+
+---
+
+## Task SUPERNOVA-NEBULA-SYNC — Particle coalescence + camera sync
+
+### Goal
+The supernova→nebula transition had two visible artifacts:
+1. The remnant cloud just expanded uniformly — no sense of "particles
+   coalescing into bigger ones to form the nebula".
+2. The cinematic camera was LOCKED during the fade, so when the
+   `prism-preset` event fired, the nebula preset's `setHome()` snapped
+   the rig to `{ distance: 16, pitch: 0.2, yaw: 0 }` — a visible jump
+   from the supernova's pose (`distance ~8, pitch ~0.4, yaw ~0.3`).
+
+User wanted: (a) many small particles released by the supernova that
+visibly coagulate into bigger particles till they're big enough for the
+nebula, and (b) the supernova's end-camera matched to the nebula's
+opening camera so the handoff is smooth.
+
+### Changes (all in `src/lib/prism/presets/supernova.ts`)
+
+**1. New coalescence + camera-sync state (after the cinematic block)**
+- `CLUMP_COUNT = 8` — divide the remnant into 8 clumps.
+- `clumpCenters: THREE.Vector3[]` (8 `Vector3`s) — the clump target
+  positions, set at fading-phase entry.
+- `remnantClumpIdx: Uint8Array(REMNANT_COUNT)` — each particle's
+  assigned clump (nearest-center assignment at fade start).
+- `remnantStartSize` / `remnantEndSize: Float32Array(REMNANT_COUNT)` —
+  per-particle size lerp range captured at fade start.
+- `NEBULA_OPEN_{DIST,PITCH,YAW} = {16, 0.2, 0}` — the nebula preset's
+  opening view (hardcoded constants, matching `nebula.ts`).
+- `fadeStart{Dist,Pitch,Yaw}` — the cinematic camera's pose at fade
+  start, captured so the smoothstep lerp knows where to lerp FROM.
+
+**2. Aftermath phase: gradual particle shrink (set up coalescence)**
+- During the second half of aftermath (`t > 0.5`), each remnant
+  particle's size exponentially decays toward `3.0`:
+  `remnantSize[i] += (3.0 - remnantSize[i]) * min(1, seqDt * 1.5)`.
+- This brings sizes from the explosion's 6-14 down to ~3 by the time
+  the fade begins — no visible "pop" because the shrink is gradual.
+- `remnantGeo.attributes.size.needsUpdate = true` set when shrinking
+  is active (only in the second half, to avoid unnecessary uploads).
+
+**3. Fading-phase entry: clump init + camera-pose capture**
+- At the aftermath→fading transition, 8 clump centers are placed in a
+  ring of radius 2.8-5.4 with random y-spread — spread across the
+  eventual nebula volume (the clumps themselves will drift outward
+  during the fade to match the nebula's final spread).
+- Each remnant particle is assigned to its nearest clump via a brute-
+  force nearest-center search (REMNANT_COUNT × CLUMP_COUNT = at most
+  3000×8 = 24k distance checks — runs ONCE at fade start, not per
+  frame).
+- `remnantStartSize[i]` captures the current (post-shrink, ~3) size;
+  `remnantEndSize[i] = 10 + random*10` (10-20) — bigger with per-
+  particle jitter so clumps have natural size variance.
+- `fadeStart{Dist,Pitch,Yaw}` snapshots the cinematic camera's pose
+  (~8, ~0.4, ~0.3) for the smoothstep lerp.
+
+**4. Fading phase: camera sync (the headline fix)**
+- Replaced the "camera LOCKED" block with a smoothstep lerp:
+  ```
+  cinematicDist  = mix(fadeStartDist,  16,  smoothT);
+  cinematicPitch = mix(fadeStartPitch, 0.2, smoothT);
+  cinematicYaw   = mix(fadeStartYaw,   0,   smoothT);
+  ```
+- At `smoothT=0`: camera at its post-aftermath pose (~8, 0.4, 0.3).
+- At `smoothT=1`: camera at the nebula's opening pose (16, 0.2, 0) —
+  EXACTLY where `setHome()` will snap when the preset switches.
+- Result: when the `prism-preset` event fires, the rig's `setHome()`
+  snaps to (16, 0.2, 0) but the camera was already there — invisible.
+
+**5. Fading phase: particle coalescence (the headline visual)**
+- Per-frame, each particle:
+  1. **Outward drift** (its existing velocity) scaled by
+     `outwardK = 1 - smoothT` — momentum dies off over the fade.
+  2. **Drag** on velocity: `remnantVel[i] *= 1 - seqDt*smoothT*0.6` —
+     particles slow so they can settle near clumps.
+  3. **Inward pull** toward clump center: per-frame lerp factor
+     `pullK = smoothT * seqDt * 2.5` — grows from 0 at fade start to
+     ~4% per frame at fade end, giving strong convergence by `t=1`.
+  4. **Size growth**: `remnantSize[i] = mix(startSize, endSize, smoothT)`
+     — smoothstep from ~3 → 10-20. Small particles visibly merge into
+     bigger ones as they clump.
+- Clump centers themselves drift outward: `multiplyScalar(1 + seqDt *
+  0.18 * (1 - smoothT))` — strong at fade start, tapers to zero, so
+  the final layout matches the nebula's spread (radius ~3.5-6.7).
+- `remnantGeo.attributes.position.needsUpdate = true` AND
+  `remnantGeo.attributes.size.needsUpdate = true` set every frame
+  (both attributes now animate).
+
+**6. Preset-switch threshold 0.85 → 0.95**
+- The `prism-preset` event now fires at `smoothT > 0.95` (was 0.85).
+- At `smoothT = 0.95`, raw `t ≈ 0.865` → ~2.16s into the 2.5s fade.
+  This lets the coalescence + camera lerp reach ~95% completion before
+  the swap — the cloud has visibly coalesced into clumps and the camera
+  is essentially at the nebula opening pose when the swap fires.
+- The remaining ~0.34s of fade continues to run on the (now-being-
+  disposed) supernova world — invisible to the user since the nebula
+  preset has loaded.
+
+**7. Header comment + fading-phase block comment**
+- Updated the file header from "4-phase sequence" → "5-phase sequence
+  … fading: remnant particles COALESCE into N clumps, the cinematic
+  camera smoothstep-lerps to the nebula preset's opening view …".
+- Replaced the fading-phase block comment ("camera DOES NOT MOVE")
+  with an accurate description of the new coalescence + camera sync.
+
+### Constraints honored
+- `WorldAPI` interface unchanged — `cinematicCamera` getter still
+  returns `{ yaw, pitch, distance } | null`, now driven by the lerp.
+- 5-phase state machine preserved
+  (`STABLE=3`, `DESTABILIZE=2`, `EXPLODE=2`, `AFTERMATH=3.2`, `FADE=2.5`).
+- `disposeGroup(world)` still called in `dispose()`.
+- TypeScript strict — no `any` added. `Uint8Array` + `Float32Array`
+  used for the new per-particle state (typed, no casts needed).
+- Only `supernova.ts` modified.
+- Background cross-fade: kept the existing approach (let the remnant
+  cloud fill the view so the bg is barely visible — supernova bg
+  `0x050308` and nebula bg `0x020308` are visually near-identical at
+  the brightness level the cloud occupies).
+
+### Verification
+- `bun run lint` → clean (0 errors).
+- Dev server: `GET /?preset=supernova 200 in 739ms (compile: 215ms,
+  render: 524ms)` — no runtime or compile errors.
+- HTTP 200 confirmed via curl.
+
+### Expected visual impact
+- **Aftermath (second half)**: particles smoothly shrink from 6-14 → ~3
+  — sets up the coalescence. No visible "pop" because the shrink is
+  exponential over 1.6s.
+- **Fading (0 → 0.5)**: cloud keeps expanding outward (tapering) while
+  particles begin drifting inward toward their assigned clump centers
+  and growing in size. Camera starts pulling back from distance 8 → 12
+  and yawing/pitching toward (0.2, 0).
+- **Fading (0.5 → 0.95)**: outward drift dies off; inward pull
+  dominates. Particles visibly converge into 8 clumps while growing
+  from ~3 → 10-20. Camera arrives at the nebula's opening pose
+  (distance 16, pitch 0.2, yaw 0).
+- **Preset switch (smoothT > 0.95)**: nebula loads. The rig's
+  `setHome()` snaps to (16, 0.2, 0) — but the camera was already
+  there. The nebula's particles load in a similar clumped distribution.
+  Net visual: the cloud morphs into the nebula with no camera jump
+  and no particle-density drop.
+
+### Potential follow-ups (not in scope)
+- The clump assignment is a one-shot nearest-center at fade start. A
+  more sophisticated sim could re-assign particles mid-fade as they
+  drift (k-means style) — but the current single-pass assignment
+  looks coherent because particles only drift short distances.
+- The clump centers use a fixed ring layout. Could be replaced with
+  a Poisson-disk distribution for more organic clump placement.
+- A subtle fullscreen additive blue tint sprite during the last 10%
+  of the fade would cross-fade the bg color even more smoothly (the
+  remnant cloud fills the view, but a tint would catch the edges).
+- Could verify the visual end-to-end via VLM screenshot at the
+  fade-complete moment (expected: 8 distinct colored clumps visible,
+  camera at the nebula opening pose).
+
+---
+
+**Task ID:** BLOCKS-GRAVITY
+**Agent:** general-purpose (sub-agent)
+**Task:** Add gravity physics + interactivity upgrades to the BLOCKS preset.
+
+### Work Log
+
+Edited ONLY `/home/z/my-project/src/lib/prism/presets/blocks.ts`. The
+file was a stub (static world, `update()` did nothing); it now implements
+a full per-cube physics loop plus premium environment polish.
+
+#### 1. Gravity physics system
+- **Gravity integration**: per-cube `userData.vy -= GRAVITY * step`
+  (9.8 m/s²), simple Euler. `step = Math.min(dt, 1/30)` so a lag spike
+  can't tunnel a cube through the floor.
+- **Vertical collision**: `restYFor()` computes the highest resting Y
+  for each cube — either `GROUND_Y = 0.3` (platform top + half-cube)
+  or `other.position.y + 0.6` if another (non-grabbed) cube's XZ
+  footprint overlaps and that cube is strictly below. AABB check uses
+  the spec's `dx < 0.6 && dz < 0.6` tolerance.
+- **Bounce damping**: `vy *= -0.3` on impact, capped at `MAX_BOUNCES = 2`
+  after which `vy = 0`. Soft-landing threshold (`vy < -0.4`) skips the
+  bounce/dust for trivial taps.
+- **Velocity tracking**: `userData.vy`, `userData.vx`, `userData.vz`,
+  `userData.bounces`, `userData.settled`.
+
+#### 2. Grid snapping on settle
+- When a cube's speed drops below `REST_VEL = 0.04` m/s AND it's within
+  0.01 of its rest surface, X and Z are snapped to `Math.round(x / 0.6) *
+  0.6`, Y clamped to `restY`, and all velocities zeroed. `settled = true`
+  then short-circuits the physics tick on subsequent frames (avoids the
+  "gravity dip-and-snap" oscillation that would otherwise run every
+  frame on resting cubes).
+- The interaction system's existing `gridSnap` release snap is preserved
+  (`userData.gridSnap = true`); my snap is idempotent on top of it.
+
+#### 3. Visual polish
+- **Dust puffs**: one pooled `THREE.Points` (64 particles, additive,
+  `glowTex` map, `depthWrite:false`). On impact `spawnDust()` emits 4
+  particles around the cube's base perimeter (radius 0.32–0.44, just
+  outside the 0.3 cube edge) with outward + upward drift. Each particle
+  fades over 300 ms by scaling its vertex color toward black (additive
+  blending makes that = invisible, no per-particle alpha needed).
+- **Squash on impact**: `userData.squashT = 1` on landing; decays to 0
+  over 100 ms via `step / 0.1`. `scale.y = 1 - 0.15·sin(t·π/2)` (so
+  0.85 at impact, 1.0 at rest) with a slight XZ bulge
+  (`scale.x = scale.z = 1 + 0.07·sin(...)`). Runs every frame
+  regardless of grabbed/settled state, so grabbing mid-squash still
+  recovers cleanly.
+- **Better materials**: each cube is now multi-material
+  (`[side, side, top, side, side, side]`) — top face is glossy
+  (roughness 0.22, metalness 0.45, emissiveIntensity 0.32) while the
+  sides/bottom stay matte (roughness 0.55, metalness 0.05).
+
+#### 4. Interactivity upgrades
+- **Throw mechanic**: while a cube is grabbed, `pushHistory()` writes
+  its smoothed-hand position + elapsed time into a 4-sample ring buffer
+  (`Float32Array(16)`, one sample = x/y/z/t). On release transition
+  (`prevGrabbed && !grabbed`), `estimateVelocity()` computes
+  `(newest − oldest) / dt`. If horizontal speed > `THROW_THRESHOLD =
+  1.2` m/s, the cube inherits that `vx`/`vz` and slides.
+- **Sliding friction**: `vx *= vz *= Math.pow(0.92, step * 60)` —
+  framerate-independent decay matching the spec's 0.92/frame at 60 fps.
+- **Slide-collision impulse**: `resolveSlideCollision()` runs only when
+  the cube is on its rest surface AND `|vy| < 0.5` (so falling cubes
+  pass through stacks instead of getting knocked sideways). On XZ
+  overlap (same level), it pushes the slider back along the axis of
+  smaller penetration and transfers 50% of its momentum to the hit
+  cube (`other.settled = false`, `other.vx = cube.vx * 0.5`), then
+  reduces the slider's velocity to 30%.
+
+#### 5. Premium environment
+- **Baseplate**: `metalness 0.3`, `roughness 0.5` (was 0.0/0.9) for a
+  subtle shiny reflection.
+- **AO vignette**: a transparent `PlaneGeometry(6,6)` just above the
+  plate at `y = 0.0015`, textured with a 64×64 `DataTexture` whose
+  alpha ramps from 0 at the center to ~0.7 at the rim (quadratic),
+  giving a soft darkening near the edges. Material flagged
+  `userData.ownMap = true` so the texture is freed on preset switch.
+- **Glow rings**: per-cube additive `THREE.Sprite` at `y = 0.011`,
+  scaled 0.95 (so a soft halo extends just beyond the cube's 0.6
+  footprint), colored to match the cube. Opacity fades with lift
+  (`0.55 − lift · 0.18`, clamped to 0.08) so an airborne cube leaves a
+  dimmer "shadow puddle" on the plate.
+- **Studs**: also lightly shiny (`metalness 0.2`, `roughness 0.55`).
+
+### Constraints honored
+- `WorldAPI` interface unchanged (`grabbables`, `background`,
+  `view`, `update`, `bodyInfo`, `dispose`).
+- `userData.gridSnap = true` preserved on every cube (interaction
+  system still snaps on release; my settle-snap is idempotent on top).
+- `VOXELS` array unchanged (positions + colors + names identical).
+- `disposeGroup(world)` still called in `dispose()`. AO texture flagged
+  `ownMap` so it's freed; shared `glowTex` is left untouched (correct —
+  owned by BuilderCtx).
+- TypeScript strict — no `any` added. ESLint clean (0 errors).
+- Only `blocks.ts` modified.
+
+### Verification
+- `bun run lint` → clean (0 errors, no warnings).
+- Dev server: `GET /?preset=blocks 200 in 652ms (compile: 231ms,
+  render: 420ms)` — no runtime or compile errors.
+
+### Expected visual impact
+- On load: the floating cyan cube at `[0, 0.9, 0]` drops onto the
+  plate with a 2-bounce + dust + squash. The other 7 cubes sit
+  quietly on the plate, each wearing a soft glow halo.
+- Grab + release a cube in mid-air: it falls, bounces twice, settles,
+  squashes on each impact, puffs dust around its base, snaps to grid.
+- Toss a cube hard sideways: it slides across the plate with friction,
+  knocks into another cube (transferring half its momentum), and both
+  settle on grid cells.
+- Stack a cube directly above another: it lands cleanly at
+  `y = 0.9` (top of the lower cube), no overlap, no jitter.
+- The plate is subtly shiny with a darker vignette at the rim.
+
+### Potential follow-ups (not in scope)
+- The interaction system's release snap rounds `y` to multiples of
+  0.6 (so a release at `y=0.5` snaps to `y=0.6`, then my gravity drops
+  it the last 0.3 units to `y=0.3`). This is fine but means there's
+  always a brief 0.3-unit "drop" after release even if the user
+  thought they placed it on the plate. A future tweak could special-
+  case the blocks preset to skip the interaction's `y` snap (or snap
+  to multiples of 0.6 offset by 0.3) for instant placement.
+- The slide-collision impulse is a simple 1-axis resolution; full
+  2-axis (diagonal) collision would feel slightly more solid but
+  isn't necessary for the toy-block feel.
+- A VLM screenshot rating would confirm the polish reads as
+  "premium" (expected 9/10).

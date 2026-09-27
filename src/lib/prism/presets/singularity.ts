@@ -445,6 +445,10 @@ export function buildSingularity(ctx: BuilderCtx): WorldAPI {
             world.visible = true;
             flash.visible = false;
             coreFlash.visible = false;
+            // CRITICAL: reset the black hole to calm mode. Without this,
+            // the hole stays stuck at high extremeLevel (glowing intensely)
+            // after the detonation rebuilds the world.
+            hole.setExtreme(false);
             cinematicActive = false;
             // Re-add the black hole + debris + probes to the scene
             if (!hole.group.parent) world.add(hole.group);

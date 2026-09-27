@@ -70,44 +70,50 @@ export async function startCamera(video: HTMLVideoElement): Promise<CameraHandle
     throw new Error(`Camera unavailable: ${describeMediaError(err)}. ${hint}`);
   }
 
-  video.srcObject = stream;
+  // CRITICAL: set all autoplay-required properties BEFORE assigning the stream.
+  // If these are set after srcObject, some browsers fire canplay/loadeddata
+  // events before the properties take effect, causing the readyState check
+  // to fail and the camera to appear "unavailable" even when permission is granted.
   video.muted = true;
+  video.playsInline = true;
+  video.autoplay = true;
+  video.srcObject = stream;
+
+  // Try to play — this returns a promise that can reject due to autoplay
+  // policy, but since we set muted=true, it should succeed. Don't timeout
+  // on play() itself; just catch and continue to the readyState poll below.
   try {
-    await withTimeout(
-      video.play().catch(() => {
-        /* autoplay policies vary; canplay listener below still resolves */
-      }),
-      8000,
-      'Camera playback',
-    );
-  } catch (err) {
-    stream.getTracks().forEach((t) => t.stop());
-    throw new Error(
-      `Camera started but video never played (${describeMediaError(err)}).`,
-    );
+    await video.play().catch(() => {
+      /* autoplay rejection — the polling loop below will still detect
+         frames once the browser decides to start playback */
+    });
+  } catch {
+    /* fall through to polling */
   }
-  try {
-    await withTimeout(
-      new Promise<void>((resolve) => {
-        if (video.readyState >= 2 && video.videoWidth > 0) {
-          resolve();
-          return;
-        }
-        const onCanPlay = (): void => {
-          video.removeEventListener('canplay', onCanPlay);
-          resolve();
-        };
-        video.addEventListener('canplay', onCanPlay);
-      }),
-      8000,
-      'Camera first frame',
-    );
-  } catch (err) {
+
+  // Poll for readyState instead of relying on a single canplay event.
+  // The canplay event can fire BEFORE we attach the listener (race condition),
+  // or never fire on some browsers/drivers. Polling is reliable.
+  const pollStart = performance.now();
+  const POLL_TIMEOUT_MS = 12_000; // 12s — generous for slow camera init
+  const POLL_INTERVAL_MS = 50;
+  await new Promise<void>((resolve, reject) => {
+    const check = (): void => {
+      if (video.readyState >= 2 && video.videoWidth > 0) {
+        resolve();
+        return;
+      }
+      if (performance.now() - pollStart > POLL_TIMEOUT_MS) {
+        reject(new Error(`Camera stream started but no frames arrived within ${POLL_TIMEOUT_MS / 1000}s (readyState=${video.readyState}, videoWidth=${video.videoWidth}).`));
+        return;
+      }
+      setTimeout(check, POLL_INTERVAL_MS);
+    };
+    check();
+  }).catch((err) => {
     stream.getTracks().forEach((t) => t.stop());
-    throw new Error(
-      `Camera produced no frames (${describeMediaError(err)}).`,
-    );
-  }
+    throw err instanceof Error ? err : new Error(String(err));
+  });
 
   const track = stream.getVideoTracks()[0];
   const settings = track?.getSettings();

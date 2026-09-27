@@ -12,14 +12,20 @@
 //  • Multi-component lens flare — bright core halo + anamorphic streak +
 //    6 radial spikes + chromatic ring; intensifies during destabilization
 //    and flashes blindingly during explosion.
-//  • 4-phase sequence — stable → destabilizing → exploding → aftermath.
+//  • 5-phase sequence — stable → destabilizing → exploding → aftermath → fading.
 //    Stable: solar wind particles stream outward; subtle prominences.
 //    Destabilizing: surface bulges, pre-flare micro-shockwaves, lens flare ramp.
 //    Explosion: blinding flash, 3 concentric shock spheres (white→yellow→orange),
 //               6 flat rings, debris with trails + per-particle tumbling + gas puffs,
 //               brief rainbow "chromatic aberration" tint on debris.
 //    Aftermath: slowly expanding nebula remnant (oxygen green + hydrogen red),
-//               camera pulls back to reveal the dispersing cloud.
+//               camera holds steady as the dispersing cloud settles.
+//    Fading: remnant particles COALESCE into N clumps (small → bigger), the
+//            cinematic camera smoothstep-lerps to the nebula preset's opening
+//            view, then a `prism-preset` event swaps to the nebula preset —
+//            the cloud and camera both arrive at the nebula's pose so the
+//            handoff is visually seamless (no particle-density drop, no
+//            camera jump).
 //  • Background — procedural nebula sphere + twinkling colored starfield.
 //
 // Noise + blackbody from: ggwzrd/threejs-galaxy (MIT) + vlwkaos/threejs-blackhole (ISC)
@@ -905,6 +911,29 @@ export function buildSupernova(ctx: BuilderCtx): WorldAPI {
   let cinematicDist = 12;
   let targetDist = 12;
 
+  // ── Fading-phase coalescence state ──────────────────────────────────
+  // During the fade, remnant particles COALESCE into N clumps: each
+  // particle drifts toward its assigned clump center while growing in size
+  // — a visible "small particles merge into bigger particles" effect that
+  // ends with the cloud looking like a structured nebula. Clump centers
+  // also drift slowly outward so the final layout matches the nebula's
+  // spread (radius ~5-7).
+  const CLUMP_COUNT = 8;
+  const clumpCenters: THREE.Vector3[] = [];
+  for (let i = 0; i < CLUMP_COUNT; i++) clumpCenters.push(new THREE.Vector3());
+  const remnantClumpIdx = new Uint8Array(REMNANT_COUNT);
+  const remnantStartSize = new Float32Array(REMNANT_COUNT);
+  const remnantEndSize = new Float32Array(REMNANT_COUNT);
+  // Camera start (captured at fading-phase entry) so the cinematic rig
+  // can smoothstep-lerp to the nebula preset's opening view during the
+  // fade. Nebula opens at: { distance: 16, pitch: 0.2, yaw: 0 }.
+  const NEBULA_OPEN_DIST = 16;
+  const NEBULA_OPEN_PITCH = 0.2;
+  const NEBULA_OPEN_YAW = 0;
+  let fadeStartDist = 12;
+  let fadeStartPitch = 0.35;
+  let fadeStartYaw = 0.3;
+
   const tmpCol = new THREE.Color();
 
   return {
@@ -1332,14 +1361,24 @@ export function buildSupernova(ctx: BuilderCtx): WorldAPI {
 
         // Remnant: drift outward, gaining speed. By the end of aftermath the
         // cloud should fill a volume ~radius 4, on its way to nebula size (8).
+        // During the second half of aftermath, also SHRINK each particle's
+        // size toward a small value (~3) — sets up the coalescence grow-back
+        // during the fade (small particles → bigger particles merging).
+        const shrinkActive = t > 0.5;
         for (let i = 0; i < REMNANT_COUNT; i++) {
           remnantPos[i * 3] += remnantVel[i].x * seqDt;
           remnantPos[i * 3 + 1] += remnantVel[i].y * seqDt;
           remnantPos[i * 3 + 2] += remnantVel[i].z * seqDt;
           // Gentle acceleration so the cloud keeps expanding.
           remnantVel[i].multiplyScalar(1 + seqDt * 0.15);
+          // Exponential decay toward size ~3 over the second half of aftermath.
+          // Smooth (no per-particle jitter — uses the particle's current size).
+          if (shrinkActive) {
+            remnantSize[i] += (3.0 - remnantSize[i]) * Math.min(1, seqDt * 1.5);
+          }
         }
         remnantGeo.attributes.position.needsUpdate = true;
+        if (shrinkActive) remnantGeo.attributes.size.needsUpdate = true;
         // Remnant opacity RISES as debris fades — cross-fade in particle space.
         remnantMat.uniforms.uOpacity.value = Math.min(1, 0.6 + t * 0.4);
 
@@ -1352,33 +1391,106 @@ export function buildSupernova(ctx: BuilderCtx): WorldAPI {
           phase = 'fading';
           phaseT = 0;
           nebulaSwitchDispatched = false;
+
+          // ── Initialize particle coalescence ────────────────────────
+          // Place N clump centers spread across the eventual nebula volume
+          // (radius ~3-5) so each clump becomes a "sub-cloud" within the
+          // final nebula distribution. Clump centers will drift outward
+          // slightly during the fade to match the nebula's spread.
+          for (let i = 0; i < CLUMP_COUNT; i++) {
+            const theta = (i / CLUMP_COUNT) * Math.PI * 2 + Math.random() * 0.5;
+            const r = 2.8 + Math.random() * 2.6;
+            clumpCenters[i].set(
+              Math.cos(theta) * r * (0.7 + Math.random() * 0.3),
+              (Math.random() - 0.5) * 3.0,
+              Math.sin(theta) * r * (0.7 + Math.random() * 0.3),
+            );
+          }
+          // Assign each remnant particle to its nearest clump center, then
+          // capture each particle's current (small) size as the start of
+          // the grow lerp. End size is bigger (10-20) with per-particle
+          // jitter so the clumps have natural size variance rather than a
+          // uniform blob — the visible "merged into bigger particles".
+          for (let i = 0; i < REMNANT_COUNT; i++) {
+            let best = 0;
+            let bestD = Infinity;
+            for (let c = 0; c < CLUMP_COUNT; c++) {
+              const dx = remnantPos[i * 3] - clumpCenters[c].x;
+              const dy = remnantPos[i * 3 + 1] - clumpCenters[c].y;
+              const dz = remnantPos[i * 3 + 2] - clumpCenters[c].z;
+              const d = dx * dx + dy * dy + dz * dz;
+              if (d < bestD) { bestD = d; best = c; }
+            }
+            remnantClumpIdx[i] = best;
+            remnantStartSize[i] = remnantSize[i];
+            remnantEndSize[i] = 10 + Math.random() * 10;
+          }
+          // Capture the camera's current cinematic pose so we can
+          // smoothstep-lerp from here to the nebula's opening view over
+          // the fade. The nebula preset's setHome() snaps to its own
+          // view when the preset switches — by arriving at that exact
+          // pose before the switch, the snap is invisible (no jump).
+          fadeStartDist = cinematicDist;
+          fadeStartPitch = cinematicPitch;
+          fadeStartYaw = cinematicYaw;
         }
       }
       // ── Fading phase ──────────────────────────────────────────────────
-      // PARTICLE-TO-PARTICLE MORPH: the remnant cloud keeps growing until it
-      // fills a nebula-sized volume (radius ~8) with nebula colors. The camera
-      // DOES NOT MOVE. Once the cloud looks like a nebula, we switch presets —
-      // the nebula loads with particles in roughly the same distribution, so
-      // the handoff is visually continuous (insanely smooth sync).
+      // PARTICLE COALESCENCE + CAMERA SYNC: the remnant particles drift
+      // inward toward N clump centers while growing in size (small → big),
+      // giving the visible "particles merging to form the nebula" effect.
+      // Meanwhile the cinematic camera smoothstep-lerps from its current
+      // pose to the nebula preset's opening view. By the time the preset
+      // switches, the cloud has coalesced into structured clumps AND the
+      // camera is at the nebula's opening pose — the swap is seamless.
       else if (phase === 'fading') {
         const t = phaseT / FADE_DURATION;
         // Smoothstep for buttery expansion rate (ease-in + ease-out).
         const smoothT = t * t * (3 - 2 * t);
 
-        // Camera: LOCKED. No movement at all. The user explicitly complained
-        // about the camera changing — keep it dead still so the only motion
-        // is the particle cloud morphing.
-        // (cinematicDist / cinematicYaw / cinematicPitch untouched.)
+        // ── Camera sync with nebula opening ───────────────────────────
+        // Smoothstep-lerp the cinematic camera from where it was at fade
+        // start to the nebula preset's opening view
+        // ({ distance: 16, pitch: 0.2, yaw: 0 }). When the preset switches,
+        // the rig's setHome() snaps to that exact pose — because we've
+        // already arrived there, the snap is invisible (no camera jump).
+        cinematicDist = mix(fadeStartDist, NEBULA_OPEN_DIST, smoothT);
+        cinematicPitch = mix(fadeStartPitch, NEBULA_OPEN_PITCH, smoothT);
+        cinematicYaw = mix(fadeStartYaw, NEBULA_OPEN_YAW, smoothT);
 
-        // Remnant: keep expanding. By t=1 the cloud fills radius ~8 (nebula).
+        // ── Clump-center outward drift ─────────────────────────────────
+        // Clump centers expand gently outward (slowing as smoothT→1) so
+        // the final cloud layout matches the nebula's spread.
+        const clumpExpand = 0.18 * (1 - smoothT);
+        for (let i = 0; i < CLUMP_COUNT; i++) {
+          clumpCenters[i].multiplyScalar(1 + seqDt * clumpExpand);
+        }
+
+        // ── Particle coalescence + size growth ─────────────────────────
+        // Each particle keeps a fading outward drift (its own momentum
+        // dying off) AND gains an inward pull toward its clump center that
+        // strengthens over the fade. Particles also grow from startSize to
+        // endSize (smoothstep) — small particles visibly merge into bigger
+        // ones, forming the structured nebula cloud.
+        const outwardK = 1 - smoothT;          // 1 → 0: outward drift dies
+        const pullK = smoothT * seqDt * 2.5;    // per-frame lerp toward clump
+        const dragK = 1 - seqDt * smoothT * 0.6;
         for (let i = 0; i < REMNANT_COUNT; i++) {
-          remnantPos[i * 3] += remnantVel[i].x * seqDt;
-          remnantPos[i * 3 + 1] += remnantVel[i].y * seqDt;
-          remnantPos[i * 3 + 2] += remnantVel[i].z * seqDt;
-          // Acceleration tapers off as we approach nebula size (settles).
-          remnantVel[i].multiplyScalar(1 + seqDt * (0.15 * (1 - smoothT)));
+          // Outward drift (tapering) + drag on velocity so particles settle.
+          remnantPos[i * 3] += remnantVel[i].x * seqDt * outwardK;
+          remnantPos[i * 3 + 1] += remnantVel[i].y * seqDt * outwardK;
+          remnantPos[i * 3 + 2] += remnantVel[i].z * seqDt * outwardK;
+          remnantVel[i].multiplyScalar(dragK);
+          // Inward pull toward clump center (grows over fade).
+          const c = clumpCenters[remnantClumpIdx[i]];
+          remnantPos[i * 3] += (c.x - remnantPos[i * 3]) * pullK;
+          remnantPos[i * 3 + 1] += (c.y - remnantPos[i * 3 + 1]) * pullK;
+          remnantPos[i * 3 + 2] += (c.z - remnantPos[i * 3 + 2]) * pullK;
+          // Grow size (smoothstep from startSize → endSize).
+          remnantSize[i] = mix(remnantStartSize[i], remnantEndSize[i], smoothT);
         }
         remnantGeo.attributes.position.needsUpdate = true;
+        remnantGeo.attributes.size.needsUpdate = true;
         // Remnant stays at full opacity — it IS the nebula now.
         remnantMat.uniforms.uOpacity.value = 1;
 
@@ -1424,10 +1536,13 @@ export function buildSupernova(ctx: BuilderCtx): WorldAPI {
         // Solar wind fades (it was streaming from the star, now the star is gone).
         windMat.opacity = 0.7 * Math.max(0, 1 - smoothT * 2);
 
-        // Once the cloud has fully expanded (smoothT near 1) and we haven't
-        // switched yet, dispatch the preset change. The nebula will load with
-        // its particles in a similar distribution — visually continuous.
-        if (smoothT > 0.85 && !nebulaSwitchDispatched) {
+        // Once the cloud has fully coalesced + the camera has arrived at
+        // the nebula's opening pose (smoothT near 1), dispatch the preset
+        // change. The nebula loads with its own particles in a similar
+        // distribution and the camera at the same pose — visually seamless.
+        // Threshold 0.95 (was 0.85) lets coalescence + camera sync almost
+        // fully complete before the swap.
+        if (smoothT > 0.95 && !nebulaSwitchDispatched) {
           nebulaSwitchDispatched = true;
           if (typeof window !== 'undefined') {
             window.dispatchEvent(new CustomEvent('prism-preset', { detail: 'nebula' }));

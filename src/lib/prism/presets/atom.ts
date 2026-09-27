@@ -155,7 +155,10 @@ export function buildAtom(ctx: BuilderCtx): WorldAPI {
     electron.userData.orbitBody = true;
     electron.userData.homeShell = si;
     const angle = (si / SHELLS.length) * Math.PI * 2 + 0.4;
-    world.add(electron);
+    // Add electron to the shellGroup (not world) so it inherits the 3D
+    // orientation — the orbit runs in local XZ, but the group's rotation
+    // tilts it into 3D space.
+    shellGroup.add(electron);
     grabbables.push(electron);
     orbits.register(electron, shell.radius, angle, shell.period);
     lastShell.set(electron, si);

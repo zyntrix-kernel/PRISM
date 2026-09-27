@@ -312,7 +312,7 @@ export class PrismScene {
   private starMat!: THREE.ShaderMaterial;
   private readonly composer: EffectComposer;
   private readonly caPass: ShaderPass;
-  private readonly grainPass: ShaderPass;
+  // grainPass removed (animated hash noise read as TV static over the scene).
   private readonly glowTex: THREE.Texture;
   private readonly nebulaTex: THREE.Texture;
   private readonly planetTex: PlanetTextureSet;
@@ -431,14 +431,11 @@ export class PrismScene {
     this.composer.addPass(bloom);
     this.caPass = new ShaderPass(CA_VIGNETTE_SHADER);
     this.composer.addPass(this.caPass);
-    this.grainPass = new ShaderPass(FILM_GRAIN_SHADER);
-    this.composer.addPass(this.grainPass);
     this.composer.addPass(new OutputPass());
-    // Seed the grain pass resolution so the first frame isn't a uniform default.
-    (this.grainPass.material as THREE.ShaderMaterial).uniforms.uResolution.value.set(
-      container.clientWidth,
-      container.clientHeight,
-    );
+    // NOTE: the FILM_GRAIN_SHADER pass was removed — its per-pixel hash noise
+    // animated every frame and read as 'TV static covering the whole 3D scene'
+    // even at uAmount = 0.04. Not premium; just noisy. The vignette in CA_VIGNETTE
+    // is enough cinematic depth.
 
     this.loadPreset(preset);
   }
@@ -559,9 +556,6 @@ export class PrismScene {
     this.camera.updateProjectionMatrix();
     this.renderer.setSize(width, height);
     this.composer.setSize(width, height);
-    // Film grain hash is seeded by pixel position; update the resolution so
-    // the noise pattern scales with viewport, not pixel count.
-    (this.grainPass.material as THREE.ShaderMaterial).uniforms.uResolution.value.set(width, height);
   }
 
   /**
@@ -718,12 +712,9 @@ export class PrismScene {
     this.rig.update(dt, this.camera);
     this.api?.update(dt, elapsed);
     this.cursor.rotation.y += dt * 2.2;
-    // Drive per-frame shader uniforms. Starfield twinkle + grain noise need
-    // elapsed time (seconds, monotonically increasing). Both run on every
-    // tier — the starfield is always rendered; grain is only sampled when
-    // the composer renders (high/ultra) but updating the uniform is free.
+    // Drive per-frame shader uniforms. Starfield twinkle needs elapsed time
+    // (seconds, monotonically increasing). Runs on every tier.
     this.starMat.uniforms.uTime.value = elapsed;
-    (this.grainPass.material as THREE.ShaderMaterial).uniforms.uTime.value = elapsed;
   }
 
   render(): void {
@@ -750,7 +741,6 @@ export class PrismScene {
     this.starMat?.dispose();
     // Free the fullscreen-quad shader materials backing the post passes.
     (this.caPass?.material as THREE.ShaderMaterial | undefined)?.dispose();
-    (this.grainPass?.material as THREE.ShaderMaterial | undefined)?.dispose();
     this.composer?.dispose();
     this.renderer.dispose();
   }

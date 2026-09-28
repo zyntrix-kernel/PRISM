@@ -79,9 +79,9 @@ export const PrismConfig = {
     // more responsive to hand movement). Was 0.3 (floaty/disconnected);
     // bumped to 0.55 so grabbed objects feel glued to the fingertip.
     grabSmoothing: 0.55,
-    // Two-hand zoom sensitivity. Lower = more hand movement needed = finer
-    // control. 1.5 = medium power — hands apart 50% = camera 33% closer.
-    zoomSpeed: 1.5,
+    // Two-hand zoom sensitivity. 2.5 = strong — hands apart 50% = camera
+    // 62% closer. Hands together 50% = camera 177% further (zoom out).
+    zoomSpeed: 2.5,
     // Two-hand twist sensitivity (radians of scene rotation per radian).
     rotateSpeed: 0.8,
     worldScaleMin: 0.4,
@@ -109,8 +109,8 @@ export const PrismConfig = {
     orbitSpeed: 0.0052, // radians per pixel of drag
     panSpeed: 0.004,
     zoomFactor: 0.0012, // exponential dolly per wheel delta
-    minDistance: 4,
-    maxDistance: 120,
+    minDistance: 2,    // was 4 — allow zooming in closer
+    maxDistance: 200,  // was 120 — allow zooming out further
     autoRotateSpeed: 0.22, // rad/s when auto-orbit is on (O key)
     // Performance: the rig update is cheap but the renderer is the bottleneck.
     // These are just camera constants; perf is controlled by quality tiers.

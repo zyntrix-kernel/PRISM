@@ -43,8 +43,28 @@ export class HandTracker {
   pumpErrorCount = 0;
   lastPumpError = '';
 
-  /** Loads wasm + model. Must be called before start(). */
+  /** Loads wasm + model. Must be called before start().
+   *  IDEMPOTENT: if already loaded (or currently loading), returns the
+   *  existing promise instead of starting a duplicate load. This prevents
+   *  the preload + ensureTracking race that caused "stuck on starting hand
+   *  tracking" (two concurrent init() calls deadlocking). */
+  private initPromise: Promise<void> | null = null;
   async init(onProgress: (msg: string) => void): Promise<void> {
+    // Already loaded? Skip.
+    if (this.landmarker) return;
+    // Currently loading? Return the existing promise (don't start a 2nd load).
+    if (this.initPromise) return this.initPromise;
+    this.initPromise = this.doInit(onProgress);
+    try {
+      await this.initPromise;
+    } finally {
+      // Keep the promise so concurrent callers can await it, but allow
+      // a retry if init failed (landmarker is still null).
+      if (!this.landmarker) this.initPromise = null;
+    }
+  }
+
+  private async doInit(onProgress: (msg: string) => void): Promise<void> {
     onProgress('Loading vision runtime…');
     const wasmUrls = [PrismConfig.tracking.wasmUrl, PrismConfig.tracking.cdnWasmUrl].filter(
       (u, i, all) => u && all.indexOf(u) === i,

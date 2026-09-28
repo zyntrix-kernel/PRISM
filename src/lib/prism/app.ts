@@ -438,7 +438,16 @@ export class PrismApp {
 
   private async ensureTracking(): Promise<void> {
     if (!this.cameraHandle || this.tracker.isReady) return;
-    await this.tracker.init((m) => this.setStatus(m));
+    this.setStatus('Loading hand-tracking model…');
+    try {
+      await this.tracker.init((m) => this.setStatus(m));
+    } catch (err) {
+      const full = err instanceof Error ? err.message : String(err);
+      this.setStatus('Tracking unavailable — mouse active', full);
+      this.toast(`Tracking init failed: ${full.substring(0, 100)}`, 'warn');
+      return;
+    }
+    if (!this.tracker.isReady) return; // init failed silently
     this.tracker.start(this.el.video);
     const handle = this.cameraHandle;
     this.setStatus(`Tracking ${handle.width}×${handle.height} · point to move, pinch to grab.`);

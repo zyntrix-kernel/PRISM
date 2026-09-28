@@ -80,8 +80,8 @@ export const PrismConfig = {
     // bumped to 0.55 so grabbed objects feel glued to the fingertip.
     grabSmoothing: 0.55,
     // Two-hand zoom sensitivity. Lower = more hand movement needed = finer
-    // control. 1.0 maps 1:1 (hands double apart = camera half the distance).
-    zoomSpeed: 1.0,
+    // control. 1.5 = medium power — hands apart 50% = camera 33% closer.
+    zoomSpeed: 1.5,
     // Two-hand twist sensitivity (radians of scene rotation per radian).
     rotateSpeed: 0.8,
     worldScaleMin: 0.4,

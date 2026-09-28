@@ -164,8 +164,23 @@ export class PrismApp {
       this.observer.setEnabled(true);
       this.syncAiButton();
     }
-    void this.bootVision();
+    // PRELOAD the hand-tracking model in the background so the first
+    // detection is instant. The WASM + model file (~8MB) loads from CDN
+    // while the user is on the onboarding screen — by the time they click
+    // "Enable camera", the model is ready and detection starts immediately.
+    // The camera prompt still requires a user gesture, so we preload only
+    // the model, not the camera.
+    void this.preloadModel();
     this.emit();
+  }
+
+  /** Preloads the hand-tracking WASM + model in the background. */
+  private async preloadModel(): Promise<void> {
+    try {
+      await this.tracker.init((m) => this.setStatus(m));
+    } catch {
+      // Will retry on camera enable.
+    }
   }
 
   // ---- public API -------------------------------------------------------

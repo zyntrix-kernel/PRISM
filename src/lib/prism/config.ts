@@ -58,13 +58,13 @@ export const PrismConfig = {
     // Adaptive hand pointer: the filter measures tracking fps + undirected
     // noise online and retunes itself. Premium tuning = HEAVY smoothing.
     pointerAdaptive: {
-      maxSpeed: 3.0,       // was 3.5 — slightly tighter gate
-      slowCutoff: 0.10,    // ULTRA-HEAVY rest smoothing (kills all idle jitter)
-      fastCutoff: 1.2,     // heavy at high fps too
-      betaBase: 0.03,      // minimal speed-opening (no twitchiness)
-      betaRate: 0.02,      // minimal extra opening
-      maxLeadSec: 0.06,    // very short prediction (no overshoot)
-      maxLeadDist: 0.018,  // very tight cap (no fling)
+      maxSpeed: 3.5,       // standard gate
+      slowCutoff: 0.20,    // heavy rest smoothing but not extreme (was 0.10 — too laggy)
+      fastCutoff: 2.0,     // responsive at high fps (was 1.2 — too heavy)
+      betaBase: 0.05,      // moderate speed-opening (was 0.03 — too sluggish)
+      betaRate: 0.04,      // moderate extra opening
+      maxLeadSec: 0.08,    // moderate prediction (was 0.06 — felt disconnected)
+      maxLeadDist: 0.030,  // moderate cap (was 0.018 — too tight, felt laggy)
     },
     // Grabbed-object follow: higher = tighter (glued to fingertip).
     // 0.65 = responsive but still smooth (not robotic).

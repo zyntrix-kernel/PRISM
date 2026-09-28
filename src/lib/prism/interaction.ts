@@ -376,9 +376,21 @@ export class InteractionController {
     return { x: this.tmpLocal.x, z: this.tmpLocal.z };
   }
 
-  /** Landmark x is unmirrored camera space; the selfie view needs a flip. */
+  /** Landmark x is unmirrored camera space; the selfie view needs a flip.
+   *  Maps the hand's normalized [0..1] position to NDC [-1..+1].
+   *  The hand doesn't need to reach the screen edge — we map the useful
+   *  central region [0.15..0.85] to full NDC range so small hand movements
+   *  cover the whole screen. This feels more natural — you don't have to
+   *  stretch your arm to reach the corners. */
   private toNdc(lm: Landmark): { x: number; y: number } {
-    return { x: 1 - lm.x * 2, y: -(lm.y * 2 - 1) };
+    // Remap the central 70% of camera space to full NDC.
+    // x: 0.15 → +1.0 (right edge), 0.85 → -1.0 (left edge), flipped for selfie.
+    const remapX = (lm.x - 0.15) / (0.85 - 0.15); // 0..1 across the useful range
+    const remapY = (lm.y - 0.15) / (0.85 - 0.15);
+    return {
+      x: 1 - Math.max(0, Math.min(1, remapX)) * 2,
+      y: -(Math.max(0, Math.min(1, remapY)) * 2 - 1),
+    };
   }
 
   update(dt: number, frame: HandFrame | null): void {
@@ -416,25 +428,16 @@ export class InteractionController {
       }
     }
 
-    // ── RENDER-RATE POINTER SMOOTHING (triple-pass for ultra-premium feel) ──
+    // ── RENDER-RATE POINTER SMOOTHING (single smooth pass) ─────────────
     // The tracking loop sets pointerTarget at 10fps. The render loop runs at
-    // 60fps. Chase the target with a TRIPLE exponential lerp so the cursor
-    // moves buttery-smooth at 60fps even when tracking is at 10fps.
-    //
-    // The triple-pass cascades 3 exponential filters, each at a different
-    // rate. This produces a critically-damped response — fast initial
-    // movement toward the target, then smooth settle. No jitter, no lag.
+    // 60fps. Chase the target with a single exponential lerp — heavy enough
+    // to kill jitter, light enough to feel responsive (no lag).
+    // Rate 18 = ~26% per frame at 60fps — the cursor follows the hand with
+    // just enough smoothing to be buttery but not laggy.
     if (this.mode === 'hand') {
-      // Pass 1: fast initial chase (rate 25 = ~34% per frame)
-      const d1 = 1 - Math.exp(-25 * dt);
-      // Pass 2: medium smoothing (rate 10 = ~15% per frame)
-      const d2 = 1 - Math.exp(-10 * dt);
-      // Pass 3: slow settle (rate 5 = ~8% per frame)
-      const d3 = 1 - Math.exp(-5 * dt);
-      // Combined: the product gives a critically-damped response.
-      const combined = d1 * d2 * d3;
-      this.pointerNdc.x += (this.pointerTarget.x - this.pointerNdc.x) * combined;
-      this.pointerNdc.y += (this.pointerTarget.y - this.pointerNdc.y) * combined;
+      const damp = 1 - Math.exp(-18 * dt);
+      this.pointerNdc.x += (this.pointerTarget.x - this.pointerNdc.x) * damp;
+      this.pointerNdc.y += (this.pointerTarget.y - this.pointerNdc.y) * damp;
     }
 
     // Unified action edges (hand pinch or non-orbit mouse hold / click).

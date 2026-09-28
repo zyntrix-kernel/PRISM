@@ -1,0 +1,882 @@
+     1→"use client";
+     2→
+     3→import { useEffect, useRef, useState } from "react";
+     4→import { PrismApp, type PrismState } from "@/lib/prism/app";
+     5→import "@/lib/prism/prism.css";
+     6→import CommandPalette from "./CommandPalette";
+     7→import ShortcutLegend from "./ShortcutLegend";
+     8→import PresetTransitionOverlay from "./PresetTransitionOverlay";
+     9→import InputModeIndicator from "./InputModeIndicator";
+    10→import PrismToast from "./PrismToast";
+    11→import SettingsPanel from "./SettingsPanel";
+    12→import {
+    13→  Camera,
+    14→  Eye,
+    15→  Hand,
+    16→  Activity,
+    17→  HelpCircle,
+    18→  Bug,
+    19→  Sparkles,
+    20→  Cpu,
+    21→  Gauge,
+    22→  X,
+    23→  Check,
+    24→  ChevronRight,
+    25→  ChevronDown,
+    26→  Command,
+    27→  Zap,
+    28→  Orbit,
+    29→  Boxes,
+    30→  Circle as CircleIcon,
+    31→  Disc,
+    32→  Car,
+    33→  Atom,
+    34→  Grid3x3,
+    35→  Crosshair,
+    36→  Sun,
+    37→  Cloud,
+    38→  type LucideIcon,
+    39→} from "lucide-react";
+    40→
+    41→const PRESET_VISUALS: Record<
+    42→  string,
+    43→  { icon: LucideIcon; hue: string; blurb: string }
+    44→> = {
+    45→  space: { icon: Orbit, hue: "154, 220, 255", blurb: "Keplerian solar system" },
+    46→  blocks: { icon: Boxes, hue: "255, 179, 217", blurb: "Voxel stacking rig" },
+    47→  test: { icon: CircleIcon, hue: "201, 184, 255", blurb: "3-orb calibration" },
+    48→  singularity: { icon: Disc, hue: "255, 214, 170", blurb: "Accretion disk + jets" },
+    49→  drive: { icon: Car, hue: "143, 245, 180", blurb: "Neon circuit arcade" },
+    50→  atom: { icon: Atom, hue: "154, 220, 255", blurb: "Bohr model photon lab" },
+    51→  voxel: { icon: Grid3x3, hue: "255, 207, 92", blurb: "Place & break blocks" },
+    52→  gun: { icon: Crosshair, hue: "125, 211, 252", blurb: "Target shooting range" },
+    53→  supernova: { icon: Sun, hue: "255, 170, 68", blurb: "Stellar explosion" },
+    54→  nebula: { icon: Cloud, hue: "165, 180, 252", blurb: "Living gas cloud" },
+    55→};
+    56→
+    57→export default function PrismStage() {
+    58→  const rootRef = useRef<HTMLDivElement>(null);
+    59→  const containerRef = useRef<HTMLDivElement>(null);
+    60→  const videoRef = useRef<HTMLVideoElement>(null);
+    61→  const overlayRef = useRef<HTMLCanvasElement>(null);
+    62→  const appRef = useRef<PrismApp | null>(null);
+    63→
+    64→  // Stable refs to all HUD elements (imperative engine writes to these)
+    65→  const els = useRef<Record<string, HTMLElement | null>>({});
+    66→  const setEl = (key: string) => (e: HTMLElement | null) => {
+    67→    els.current[key] = e;
+    68→  };
+    69→
+    70→  const [state, setState] = useState<PrismState | null>(null);
+    71→  const [app, setApp] = useState<PrismApp | null>(null);
+    72→  const [presetOpen, setPresetOpen] = useState(false);
+    73→  const [paletteOpen, setPaletteOpen] = useState(false);
+    74→  const [cmdOpen, setCmdOpen] = useState(false);
+    75→  const [onboardMin, setOnboardMin] = useState(false);
+    76→
+    77→  // Cmd/Ctrl + K opens the command palette
+    78→  useEffect(() => {
+    79→    const onKey = (e: KeyboardEvent) => {
+    80→      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
+    81→        e.preventDefault();
+    82→        setCmdOpen((v) => !v);
+    83→      }
+    84→    };
+    85→    window.addEventListener("keydown", onKey);
+    86→    return () => window.removeEventListener("keydown", onKey);
+    87→  }, []);
+    88→
+    89→  useEffect(() => {
+    90→    const container = containerRef.current;
+    91→    const video = videoRef.current;
+    92→    const overlay = overlayRef.current;
+    93→    if (!container || !video || !overlay) return;
+    94→
+    95→    const e = els.current;
+    96→    const elements = {
+    97→      container,
+    98→      video,
+    99→      overlay,
+   100→      status: e.status!,
+   101→      cameraBtn: e.cameraBtn as HTMLButtonElement,
+   102→      qualitySel: e.qualitySel as HTMLSelectElement,
+   103→      presetSel: e.presetSel as HTMLSelectElement,
+   104→      debugBtn: e.debugBtn as HTMLButtonElement,
+   105→      helpBtn: e.helpBtn as HTMLButtonElement,
+   106→      helpCard: e.helpCard!,
+   107→      helpClose: e.helpClose as HTMLButtonElement,
+   108→      debugEl: e.debug!,
+   109→      planetInfo: e.planetInfo!,
+   110→      easyBtn: e.easyBtn as HTMLButtonElement,
+   111→      aiBtn: e.aiBtn as HTMLButtonElement,
+   112→      palette: e.palette!,
+   113→      coach: e.coach!,
+   114→      rail: {
+   115→        cam: e.railCam,
+   116→        hands: e.railHands,
+   117→        gesture: e.railGesture,
+   118→        fps: e.railFps,
+   119→      },
+   120→      onboard: e.onboard!,
+   121→      onboardClose: e.onboardClose as HTMLButtonElement,
+   122→      onboardHelp: e.onboardHelp as HTMLButtonElement,
+   123→    };
+   124→
+   125→    const app = new PrismApp(elements);
+   126→    appRef.current = app;
+   127→    setApp(app);
+   128→    const unsub = app.subscribe(setState);
+   129→    app.start();
+   130→
+   131→    return () => {
+   132→      unsub();
+   133→      app.dispose();
+   134→      appRef.current = null;
+   135→      setApp(null);
+   136→    };
+   137→  }, []);
+   138→
+   139→  const preset = state?.preset ?? "space";
+   140→  const quality = state?.quality ?? "auto";
+   141→
+   142→  // Track whether any modal is open → dim the 3D scene for focus.
+   143→  // cmdOpen is local state; settings/help are checked via DOM query.
+   144→  const [modalOpen, setModalOpen] = useState(false);
+   145→  useEffect(() => {
+   146→    const check = () => {
+   147→      const helpOpen = !document.querySelector("#prism-help")?.classList.contains("hidden");
+   148→      const settingsOpen = !!document.querySelector('[aria-label="Settings"]')?.getAttribute("aria-expanded") === "true";
+   149→      setModalOpen(cmdOpen || helpOpen || settingsOpen);
+   150→    };
+   151→    check();
+   152→    const interval = setInterval(check, 200);
+   153→    return () => clearInterval(interval);
+   154→  }, [cmdOpen]);
+   155→
+   156→  return (
+   157→    <div className="prism-root" ref={rootRef}>
+   158→      {/* Preset-switch transition overlay (dreamy radial flash on world change) */}
+   159→      <PresetTransitionOverlay key={preset} preset={preset} />
+   160→
+   161→      {/* Ambient backdrop dim when a modal is open (focus management).
+   162→          pointer-events: ALWAYS none — the backdrop must never block clicks
+   163→          to the HUD behind it. It's purely visual. */}
+   164→      <div
+   165→        className="prism-modal-backdrop"
+   166→        aria-hidden="true"
+   167→        style={{
+   168→          opacity: modalOpen ? 1 : 0,
+   169→          pointerEvents: "none",
+   170→        }}
+   171→      />
+   172→
+   173→      {/* Toast notifications (action feedback) */}
+   174→      <PrismToast />
+   175→
+   176→      {/* Atmospheric layers — depth below everything.
+   177→          NOTE: prism-grain and prism-vignette CSS overlays were REMOVED.
+   178→          Film grain + vignette are now handled GPU-side by the post-processing
+   179→          pipeline (animated, resolution-aware, in scene.ts). The old CSS
+   180→          versions were STATIC and sat on top of the canvas as a frozen noise
+   181→          texture + dark gradient — they were the "static thing covering the
+   182→          whole three.js" the user reported. */}
+   183→      <div className="prism-atmosphere" aria-hidden="true">
+   184→        <div className="prism-orb prism-orb-a" />
+   185→        <div className="prism-orb prism-orb-b" />
+   186→        <div className="prism-orb prism-orb-c" />
+   187→      </div>
+   188→
+   189→      {/* ParallaxDepthLayer REMOVED — it was a CSS/DOM 2D starfield that sat
+   190→          behind the canvas (z-index 2 < canvas z-index 3). On presets with a
+   191→          transparent canvas (background: 'nebula' → scene.background = null),
+   192→          the CSS stars showed THROUGH the canvas as a frozen 2D layer that
+   193→          doesn't move with the 3D camera — the "static thing covering the
+   194→          whole three.js". The 3D scene now has its own GPU-twinkling
+   195→          starfield (scene.ts STAR_VERTEX/STAR_FRAGMENT shader) that lives in
+   196→          real 3D space and moves correctly with the camera. */}
+   197→
+   198→      {/* 3D scene */}
+   199→      <main
+   200→        id="prism-scene"
+   201→        className="prism-scene"
+   202→        ref={containerRef}
+   203→        aria-label="Interactive 3D scene"
+   204→      />
+   205→
+   206→      {/* Mirrored webcam preview + hand skeleton overlay */}
+   207→      <video id="prism-webcam" autoPlay playsInline muted ref={videoRef} aria-label="Webcam preview for hand tracking" />
+   208→      <canvas id="prism-landmark-overlay" ref={overlayRef} />
+   209→
+   210→      {/* Webcam off-state placeholder — shows ZYNASH LABS logo, hides when live */}
+   211→      {!state?.cameraOn && (
+   212→        <div id="prism-webcam-frame" aria-hidden="true">
+   213→          <div className="prism-webcam-placeholder">
+   214→            <img
+   215→              src="/zynash-logo.png"
+   216→              alt="ZYNASH LABS"
+   217→              className="prism-wcam-logo"
+   218→              style={{
+   219→                width: 72,
+   220→                height: 72,
+   221→                objectFit: "contain",
+   222→                marginBottom: 4,
+   223→                opacity: 0.9,
+   224→                filter: "drop-shadow(0 0 12px rgba(125, 211, 252, 0.3))",
+   225→              }}
+   226→            />
+   227→            <span className="prism-wcam-brand">ZYNASH LABS</span>
+   228→            <span className="prism-wcam-hint">Enable camera for hand tracking</span>
+   229→          </div>
+   230→        </div>
+   231→      )}
+   232→
+   233→      {/* ===== Top HUD — spatial control bar ===== */}
+   234→      <header id="prism-hud" className="prism-glass prism-glass-hover">
+   235→        <div id="prism-hud-title">
+   236→          <span className="prism-mark" aria-hidden="true" />
+   237→          <span className="prism-wordmark">PRISM</span>
+   238→        </div>
+   239→        <div
+   240→          id="prism-hud-status"
+   241→          ref={setEl("status")}
+   242→          role="status"
+   243→          aria-live="polite"
+   244→          style={{ display: "flex", alignItems: "center", gap: 8 }}
+   245→        >
+   246→          <span
+   247→            className="prism-status-dot"
+   248→            aria-hidden="true"
+   249→            style={{
+   250→              width: 7,
+   251→              height: 7,
+   252→              borderRadius: "50%",
+   253→              background: state?.cameraOn
+   254→                ? "var(--ok)"
+   255→                : state?.status && /fault|unavailable/i.test(state.status)
+   256→                  ? "var(--warn)"
+   257→                  : "var(--accent)",
+   258→              boxShadow: state?.cameraOn
+   259→                ? "0 0 8px rgba(143,245,180,0.8)"
+   260→                : "0 0 8px rgba(154,220,255,0.5)",
+   261→            }}
+   262→          />
+   263→          <span className="prism-status-text">Starting…</span>
+   264→        </div>
+   265→        <div id="prism-hud-controls">
+   266→          <button
+   267→            id="prism-btn-camera"
+   268→            type="button"
+   269→            ref={setEl("cameraBtn") as React.RefObject<HTMLButtonElement>}
+   270→            aria-label="Enable camera for hand tracking"
+   271→            className="prism-pressable"
+   272→          >
+   273→            <Camera size={14} style={{ marginRight: 6 }} />
+   274→            Enable camera
+   275→          </button>
+   276→
+   277→          {/* Preset picker — dreamy visual gallery */}
+   278→          <div style={{ position: "relative" }}>
+   279→            <button
+   280→              type="button"
+   281→              className={`prism-pressable ${presetOpen ? "active" : ""}`}
+   282→              onClick={() => setPresetOpen((v) => !v)}
+   283→              aria-label="Choose world preset"
+   284→              aria-expanded={presetOpen}
+   285→              style={{ display: "flex", alignItems: "center", gap: 7 }}
+   286→            >
+   287→              {(() => {
+   288→                const PIcon = PRESET_VISUALS[preset].icon;
+   289→                return (
+   290→                  <PIcon
+   291→                    size={14}
+   292→                    style={{ color: `rgb(${PRESET_VISUALS[preset].hue})` }}
+   293→                  />
+   294→                );
+   295→              })()}
+   296→              <span style={{ textTransform: "capitalize" }}>{preset}</span>
+   297→              <ChevronRight
+   298→                size={13}
+   299→                style={{
+   300→                  transform: presetOpen ? "rotate(90deg)" : "rotate(0deg)",
+   301→                  transition: "transform 140ms cubic-bezier(0.2,0,0,1)",
+   302→                }}
+   303→              />
+   304→            </button>
+   305→            {presetOpen && (
+   306→              <PresetGallery
+   307→                current={preset}
+   308→                onPick={(id) => {
+   309→                  app?.setPreset(id as PrismState["preset"]);
+   310→                  setPresetOpen(false);
+   311→                }}
+   312→                onClose={() => setPresetOpen(false)}
+   313→              />
+   314→            )}
+   315→          </div>
+   316→
+   317→          {/* Detonate button — only visible in the singularity preset.
+   318→              Triggers the cinematic blackhole detonation sequence. */}
+   319→          {preset === "singularity" && (
+   320→            <button
+   321→              type="button"
+   322→              onClick={() => {
+   323→                window.dispatchEvent(new CustomEvent("prism-detonate"));
+   324→                window.__prismToast?.({
+   325→                  message: "Singularity destabilizing…",
+   326→                  kind: "warn",
+   327→                });
+   328→              }}
+   329→              title="Trigger the cinematic detonation (B)"
+   330→              aria-label="Detonate black hole"
+   331→              className="prism-pressable"
+   332→              style={{
+   333→                display: "flex",
+   334→                alignItems: "center",
+   335→                gap: 6,
+   336→                background: "linear-gradient(135deg, rgba(255,154,165,0.2), rgba(255,207,92,0.16))",
+   337→                borderColor: "rgba(255,154,165,0.5)",
+   338→                animation: "prism-invite-pulse 2.5s ease-in-out infinite",
+   339→              }}
+   340→            >
+   341→              <Zap size={13} style={{ color: "var(--pink-deep)" }} />
+   342→              <span style={{ fontWeight: 700, letterSpacing: 0.5 }}>Detonate</span>
+   343→            </button>
+   344→          )}
+   345→
+   346→          {/* Hidden native select kept in sync for the engine's change events */}
+   347→          <select
+   348→            id="prism-sel-preset"
+   349→            ref={setEl("presetSel") as React.RefObject<HTMLSelectElement>}
+   350→            title="World preset (keys 1-7)"
+   351→            aria-label="World preset"
+   352→            style={{ position: "absolute", opacity: 0, pointerEvents: "none", width: 1, height: 1 }}
+   353→          />
+   354→
+   355→          <button
+   356→            id="prism-btn-easy"
+   357→            type="button"
+   358→            ref={setEl("easyBtn") as React.RefObject<HTMLButtonElement>}
+   359→            className="hidden"
+   360→            title="Easy point-and-go mode (E)"
+   361→            aria-label="Toggle easy point-and-go driving"
+   362→          />
+   363→
+   364→          {/* Premium separator between primary actions and utility group */}
+   365→          <span className="prism-btn-sep" aria-hidden="true" />
+   366→
+   367→          {/* Settings gear — opens drawer with Debug/AI/Quality/Easy */}
+   368→          <SettingsPanel state={state} app={app} />
+   369→
+   370→          {/* Hidden native engine buttons (kept for keyboard-shortcut compat) */}
+   371→          <select
+   372→            id="prism-sel-quality"
+   373→            ref={setEl("qualitySel") as React.RefObject<HTMLSelectElement>}
+   374→            title="Render quality"
+   375→            aria-label="Render quality"
+   376→            defaultValue="auto"
+   377→            style={{ position: "absolute", opacity: 0, pointerEvents: "none", width: 1, height: 1 }}
+   378→          >
+   379→            <option value="ultra">Ultra</option>
+   380→            <option value="high">High</option>
+   381→            <option value="medium">Medium</option>
+   382→            <option value="low">Low</option>
+   383→            <option value="auto">Auto</option>
+   384→          </select>
+   385→          <button
+   386→            id="prism-btn-debug"
+   387→            type="button"
+   388→            ref={setEl("debugBtn") as React.RefObject<HTMLButtonElement>}
+   389→            title="Toggle debug overlay (D)"
+   390→            aria-label="Toggle debug overlay"
+   391→            className={state?.debugVisible ? "active" : ""}
+   392→            style={{ position: "absolute", opacity: 0, pointerEvents: "none", width: 1, height: 1 }}
+   393→          >
+   394→            Debug
+   395→          </button>
+   396→          <button
+   397→            id="prism-btn-ai"
+   398→            type="button"
+   399→            ref={setEl("aiBtn") as React.RefObject<HTMLButtonElement>}
+   400→            title="AI observer: watches the camera with FastVLM (off by default)"
+   401→            aria-label="Toggle AI observer"
+   402→            className={state?.aiEnabled ? "active" : ""}
+   403→            style={{ position: "absolute", opacity: 0, pointerEvents: "none", width: 1, height: 1 }}
+   404→          >
+   405→            AI
+   406→          </button>
+   407→          <button
+   408→            id="prism-btn-help"
+   409→            type="button"
+   410→            ref={setEl("helpBtn") as React.RefObject<HTMLButtonElement>}
+   411→            title="Show help (H)"
+   412→            aria-label="Show help"
+   413→            className="prism-pressable"
+   414→            style={{ padding: "8px 10px" }}
+   415→          >
+   416→            <HelpCircle size={14} />
+   417→          </button>
+   418→          <button
+   419→            type="button"
+   420→            onClick={() => setCmdOpen(true)}
+   421→            title="Command palette (Cmd+K)"
+   422→            aria-label="Open command palette"
+   423→            className="prism-pressable"
+   424→            style={{
+   425→              display: "flex",
+   426→              alignItems: "center",
+   427→              gap: 6,
+   428→              padding: "6px 10px",
+   429→            }}
+   430→          >
+   431→            <Command size={13} />
+   432→            <kbd
+   433→              style={{
+   434→                fontFamily: "var(--font-mono)",
+   435→                fontSize: 10,
+   436→                color: "var(--hud-fg-dim)",
+   437→                background: "rgba(255,255,255,0.06)",
+   438→                border: "1px solid var(--glass-line)",
+   439→                borderRadius: 5,
+   440→                padding: "1px 5px",
+   441→              }}
+   442→            >
+   443→              ⌘K
+   444→            </kbd>
+   445→          </button>
+   446→        </div>
+   447→      </header>
+   448→
+   449→      {/* ===== Command palette (Cmd+K) — mounted fresh each open ===== */}
+   450→      {cmdOpen && (
+   451→        <CommandPalette
+   452→          onClose={() => setCmdOpen(false)}
+   453→          state={state}
+   454→          app={app}
+   455→        />
+   456→      )}
+   457→
+   458→      {/* ===== Debug overlay (engine-owned innerHTML) ===== */}
+   459→      <div id="prism-debug" className="prism-glass hidden" ref={setEl("debug")} />
+   460→
+   461→      {/* ===== Planet / body info ===== */}
+   462→      <div id="prism-planet-info" className="prism-glass hidden" ref={setEl("planetInfo")} />
+   463→
+   464→      {/* ===== Voxel palette ===== */}
+   465→      <div id="prism-voxel-palette" className="prism-glass hidden" ref={setEl("palette")} />
+   466→
+   467→      {/* ===== System rail — ambient awareness ===== */}
+   468→      <aside id="prism-sys-rail" className="prism-glass" aria-label="System status">
+   469→        <div className="prism-rail-header">System</div>
+   470→        <div className="prism-rail-item" id="prism-rail-cam" ref={setEl("railCam")}>
+   471→          <span className="dot" data-state="off" />
+   472→          <Camera size={12} className="prism-rail-icon" />
+   473→          <span className="txt">Camera off</span>
+   474→        </div>
+   475→        <div className="prism-rail-item" id="prism-rail-hands" ref={setEl("railHands")}>
+   476→          <span className="dot" data-state="off" />
+   477→          <Hand size={12} className="prism-rail-icon" />
+   478→          <span className="txt">No hands</span>
+   479→        </div>
+   480→        <div className="prism-rail-item" id="prism-rail-gesture" ref={setEl("railGesture")}>
+   481→          <span className="dot" data-state="off" />
+   482→          <Activity size={12} className="prism-rail-icon" />
+   483→          <span className="txt">—</span>
+   484→        </div>
+   485→        <div className="prism-rail-item" id="prism-rail-fps" ref={setEl("railFps")}>
+   486→          <span className="dot" data-state="on" />
+   487→          <Gauge size={12} className="prism-rail-icon" />
+   488→          <span className="txt">— fps</span>
+   489→        </div>
+   490→      </aside>
+   491→
+   492→      {/* ===== Coach pill ===== */}
+   493→      <div id="prism-coach" className="prism-glass hidden" role="status" ref={setEl("coach")}>
+   494→        <span className="prism-coach-icon" aria-hidden="true" />
+   495→        <span className="prism-coach-text" />
+   496→      </div>
+   497→
+   498→      {/* ===== Live input-mode + gesture indicator (morphing instrument) ===== */}
+   499→      <InputModeIndicator state={state} />
+   500→
+   501→      {/* ===== Onboarding ===== */}
+   502→      <aside
+   503→        id="prism-onboard"
+   504→        className="prism-glass hidden"
+   505→        aria-label="Getting started"
+   506→        ref={setEl("onboard")}
+   507→      >
+   508→        <div className="prism-onboard-header">
+   509→          <h2>Getting started</h2>
+   510→          <button
+   511→            type="button"
+   512→            className="prism-onboard-min"
+   513→            onClick={() => setOnboardMin((v) => !v)}
+   514→            aria-label={onboardMin ? "Expand onboarding" : "Minimize onboarding"}
+   515→            aria-expanded={!onboardMin}
+   516→            title={onboardMin ? "Expand" : "Minimize"}
+   517→          >
+   518→            <ChevronDown
+   519→              size={15}
+   520→              style={{
+   521→                transform: onboardMin ? "rotate(-90deg)" : "rotate(0deg)",
+   522→                transition: "transform 200ms cubic-bezier(0.2,0,0,1)",
+   523→              }}
+   524→            />
+   525→          </button>
+   526→        </div>
+   527→        {!onboardMin && (
+   528→          <>
+   529→            <p className="prism-onboard-sub">Complete these to get started.</p>
+   530→            <ol>
+   531→              <li data-step="camera">
+   532→                <span className="tick" />
+   533→                <span>Enable the camera</span>
+   534→              </li>
+   535→              <li data-step="hand">
+   536→                <span className="tick" />
+   537→                <span>Show your hand</span>
+   538→              </li>
+   539→              <li data-step="grab">
+   540→                <span className="tick" />
+   541→                <span>Pinch to grab</span>
+   542→              </li>
+   543→            </ol>
+   544→          </>
+   545→        )}
+   546→        {/* Dreamy progress bar — fills as onboarding steps complete */}
+   547→        <div className="prism-onboard-progress" aria-hidden="true">
+   548→          <div
+   549→            className="prism-onboard-progress-fill"
+   550→            style={{
+   551→              width: `${(state?.onboardSteps
+   552→                ? (Number(state.onboardSteps.camera) + Number(state.onboardSteps.hand) + Number(state.onboardSteps.grab)) / 3 * 100
+   553→                : 0)}%`,
+   554→            }}
+   555→          />
+   556→        </div>
+   557→        {!onboardMin && (
+   558→          <div className="row">
+   559→            <button id="prism-btn-onboard-close" type="button" ref={setEl("onboardClose") as React.RefObject<HTMLButtonElement>}>
+   560→              Dismiss
+   561→            </button>
+   562→            <button id="prism-btn-onboard-help" type="button" ref={setEl("onboardHelp") as React.RefObject<HTMLButtonElement>}>
+   563→              View guide
+   564→            </button>
+   565→          </div>
+   566→        )}
+   567→        <div className="celebrate hidden">Setup complete</div>
+   568→      </aside>
+   569→
+   570→      {/* ===== Help card ===== */}
+   571→      <div id="prism-help" className="hidden" ref={setEl("helpCard")}>
+   572→        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
+   573→          <h2 style={{ margin: 0 }}>How to interact — point + pinch</h2>
+   574→          <button
+   575→            type="button"
+   576→            onClick={() => app?.toggleHelp()}
+   577→            aria-label="Close help"
+   578→            style={{
+   579→              background: "transparent",
+   580→              border: "none",
+   581→              color: "var(--hud-fg-dim)",
+   582→              cursor: "pointer",
+   583→              padding: 4,
+   584→            }}
+   585→          >
+   586→            <X size={18} />
+   587→          </button>
+   588→        </div>
+   589→        <ul>
+   590→          <li><b>Point</b> your index finger to move the cursor. Near-misses snap to nearby bodies.</li>
+   591→          <li><b>Pinch</b> (thumb + index together) to grab the highlighted body. The ring cinches as the pinch closes — it grabs at full close.</li>
+   592→          <li><b>Move</b> while pinching to drag it, <b>release</b> to drop. Thresholds self-calibrate to your hand.</li>
+   593→          <li><b>Two-hand pinch:</b> move apart/together to zoom, twist to rotate.</li>
+   594→          <li><b>No camera?</b> Use the mouse: move to point, hold left button to grab.</li>
+   595→        </ul>
+   596→        <h2>Camera (mouse / keys)</h2>
+   597→        <ul>
+   598→          <li><b>Drag empty space</b> to orbit · <b>wheel</b> to zoom toward the cursor · <b>right-drag</b> to pan.</li>
+   599→          <li><b>Arrows</b> orbit · <b>+/-</b> zoom · <b>R</b> reset view · <b>X</b> reset world · <b>T</b> top · <b>F</b> edge · <b>V</b> overview · <b>O</b> auto-orbit · <b>H</b> this help.</li>
+   600→          <li><b>1–7</b> switch presets. <b>High</b> quality adds procedural planet textures + bloom glow.</li>
+   601→        </ul>
+   602→        <h2>Drive preset</h2>
+   603→        <ul>
+   604→          <li><b>Steer</b> with pointer left/right · <b>pinch-hold</b> = gas · release to coast · <b>Space</b> = brake.</li>
+   605→          <li><b>Easy mode</b> (button or <b>E</b>): point at the ground, <b>pinch</b> to drop a pin, <b>pinch</b> again to GO, <b>pinch</b> once more to stop.</li>
+   606→          <li>Stay inside the neon rails — the grass slows you down. Cross the start line for lap times.</li>
+   607→        </ul>
+   608→        <h2>Atom preset</h2>
+   609→        <ul>
+   610→          <li>Grab an <b>electron</b> and drop it on another shell (<b>n=1, 2, 3</b>).</li>
+   611→          <li>Dropping to a <b>lower</b> shell emits a photon flash labeled with its true wavelength (3→2 glows red at 656 nm).</li>
+   612→        </ul>
+   613→        <h2>Voxel preset</h2>
+   614→        <ul>
+   615→          <li><b>Tap</b> a pinch to place the selected block on the targeted face.</li>
+   616→          <li><b>Hold</b> the pinch to break the block (highlight reddens) — sliding off cancels. Bedrock never breaks.</li>
+   617→          <li>Pick blocks from the palette below, or press <b>Q</b>/<b>E</b> to cycle.</li>
+   618→        </ul>
+   619→        {/* Credits */}
+   620→        <div className="prism-credits">
+   621→          <div className="prism-credits-logo">
+   622→            <img src="/zynash-logo.png" alt="ZYNASH LABS" style={{ width: 28, height: 28, objectFit: "contain" }} />
+   623→            <span className="prism-credits-brand">ZYNASH LABS</span>
+   624→          </div>
+   625→          <p className="prism-credits-tagline">
+   626→            PRISM — Projected Reality Interaction &amp; Spatial Manipulation
+   627→          </p>
+   628→          <div className="prism-credits-team">
+   629→            <div className="prism-credit-row">
+   630→              <span className="prism-credit-name">Tanay Bhandari</span>
+   631→              <span className="prism-credit-handle">Zyntrix.krnl.sys</span>
+   632→            </div>
+   633→            <div className="prism-credit-row">
+   634→              <span className="prism-credit-name">Ashwin Nagaranjan Ramnath</span>
+   635→              <span className="prism-credit-handle">Ash Collector</span>
+   636→            </div>
+   637→          </div>
+   638→        </div>
+   639→        <button id="prism-btn-help-close" type="button" ref={setEl("helpClose") as React.RefObject<HTMLButtonElement>}>
+   640→          Close
+   641→        </button>
+   642→      </div>
+   643→
+   644→      <style>{`
+   645→        .prism-rail-icon {
+   646→          color: var(--hud-fg-faint);
+   647→          flex: none;
+   648→        }
+   649→      `}</style>
+   650→
+   651→      {/* Keyboard shortcut legend (bottom-left chip) */}
+   652→      <ShortcutLegend
+   653→        onPickPreset={(n) => {
+   654→          // Preset keys 1-7 map to PRESET_ORDER indices
+   655→          if (n >= 1 && n <= 7) {
+   656→            window.dispatchEvent(new KeyboardEvent("keydown", { key: String(n) }));
+   657→          }
+   658→        }}
+   659→      />
+   660→    </div>
+   661→  );
+   662→}
+   663→
+   664→/* ==========================================================================
+   665→   Preset gallery — dreamy visual picker
+   666→   ========================================================================== */
+   667→
+   668→function PresetGallery({
+   669→  current,
+   670→  onPick,
+   671→  onClose,
+   672→}: {
+   673→  current: string;
+   674→  onPick: (id: string) => void;
+   675→  onClose: () => void;
+   676→}) {
+   677→  const presets = Object.entries(PRESET_VISUALS);
+   678→  useEffect(() => {
+   679→    const onKey = (e: KeyboardEvent) => {
+   680→      if (e.key === "Escape") onClose();
+   681→    };
+   682→    window.addEventListener("keydown", onKey);
+   683→    return () => window.removeEventListener("keydown", onKey);
+   684→  }, [onClose]);
+   685→
+   686→  return (
+   687→    <>
+   688→      <div
+   689→        onClick={onClose}
+   690→        style={{ position: "fixed", inset: 0, zIndex: 30 }}
+   691→        aria-hidden="true"
+   692→      />
+   693→      <div
+   694→        className="prism-glass prism-glass-premium prism-dropdown-enter"
+   695→        style={{
+   696→          position: "absolute",
+   697→          top: "calc(100% + 8px)",
+   698→          right: 0,
+   699→          minWidth: 340,
+   700→          padding: 12,
+   701→          borderRadius: "var(--radius-lg)",
+   702→          zIndex: 31,
+   703→        }}
+   704→      >
+   705→        <div
+   706→          style={{
+   707→            display: "grid",
+   708→            gridTemplateColumns: "1fr 1fr",
+   709→            gap: 8,
+   710→          }}
+   711→        >
+   712→          {presets.map(([id, v]) => {
+   713→            const active = id === current;
+   714→            return (
+   715→              <button
+   716→                key={id}
+   717→                type="button"
+   718→                className="prism-preset-card"
+   719→                onClick={() => onPick(id)}
+   720→                style={{
+   721→                  background: active
+   722→                    ? `rgba(${v.hue}, 0.22)`
+   723→                    : undefined,
+   724→                  borderColor: active
+   725→                    ? `rgba(${v.hue}, 0.6)`
+   726→                    : undefined,
+   727→                  boxShadow: active
+   728→                    ? `0 0 16px rgba(${v.hue}, 0.35), inset 0 0.5px 0 rgba(255,255,255,0.06)`
+   729→                    : undefined,
+   730→                  // Pass the hue to the CSS accent bar via custom prop
+   731→                  "--accent-hue": `rgb(${v.hue})`,
+   732→                } as React.CSSProperties}
+   733→              >
+   734→                {/* Accent bar — preset signature color */}
+   735→                <span
+   736→                  className="prism-preset-accent-bar"
+   737→                  aria-hidden="true"
+   738→                  style={{
+   739→                    background: active
+   740→                      ? `rgb(${v.hue})`
+   741→                      : `linear-gradient(180deg, rgba(${v.hue}, 0.9), rgba(${v.hue}, 0))`,
+   742→                    opacity: active ? 1 : undefined,
+   743→                  }}
+   744→                />
+   745→                {(() => {
+   746→                  const GIcon = v.icon;
+   747→                  return (
+   748→                    <GIcon
+   749→                      size={22}
+   750→                      style={{
+   751→                        color: `rgb(${v.hue})`,
+   752→                        filter: `drop-shadow(0 0 8px rgba(${v.hue}, 0.6))`,
+   753→                      }}
+   754→                    />
+   755→                  );
+   756→                })()}
+   757→                <span
+   758→                  style={{
+   759→                    fontSize: 13,
+   760→                    fontWeight: 600,
+   761→                    textTransform: "capitalize",
+   762→                    letterSpacing: 0.2,
+   763→                  }}
+   764→                >
+   765→                  {id}
+   766→                </span>
+   767→                <span style={{ fontSize: 11, color: "var(--hud-fg-faint)", lineHeight: 1.4 }}>
+   768→                  {v.blurb}
+   769→                </span>
+   770→                {active && (
+   771→                  <Check
+   772→                    size={14}
+   773→                    style={{
+   774→                      position: "absolute",
+   775→                      top: 8,
+   776→                      right: 8,
+   777→                      color: `rgb(${v.hue})`,
+   778→                      filter: `drop-shadow(0 0 4px rgba(${v.hue}, 0.6))`,
+   779→                    }}
+   780→                  />
+   781→                )}
+   782→              </button>
+   783→            );
+   784→          })}
+   785→        </div>
+   786→      </div>
+   787→    </>
+   788→  );
+   789→}
+   790→
+   791→/* ==========================================================================
+   792→   Quality menu
+   793→   ========================================================================== */
+   794→
+   795→function QualityMenu({
+   796→  current,
+   797→  onPick,
+   798→  onClose,
+   799→}: {
+   800→  current: string;
+   801→  onPick: (q: string) => void;
+   802→  onClose: () => void;
+   803→}) {
+   804→  const tiers = [
+   805→    { id: "auto", label: "Auto", desc: "Probe device + adapt", icon: Cpu },
+   806→    { id: "ultra", label: "Ultra", desc: "3× pixel + full bloom", icon: Sparkles },
+   807→    { id: "high", label: "High", desc: "2× pixel + textures", icon: Eye },
+   808→    { id: "medium", label: "Medium", desc: "Balanced default", icon: Gauge },
+   809→    { id: "low", label: "Low", desc: "Flat colors, speed", icon: Activity },
+   810→  ];
+   811→  useEffect(() => {
+   812→    const onKey = (e: KeyboardEvent) => {
+   813→      if (e.key === "Escape") onClose();
+   814→    };
+   815→    window.addEventListener("keydown", onKey);
+   816→    return () => window.removeEventListener("keydown", onKey);
+   817→  }, [onClose]);
+   818→
+   819→  return (
+   820→    <>
+   821→      <div onClick={onClose} style={{ position: "fixed", inset: 0, zIndex: 30 }} aria-hidden="true" />
+   822→      <div
+   823→        className="prism-glass"
+   824→        style={{
+   825→          position: "absolute",
+   826→          top: "calc(100% + 8px)",
+   827→          right: 0,
+   828→          minWidth: 240,
+   829→          padding: 8,
+   830→          borderRadius: "var(--radius-lg)",
+   831→          zIndex: 31,
+   832→          animation: "prism-fade-in 140ms cubic-bezier(0.2,0,0,1)",
+   833→          display: "flex",
+   834→          flexDirection: "column",
+   835→          gap: 2,
+   836→        }}
+   837→      >
+   838→        {tiers.map((t) => {
+   839→          const active = t.id === current;
+   840→          const Icon = t.icon;
+   841→          return (
+   842→            <button
+   843→              key={t.id}
+   844→              type="button"
+   845→              onClick={() => onPick(t.id)}
+   846→              style={{
+   847→                display: "flex",
+   848→                alignItems: "center",
+   849→                gap: 10,
+   850→                padding: "8px 10px",
+   851→                background: active ? "var(--accent-soft)" : "transparent",
+   852→                border: "1px solid transparent",
+   853→                borderRadius: "var(--radius-sm)",
+   854→                cursor: "pointer",
+   855→                textAlign: "left",
+   856→                color: "var(--hud-fg)",
+   857→                fontFamily: "inherit",
+   858→                transition: "all 140ms cubic-bezier(0.2,0,0,1)",
+   859→              }}
+   860→              onMouseEnter={(e) => {
+   861→                if (!active)
+   862→                  (e.currentTarget as HTMLElement).style.background = "rgba(255,255,255,0.06)";
+   863→              }}
+   864→              onMouseLeave={(e) => {
+   865→                if (!active)
+   866→                  (e.currentTarget as HTMLElement).style.background = "transparent";
+   867→              }}
+   868→            >
+   869→              <Icon size={15} style={{ color: active ? "var(--accent)" : "var(--hud-fg-faint)" }} />
+   870→              <span style={{ display: "flex", flexDirection: "column", gap: 1 }}>
+   871→                <span style={{ fontSize: 13, fontWeight: 600 }}>{t.label}</span>
+   872→                <span style={{ fontSize: 11, color: "var(--hud-fg-faint)" }}>{t.desc}</span>
+   873→              </span>
+   874→              {active && <Check size={14} style={{ marginLeft: "auto", color: "var(--accent)" }} />}
+   875→            </button>
+   876→          );
+   877→        })}
+   878→      </div>
+   879→    </>
+   880→  );
+   881→}
+   882→

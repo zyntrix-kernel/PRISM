@@ -95,7 +95,7 @@ export default function SettingsPanel({ state, app }: Props) {
               zIndex: 36,
               display: "flex",
               flexDirection: "column",
-              borderLeft: "1px solid rgba(255, 255, 255, 0.08)",
+              borderLeft: "1px solid var(--glass-line-soft)",
               borderRadius: 0,
               borderRight: "none",
               borderTop: "none",
@@ -118,7 +118,7 @@ export default function SettingsPanel({ state, app }: Props) {
                 alignItems: "center",
                 justifyContent: "space-between",
                 padding: "16px 20px 14px",
-                borderBottom: "1px solid var(--glass-line)",
+                borderBottom: "1px solid var(--glass-line-soft)",
               }}
             >
               <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
@@ -261,7 +261,7 @@ export default function SettingsPanel({ state, app }: Props) {
             <div
               style={{
                 padding: "12px 20px",
-                borderTop: "1px solid var(--glass-line)",
+                borderTop: "1px solid var(--glass-line-soft)",
                 fontSize: 10,
                 color: "var(--hud-fg-faint)",
                 letterSpacing: 0.4,

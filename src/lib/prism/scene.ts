@@ -323,11 +323,17 @@ export class PrismScene {
     // Performance: request high-performance GPU adapter explicitly. This forces
     // the browser to use the discrete GPU on dual-GPU machines (common on laptops).
     // Use antialias only on high/ultra (MSAA is expensive; pixelRatio covers it on lower tiers).
+    // failIfMajorPerformanceCaveat:false so the renderer still initializes on
+    // software-rasterizers (SwiftShader/llvmpipe) and on tablets whose driver
+    // occasionally reports a "major performance caveat". Without this, WebGL
+    // context creation would throw on those devices and the whole app would
+    // crash on first paint — the FPS governor is the proper backstop instead.
     const useAA = quality === 'high' || quality === 'ultra';
     this.renderer = new THREE.WebGLRenderer({
       antialias: useAA,
       powerPreference: 'high-performance',
       stencil: false,
+      failIfMajorPerformanceCaveat: false,
     });
     this.renderer.setSize(container.clientWidth, container.clientHeight);
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
@@ -565,7 +571,12 @@ export class PrismScene {
    */
   private buildStarfield(): void {
     const tier = this.quality;
-    const count = tier === 'ultra' ? 1500 : tier === 'high' ? 1000 : tier === 'medium' ? 600 : 400;
+    // Star counts per tier. Lowered `medium` from 600 → 400 (and `low`
+    // 400 → 300) to save GPU on integrated graphics — each star is a
+    // point sprite with an additive blend, and 600 additive points on a
+    // medium-tier integrated GPU was a measurable fill-rate tax. Tablets
+    // run at `high` (1000 stars) where their GPUs eat it for breakfast.
+    const count = tier === 'ultra' ? 1500 : tier === 'high' ? 1000 : tier === 'medium' ? 400 : 300;
     const positions = new Float32Array(count * 3);
     const brightness = new Float32Array(count);
     const phase = new Float32Array(count);

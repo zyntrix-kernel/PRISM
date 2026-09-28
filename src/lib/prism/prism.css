@@ -30,8 +30,12 @@
   --glass-3: rgba(18, 18, 20, 0.88);
   --glass-card: rgba(44, 44, 46, 0.72);
   --glass-line: rgba(255, 255, 255, 0.1);
+  --glass-line-soft: rgba(255, 255, 255, 0.06);
   --glass-line-strong: rgba(10, 132, 255, 0.35);
   --glass-violet-line: rgba(255, 255, 255, 0.08);
+
+  /* Premium accent glow token — reusable for top borders, focus halos, active bars */
+  --accent-glow: rgba(10, 132, 255, 0.2);
 
   /* Premium glass recipe — top edge highlight + inner glow on hover +
      layered (ambient + key + rim) shadow for true depth. */
@@ -431,8 +435,8 @@ video#prism-webcam.live + #prism-webcam-frame .prism-webcam-placeholder {
    ========================================================================== */
 .prism-wordmark {
   font-weight: 600;
-  letter-spacing: 0.08em;
-  background: linear-gradient(180deg, #f5f5f7 0%, #d8d8dc 50%, #a0a0a8 100%);
+  letter-spacing: 0.1em;
+  background: linear-gradient(180deg, #ffffff 0%, #e8e8ec 35%, #b0b0b8 75%, #82828c 100%);
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
@@ -537,6 +541,21 @@ video#prism-webcam.live + #prism-webcam-frame .prism-webcam-placeholder {
   border-radius: var(--radius-lg);
   z-index: 12;
   animation: prism-hud-in 600ms var(--motion-ease) both;
+}
+
+/* Premium top-border glow — 1px accent line at 20% opacity, fades to transparent
+   on both ends for a soft halo above the HUD. */
+#prism-hud::before {
+  content: "";
+  position: absolute;
+  top: -1px;
+  left: 28px;
+  right: 28px;
+  height: 1px;
+  background: linear-gradient(90deg, transparent 0%, var(--accent-glow) 50%, transparent 100%);
+  pointer-events: none;
+  z-index: 1;
+  border-top: 0;
 }
 
 @keyframes prism-hud-in {
@@ -667,17 +686,37 @@ video#prism-webcam.live + #prism-webcam-frame .prism-webcam-placeholder {
   background: rgba(255, 255, 255, 0.06);
 }
 
-/* Active state — Apple accent blue fill */
+/* Active state — consistent Apple-HIG accent tint + accent border.
+   Used by every toggle button (settings, debug, preset picker, cmd).
+   The camera button overrides this with a solid fill for its "on" state
+   (primary action confirmation — see below). */
 #prism-hud-controls button.active {
+  background: var(--accent-soft);
+  color: var(--accent);
+  border-color: var(--accent);
+  font-weight: 600;
+  box-shadow: inset 0 0.5px 0 rgba(255, 255, 255, 0.1),
+    0 1px 3px rgba(0, 0, 0, 0.3), 0 0 12px rgba(10, 132, 255, 0.18);
+}
+
+#prism-hud-controls button.active:hover {
+  background: rgba(10, 132, 255, 0.22);
+  border-color: var(--accent);
+}
+
+/* Camera button — primary action "on" state keeps a solid accent fill
+   (Apple's primary-button pattern) so the user clearly sees the camera is live. */
+#prism-btn-camera.active {
   background: var(--accent);
   color: var(--accent-ink);
   border-color: var(--accent);
   font-weight: 600;
   box-shadow: inset 0 0.5px 0 rgba(255, 255, 255, 0.2),
-    0 1px 3px rgba(0, 0, 0, 0.3), 0 0 12px rgba(10, 132, 255, 0.3);
+    0 1px 3px rgba(0, 0, 0, 0.3), 0 0 16px rgba(10, 132, 255, 0.4);
+  animation: none;
 }
 
-#prism-hud-controls button.active:hover {
+#prism-btn-camera.active:hover {
   background: #0071e3;
   border-color: #0071e3;
 }
@@ -686,6 +725,35 @@ video#prism-webcam.live + #prism-webcam-frame .prism-webcam-placeholder {
   opacity: 0.4;
   cursor: wait;
   transform: none;
+}
+
+/* Loading-model shimmer — a gradient sweep across the camera button while
+   the vision pipeline is busy booting. Keeps the button readable (no dim)
+   and signals "work in progress" without a spinner. */
+#prism-btn-camera:disabled {
+  opacity: 0.95;
+  position: relative;
+  overflow: hidden;
+  cursor: progress;
+}
+#prism-btn-camera:disabled::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(110deg,
+    transparent 35%,
+    rgba(255, 255, 255, 0.22) 50%,
+    transparent 65%);
+  animation: prism-btn-shimmer 1.4s ease-in-out infinite;
+  pointer-events: none;
+}
+@keyframes prism-btn-shimmer {
+  0% {
+    transform: translateX(-120%);
+  }
+  100% {
+    transform: translateX(120%);
+  }
 }
 
 /* Premium focus ring — accent halo, not browser outline */
@@ -722,11 +790,21 @@ video#prism-webcam.live + #prism-webcam-frame .prism-webcam-placeholder {
   }
 }
 
-/* Camera enable button — subtle accent border when off, no pulse */
+/* Camera enable button — subtle accent border + breathing animation when off.
+   The breathing (scale 1.0 → 1.02 → 1.0, 3s) draws the eye without nagging. */
 #prism-btn-camera:not(.active):not(:disabled) {
   background: var(--accent-soft);
   border-color: var(--glass-line-strong);
   color: var(--accent);
+  animation: prism-btn-breathe 3s ease-in-out infinite;
+}
+@keyframes prism-btn-breathe {
+  0%, 100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.02);
+  }
 }
 
 @keyframes prism-invite-pulse {
@@ -1038,6 +1116,11 @@ video#prism-webcam.live + #prism-webcam-frame .prism-webcam-placeholder {
   overflow: hidden;
   animation: prism-onboard-in 500ms var(--motion-ease) both;
   animation-delay: 300ms;
+  /* Premium onboarding gradient — dark glass with a hint of accent at the top.
+     Reads as "Apple setup flow" rather than a debug panel. */
+  background:
+    radial-gradient(120% 80% at 50% 0%, rgba(10, 132, 255, 0.07) 0%, transparent 60%),
+    linear-gradient(165deg, var(--glass-2) 0%, var(--glass-3) 100%);
 }
 
 @keyframes prism-onboard-in {
@@ -1055,7 +1138,7 @@ video#prism-webcam.live + #prism-webcam-frame .prism-webcam-placeholder {
   margin: 0 0 6px;
   font-size: 15px;
   font-weight: 600;
-  letter-spacing: -0.2px;
+  letter-spacing: -0.3px;
   color: var(--hud-fg);
   text-shadow: none;
   text-transform: none;
@@ -1198,6 +1281,14 @@ video#prism-webcam.live + #prism-webcam-frame .prism-webcam-placeholder {
   gap: 8px;
   align-items: center;
   margin-top: 4px;
+}
+
+/* Premium onboarding action buttons — weight 600, tightened tracking. */
+#prism-onboard .row button,
+#prism-onboard button#prism-btn-onboard-close,
+#prism-onboard button#prism-btn-onboard-help {
+  font-weight: 600;
+  letter-spacing: -0.1px;
 }
 
 #prism-onboard button {
@@ -1691,11 +1782,11 @@ video#prism-webcam.live + #prism-webcam-frame .prism-webcam-placeholder {
 @keyframes prism-toast-in {
   from {
     opacity: 0;
-    transform: translateX(40px) scale(0.94);
+    transform: translateY(-14px) scale(0.94);
   }
   to {
     opacity: 1;
-    transform: translateX(0) scale(1);
+    transform: translateY(0) scale(1);
   }
 }
 
@@ -1720,12 +1811,12 @@ video#prism-webcam.live + #prism-webcam-frame .prism-webcam-placeholder {
 }
 @keyframes prism-mode-breathe-premium {
   0%, 100% {
-    opacity: 0.6;
+    opacity: 0.7;
     transform: scale(1);
   }
   50% {
     opacity: 0.9;
-    transform: scale(1.08);
+    transform: scale(1.06);
   }
 }
 .prism-mode-breathe-premium {

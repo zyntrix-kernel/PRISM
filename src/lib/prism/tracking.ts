@@ -7,6 +7,7 @@
 
 import { FilesetResolver, HandLandmarker } from '@mediapipe/tasks-vision';
 import { PrismConfig } from './config';
+import { isTabletDevice } from './device';
 import type { HandFrame, TrackedHand } from './types';
 
 async function resolveModelUrl(): Promise<{ url: string; offline: boolean }> {
@@ -130,24 +131,33 @@ export class HandTracker {
    *  The pointer filter + pinch coast smooth between samples, so 10fps
    *  tracking feels smooth to the user (no visible stutter).
    *
+   *  TABLET BOOST: tablets (iPad, Galaxy Tab S, Surface) have faster CPUs
+   *  than low-end exhibition PCs, so the loop runs at 15fps (66ms) on them.
+   *  Hand-tracking feels noticeably snappier — pinch/grab latency drops
+   *  from ~100ms to ~66ms — and the render loop still gets >50ms of
+   *  headroom per frame on a 60fps tablet. Override with `opts.intervalMs`.
+   *
    *  CRITICAL: this is setTimeout-based (NOT rAF) because detectForVideo
    *  blocks the main thread. If it ran in rAF, the render loop would freeze
    *  for the duration of each inference call. setTimeout lets the render
    *  loop (rAF) run between detections. */
-  start(video: HTMLVideoElement): void {
+  start(video: HTMLVideoElement, opts?: { intervalMs?: number }): void {
     if (!this.landmarker) throw new Error('HandTracker.start() called before init().');
     this.video = video;
     this.running = true;
     this.lastFrameAt = performance.now();
-    const TARGET_INTERVAL_MS = 100; // 10fps max detection rate
+    // Pick the throttle: explicit override → tablet interval → PC interval.
+    const TARGET_INTERVAL_MS =
+      opts?.intervalMs ??
+      (isTabletDevice() ? PrismConfig.tracking.tabletIntervalMs : PrismConfig.tracking.intervalMs);
     const loop = (): void => {
       if (!this.running) return;
       const t0 = performance.now();
       this.pump();
       const elapsed = performance.now() - t0;
-      // Wait the remaining time to hit 10fps. If inference took longer than
-      // 100ms, run immediately (wait=0) — the render loop got time during
-      // the setTimeout yield between detections.
+      // Wait the remaining time to hit the target rate. If inference took
+      // longer than the interval, run immediately (wait=0) — the render
+      // loop got time during the setTimeout yield between detections.
       const wait = Math.max(0, TARGET_INTERVAL_MS - elapsed);
       this.loopHandle = window.setTimeout(loop, wait) as unknown as number;
     };

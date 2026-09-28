@@ -1,0 +1,747 @@
+     1→     1→// PrismScene shell: renderer, camera rig, bloom composer, hand cursor,
+     2→     2→// preset loading. World content lives in src/presets/* behind WorldAPI.
+     3→     3→
+     4→     4→import * as THREE from 'three';
+     5→     5→import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+     6→     6→import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+     7→     7→import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+     8→     8→import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
+     9→     9→import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+    10→    10→import { PrismConfig, type QualityTier } from './config';
+    11→    11→import { pinchRingScale, setEmissiveBoost } from './highlight';
+    12→    12→import { buildAtom } from './presets/atom';
+    13→    13→import { buildBlocks } from './presets/blocks';
+    14→    14→import { buildDrive } from './presets/drive';
+    15→    15→import { buildSingularity } from './presets/singularity';
+    16→    16→import { buildVoxel } from './presets/voxel';
+    17→    17→import { buildSolar } from './presets/solar';
+    18→    18→import { buildTest } from './presets/test';
+    19→    19→import { buildGunGame } from './presets/gun';
+    20→    20→import { buildSupernova } from './presets/supernova';
+    21→    21→import { buildNebula } from './presets/nebula';
+    22→    22→import {
+    23→    23→  disposeGroup,
+    24→    24→  type PresetId,
+    25→    25→  type WorldAPI,
+    26→    26→  type WorldBuilder,
+    27→    27→  type WorldView,
+    28→    28→} from './presets/types';
+    29→    29→import { buildGlowTexture, buildNebulaTexture, buildPlanetTextures, type PlanetTextureSet } from './textures';
+    30→    30→
+    31→    31→export type CursorMode = 'hidden' | 'point' | 'hover' | 'pinch' | 'grab';
+    32→    32→
+    33→    33→// ─────────────────────────────────────────────────────────────────────────────
+    34→    34→// Premium shader-driven starfield.
+    35→    35→// Each star has its own brightness, twinkle phase/frequency, and stellar
+    36→    36→// classification color (blue / white / yellow-white / orange / red).
+    37→    37→// Vertex shader does perspective size attenuation; fragment shader renders
+    38→    38→// a soft circular point with smooth falloff + bright core.
+    39→    39→// ─────────────────────────────────────────────────────────────────────────────
+    40→    40→const STAR_VERTEX = /* glsl */ `
+    41→    41→  attribute float aBrightness;
+    42→    42→  attribute float aPhase;
+    43→    43→  attribute float aFreq;
+    44→    44→  attribute vec3 aColor;
+    45→    45→
+    46→    46→  uniform float uTime;
+    47→    47→  uniform float uPixelRatio;
+    48→    48→
+    49→    49→  varying float vBrightness;
+    50→    50→  varying vec3 vColor;
+    51→    51→
+    52→    52→  void main() {
+    53→    53→    vColor = aColor;
+    54→    54→    // Twinkle: base brightness modulated by a per-star sinusoid.
+    55→    55→    // Range stays in [0.4, 1.0] of base brightness — never fully extinguished.
+    56→    56→    float twinkle = 0.7 + 0.3 * sin(uTime * aFreq + aPhase);
+    57→    57→    vBrightness = aBrightness * twinkle;
+    58→    58→
+    59→    59→    vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
+    60→    60→    gl_Position = projectionMatrix * mvPosition;
+    61→    61→
+    62→    62→    // Size attenuation: closer stars render larger. Brighter stars render
+    63→    63→    // larger too — twinkling visibly grows the point as it peaks.
+    64→    64→    float baseSize = 1.6 + aBrightness * 4.2;
+    65→    65→    float dist = max(1.0, -mvPosition.z);
+    66→    66→    gl_PointSize = baseSize * uPixelRatio * (240.0 / dist);
+    67→    67→  }
+    68→    68→`;
+    69→    69→
+    70→    70→const STAR_FRAGMENT = /* glsl */ `
+    71→    71→  varying float vBrightness;
+    72→    72→  varying vec3 vColor;
+    73→    73→
+    74→    74→  void main() {
+    75→    75→    // gl_PointCoord is [0,1] across the point sprite. Center it.
+    76→    76→    vec2 uv = gl_PointCoord - 0.5;
+    77→    77→    float dist = length(uv);
+    78→    78→    if (dist > 0.5) discard;
+    79→    79→
+    80→    80→    // Soft circular falloff + a brighter tight core for stellar sparkle.
+    81→    81→    float falloff = smoothstep(0.5, 0.0, dist);
+    82→    82→    float core = smoothstep(0.28, 0.0, dist);
+    83→    83→    vec3 col = vColor * vBrightness * (0.55 + 0.6 * core);
+    84→    84→    float alpha = falloff * clamp(vBrightness, 0.0, 1.0);
+    85→    85→
+    86→    86→    gl_FragColor = vec4(col, alpha);
+    87→    87→  }
+    88→    88→`;
+    89→    89→
+    90→    90→// ─────────────────────────────────────────────────────────────────────────────
+    91→    91→// Chromatic aberration + vignette (single combined pass — cheap).
+    92→    92→// CA: radial RGB channel offset, zero at center, max ~1.5px at corners.
+    93→    93→// Vignette: smooth radial darkening, center = full, corners = ~0.75.
+    94→    94→// ─────────────────────────────────────────────────────────────────────────────
+    95→    95→const CA_VIGNETTE_SHADER = {
+    96→    96→  uniforms: {
+    97→    97→    tDiffuse: { value: null as THREE.Texture | null },
+    98→    98→    uIntensity: { value: 0.4 },
+    99→    99→    uVignette: { value: 0.25 },
+   100→   100→  },
+   101→   101→  vertexShader: /* glsl */ `
+   102→   102→    varying vec2 vUv;
+   103→   103→    void main() {
+   104→   104→      vUv = uv;
+   105→   105→      gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+   106→   106→    }
+   107→   107→  `,
+   108→   108→  fragmentShader: /* glsl */ `
+   109→   109→    uniform sampler2D tDiffuse;
+   110→   110→    uniform float uIntensity;
+   111→   111→    uniform float uVignette;
+   112→   112→    varying vec2 vUv;
+   113→   113→
+   114→   114→    void main() {
+   115→   115→      vec2 uv = vUv;
+   116→   116→      vec2 offset = uv - vec2(0.5);
+   117→   117→      float dist = length(offset);
+   118→   118→
+   119→   119→      // Radial falloff: dist^2 so center is clean, edges ramp up.
+   120→   120→      float caAmt = uIntensity * 0.012 * dist * dist;
+   121→   121→      vec3 color;
+   122→   122→      if (caAmt > 1e-6) {
+   123→   123→        vec2 dir = offset / max(dist, 1e-5);
+   124→   124→        // R shifted outward toward corner; B shifted inward toward center.
+   125→   125→        color.r = texture2D(tDiffuse, uv - dir * caAmt).r;
+   126→   126→        color.g = texture2D(tDiffuse, uv).g;
+   127→   127→        color.b = texture2D(tDiffuse, uv + dir * caAmt).b;
+   128→   128→      } else {
+   129→   129→        color = texture2D(tDiffuse, uv).rgb;
+   130→   130→      }
+   131→   131→
+   132→   132→      // Soft cinematic vignette. Center stays at 1.0, corners ~0.75.
+   133→   133→      float vignette = 1.0 - uVignette * dist * dist;
+   134→   134→      color *= vignette;
+   135→   135→
+   136→   136→      gl_FragColor = vec4(color, 1.0);
+   137→   137→    }
+   138→   138→  `,
+   139→   139→};
+   140→   140→
+   141→   141→// ─────────────────────────────────────────────────────────────────────────────
+   142→   142→// Film grain: animated hash-based noise overlay. VERY subtle — adds organic
+   143→   143→// texture like Apple's HDR pipeline. Operates per-pixel; high/ultra only.
+   144→   144→// ─────────────────────────────────────────────────────────────────────────────
+   145→   145→const FILM_GRAIN_SHADER = {
+   146→   146→  uniforms: {
+   147→   147→    tDiffuse: { value: null as THREE.Texture | null },
+   148→   148→    uTime: { value: 0 },
+   149→   149→    uResolution: { value: new THREE.Vector2(1, 1) },
+   150→   150→    uAmount: { value: 0.04 },
+   151→   151→  },
+   152→   152→  vertexShader: /* glsl */ `
+   153→   153→    varying vec2 vUv;
+   154→   154→    void main() {
+   155→   155→      vUv = uv;
+   156→   156→      gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+   157→   157→    }
+   158→   158→  `,
+   159→   159→  fragmentShader: /* glsl */ `
+   160→   160→    uniform sampler2D tDiffuse;
+   161→   161→    uniform float uTime;
+   162→   162→    uniform vec2 uResolution;
+   163→   163→    uniform float uAmount;
+   164→   164→    varying vec2 vUv;
+   165→   165→
+   166→   166→    // Cheap hash-based noise: deterministic per cell, fully GPU-side.
+   167→   167→    float hash(vec2 p) {
+   168→   168→      p = fract(p * vec2(123.34, 456.21));
+   169→   169→      p += dot(p, p + 45.32);
+   170→   170→      return fract(p.x * p.y);
+   171→   171→    }
+   172→   172→
+   173→   173→    void main() {
+   174→   174→      vec3 color = texture2D(tDiffuse, vUv).rgb;
+   175→   175→      // Animated grain — changes every frame, varies spatially per pixel.
+   176→   176→      float noise = hash(vUv * uResolution + uTime * 53.0);
+   177→   177→      // Subtle modulation (±0.02 in linear). Apple-HDR-style texture.
+   178→   178→      color += (noise - 0.5) * uAmount;
+   179→   179→      gl_FragColor = vec4(color, 1.0);
+   180→   180→    }
+   181→   181→  `,
+   182→   182→};
+   183→   183→
+   184→   184→const BUILDERS: Record<PresetId, WorldBuilder> = {
+   185→   185→  space: buildSolar,
+   186→   186→  blocks: buildBlocks,
+   187→   187→  test: buildTest,
+   188→   188→  singularity: buildSingularity,
+   189→   189→  drive: buildDrive,
+   190→   190→  atom: buildAtom,
+   191→   191→  voxel: buildVoxel,
+   192→   192→  gun: buildGunGame,
+   193→   193→  supernova: buildSupernova,
+   194→   194→  nebula: buildNebula,
+   195→   195→};
+   196→   196→
+   197→   197→/** Orbit/pan/zoom camera rig (mouse, touch-drag, wheel, arrow keys). */
+   198→   198→export class CameraRig {
+   199→   199→  readonly target = new THREE.Vector3();
+   200→   200→  yaw = 0;
+   201→   201→  pitch = 0.4;
+   202→   202→  distance = 13;
+   203→   203→  autoRotate = false;
+   204→   204→  private readonly home = { yaw: 0, pitch: 0.4, distance: 13, target: new THREE.Vector3() };
+   205→   205→  private readonly tmpOffset = new THREE.Vector3();
+   206→   206→
+   207→   207→  setHome(view: WorldView): void {
+   208→   208→    this.home.yaw = view.yaw;
+   209→   209→    this.home.pitch = view.pitch;
+   210→   210→    this.home.distance = view.distance;
+   211→   211→    this.home.target.set(0, 0, 0);
+   212→   212→    this.resetToHome();
+   213→   213→  }
+   214→   214→
+   215→   215→  resetToHome(): void {
+   216→   216→    this.yaw = this.home.yaw;
+   217→   217→    this.pitch = this.home.pitch;
+   218→   218→    this.distance = this.home.distance;
+   219→   219→    this.target.copy(this.home.target);
+   220→   220→  }
+   221→   221→
+   222→   222→  orbitBy(dxPixels: number, dyPixels: number): void {
+   223→   223→    const s = PrismConfig.cameraRig.orbitSpeed;
+   224→   224→    this.yaw -= dxPixels * s;
+   225→   225→    this.pitch = THREE.MathUtils.clamp(this.pitch + dyPixels * s, 0.03, 1.52);
+   226→   226→  }
+   227→   227→
+   228→   228→  dolly(factor: number): void {
+   229→   229→    const c = PrismConfig.cameraRig;
+   230→   230→    this.distance = THREE.MathUtils.clamp(this.distance * factor, c.minDistance, c.maxDistance);
+   231→   231→  }
+   232→   232→
+   233→   233→  panBy(dxPixels: number, dyPixels: number, camera: THREE.Camera): void {
+   234→   234→    const scale = (this.distance * PrismConfig.cameraRig.panSpeed) / 10;
+   235→   235→    const right = this.tmpOffset.setFromMatrixColumn(camera.matrix, 0);
+   236→   236→    const up = new THREE.Vector3().setFromMatrixColumn(camera.matrix, 1);
+   237→   237→    this.target.addScaledVector(right, -dxPixels * scale).addScaledVector(up, dyPixels * scale);
+   238→   238→    this.target.y = THREE.MathUtils.clamp(this.target.y, -6, 6);
+   239→   239→  }
+   240→   240→
+   241→   241→  setView(name: 'overview' | 'top' | 'edge'): void {
+   242→   242→    if (name === 'top') {
+   243→   243→      this.pitch = 1.5;
+   244→   244→      this.yaw = 0;
+   245→   245→    } else if (name === 'edge') {
+   246→   246→      this.pitch = 0.06;
+   247→   247→    } else {
+   248→   248→      this.resetToHome();
+   249→   249→    }
+   250→   250→  }
+   251→   251→
+   252→   252→  /** Impact shake 0..1 (decays exponentially, squared falloff settles soft). */
+   253→   253→  private trauma = 0;
+   254→   254→  /** Accessibility gate: reduced-motion users get a whisper of shake. */
+   255→   255→  shakeScale = 1;
+   256→   256→
+   257→   257→  addShake(amount: number): void {
+   258→   258→    this.trauma = Math.min(1, this.trauma + Math.max(0, amount));
+   259→   259→  }
+   260→   260→
+   261→   261→  get traumaLevel(): number {
+   262→   262→    return this.trauma;
+   263→   263→  }
+   264→   264→
+   265→   265→  update(dt: number, camera: THREE.PerspectiveCamera): void {
+   266→   266→    if (this.autoRotate) this.yaw += dt * PrismConfig.cameraRig.autoRotateSpeed;
+   267→   267→    // NATURAL STEADICAM: rate 10 = ~15% per frame at 60fps. Responsive enough
+   268→   268→    // to feel direct, with just enough inertia for smooth motion. Was 8
+   269→   269→    // (slightly laggy on orbit stop).
+   270→   270→    const cp = Math.cos(this.pitch);
+   271→   271→    const targetX = this.target.x + this.distance * cp * Math.sin(this.yaw);
+   272→   272→    const targetY = this.target.y + this.distance * Math.sin(this.pitch);
+   273→   273→    const targetZ = this.target.z + this.distance * cp * Math.cos(this.yaw);
+   274→   274→    const damp = 1 - Math.exp(-dt * 10);
+   275→   275→    camera.position.x += (targetX - camera.position.x) * damp;
+   276→   276→    camera.position.y += (targetY - camera.position.y) * damp;
+   277→   277→    camera.position.z += (targetZ - camera.position.z) * damp;
+   278→   278→    if (this.trauma > 0) {
+   279→   279→      const s = this.trauma * this.trauma * 0.4 * this.shakeScale;
+   280→   280→      camera.position.x += (Math.random() - 0.5) * 2 * s;
+   281→   281→      camera.position.y += (Math.random() - 0.5) * 2 * s;
+   282→   282→      camera.position.z += (Math.random() - 0.5) * 2 * s;
+   283→   283→      this.trauma *= Math.exp(-dt * 2.2);
+   284→   284→      if (this.trauma <= 0.003) this.trauma = 0;
+   285→   285→    }
+   286→   286→    camera.lookAt(this.target);
+   287→   287→  }
+   288→   288→}
+   289→   289→
+   290→   290→export class PrismScene {
+   291→   291→  readonly renderer: THREE.WebGLRenderer;
+   292→   292→  readonly scene = new THREE.Scene();
+   293→   293→  readonly camera: THREE.PerspectiveCamera;
+   294→   294→  readonly rig = new CameraRig();
+   295→   295→  /** Everything zoomable/rotatable by two-hand gestures lives under this. */
+   296→   296→  readonly world = new THREE.Group();
+   297→   297→  readonly labelLayer = new THREE.Group();
+   298→   298→  readonly cursor: THREE.Mesh;
+   299→   299→  private api: WorldAPI | null = null;
+   300→   300→  private presetId: PresetId = 'space';
+   301→   301→  private quality: QualityTier = 'medium';
+   302→   302→  private readonly cursorMat: THREE.MeshBasicMaterial;
+   303→   303→  private readonly cursorRing: THREE.Mesh;
+   304→   304→  private readonly cursorRingMat: THREE.MeshBasicMaterial;
+   305→   305→  private readonly ringCyan = new THREE.Color(0x9adcff);
+   306→   306→  private readonly ringMagenta = new THREE.Color(0xffa8d8);
+   307→   307→  private readonly rayLine: THREE.Line;
+   308→   308→  private readonly rayPositions: Float32Array;
+   309→   309→  private readonly nebula: THREE.Mesh;
+   310→   310→  private stars!: THREE.Points; // built by buildStarfield() in the constructor
+   311→   311→  private starMat!: THREE.ShaderMaterial;
+   312→   312→  private readonly composer: EffectComposer;
+   313→   313→  private readonly caPass: ShaderPass;
+   314→   314→  // grainPass removed (animated hash noise read as TV static over the scene).
+   315→   315→  private readonly glowTex: THREE.Texture;
+   316→   316→  private readonly nebulaTex: THREE.Texture;
+   317→   317→  private readonly planetTex: PlanetTextureSet;
+   318→   318→  private readonly tmpVec = new THREE.Vector3();
+   319→   319→  private hovered: THREE.Object3D | null = null;
+   320→   320→
+   321→   321→  constructor(container: HTMLElement, quality: QualityTier, preset: PresetId) {
+   322→   322→    this.quality = quality;
+   323→   323→    // Performance: request high-performance GPU adapter explicitly. This forces
+   324→   324→    // the browser to use the discrete GPU on dual-GPU machines (common on laptops).
+   325→   325→    // Use antialias only on high/ultra (MSAA is expensive; pixelRatio covers it on lower tiers).
+   326→   326→    const useAA = quality === 'high' || quality === 'ultra';
+   327→   327→    this.renderer = new THREE.WebGLRenderer({
+   328→   328→      antialias: useAA,
+   329→   329→      powerPreference: 'high-performance',
+   330→   330→      stencil: false,
+   331→   331→    });
+   332→   332→    this.renderer.setSize(container.clientWidth, container.clientHeight);
+   333→   333→    this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
+   334→   334→    this.renderer.toneMappingExposure = 1.15;
+   335→   335→    // Performance: disable shadow maps (not used; saves allocation + render pass).
+   336→   336→    this.renderer.shadowMap.enabled = false;
+   337→   337→    this.applyPixelRatio();
+   338→   338→    container.appendChild(this.renderer.domElement);
+   339→   339→    // Screen readers get a labeled image role instead of a silent canvas.
+   340→   340→    this.renderer.domElement.setAttribute('role', 'img');
+   341→   341→    this.renderer.domElement.setAttribute(
+   342→   342→      'aria-label',
+   343→   343→      'Interactive 3D scene. Move the mouse to point, hold to grab, or enable the camera for hand control. Press H for all controls.',
+   344→   344→    );
+   345→   345→
+   346→   346→    this.scene.background = new THREE.Color(0x04060d);
+   347→   347→    this.scene.fog = new THREE.Fog(0x04060d, 20, 70);
+   348→   348→
+   349→   349→    this.camera = new THREE.PerspectiveCamera(
+   350→   350→      55,
+   351→   351→      container.clientWidth / Math.max(1, container.clientHeight),
+   352→   352→      0.1,
+   353→   353→      300,
+   354→   354→    );
+   355→   355→    this.camera.position.set(0, 4.6, 12);
+   356→   356→
+   357→   357→    // Multi-light setup (inspired by sanderblue/solar-system-threejs, Apache 2.0):
+   358→   358→    // OPTIMIZED: reduced from 4 directional lights to 2 (key + fill) — each
+   359→   359→    // light adds a full render pass for every MeshStandardMaterial. 2 lights
+   360→   360→    // + ambient covers all angles with half the cost.
+   361→   361→    this.scene.add(new THREE.AmbientLight(0xbfd4ff, 0.5));
+   362→   362→    const key = new THREE.DirectionalLight(0xffffff, 0.8);
+   363→   363→    key.position.set(3, 5, 4);
+   364→   364→    this.scene.add(key);
+   365→   365→    const fill = new THREE.DirectionalLight(0x8899bb, 0.3);
+   366→   366→    fill.position.set(-3, 2, -4);
+   367→   367→    this.scene.add(fill);
+   368→   368→
+   369→   369→    // Shared resources (built once; worlds must never dispose these).
+   370→   370→    this.glowTex = buildGlowTexture();
+   371→   371→    this.nebulaTex = buildNebulaTexture();
+   372→   372→    this.planetTex = buildPlanetTextures();
+   373→   373→    this.buildStarfield();
+   374→   374→
+   375→   375→    this.nebula = new THREE.Mesh(
+   376→   376→      new THREE.SphereGeometry(120, 24, 16),
+   377→   377→      new THREE.MeshBasicMaterial({ map: this.nebulaTex, side: THREE.BackSide, depthWrite: false, fog: false }),
+   378→   378→    );
+   379→   379→    this.nebula.visible = false;
+   380→   380→    this.scene.add(this.nebula);
+   381→   381→
+   382→   382→    // Hand cursor + pointer ray.
+   383→   383→    this.cursorMat = new THREE.MeshBasicMaterial({ color: 0x9adcff, transparent: true, opacity: 0.95 });
+   384→   384→    this.cursor = new THREE.Mesh(new THREE.OctahedronGeometry(0.09), this.cursorMat);
+   385→   385→    this.cursor.visible = false;
+   386→   386→    this.scene.add(this.cursor);
+   387→   387→
+   388→   388→    // Pinch progress ring: wide/faint when open, cinching onto the cursor
+   389→   389→    // as the pinch closes. Billboards toward the camera every frame.
+   390→   390→    this.cursorRingMat = new THREE.MeshBasicMaterial({
+   391→   391→      color: 0x9adcff,
+   392→   392→      transparent: true,
+   393→   393→      opacity: 0.25,
+   394→   394→      side: THREE.DoubleSide,
+   395→   395→      depthTest: false,
+   396→   396→    });
+   397→   397→    this.cursorRing = new THREE.Mesh(new THREE.RingGeometry(0.13, 0.16, 24), this.cursorRingMat);
+   398→   398→    this.cursorRing.visible = false;
+   399→   399→    this.cursorRing.renderOrder = 5;
+   400→   400→    this.scene.add(this.cursorRing);
+   401→   401→
+   402→   402→    this.rayPositions = new Float32Array(6);
+   403→   403→    const rayGeo = new THREE.BufferGeometry();
+   404→   404→    rayGeo.setAttribute('position', new THREE.BufferAttribute(this.rayPositions, 3));
+   405→   405→    this.rayLine = new THREE.Line(
+   406→   406→      rayGeo,
+   407→   407→      new THREE.LineBasicMaterial({ color: 0x9adcff, transparent: true, opacity: 0.35 }),
+   408→   408→    );
+   409→   409→    this.rayLine.visible = false;
+   410→   410→    this.rayLine.frustumCulled = false;
+   411→   411→    this.scene.add(this.rayLine);
+   412→   412→
+   413→   413→    this.scene.add(this.world);
+   414→   414→    this.scene.add(this.labelLayer);
+   415→   415→
+   416→   416→    // Post-processing composer. Pass order is critical for the cinematic look:
+   417→   417→    //   RenderPass → UnrealBloomPass → ChromaticAberration+Vignette → FilmGrain → OutputPass
+   418→   418→    // Bloom lifts emissive bodies; CA + vignette add cinematic depth; grain
+   419→   419→    // adds organic texture; OutputPass applies tone mapping + color space.
+   420→   420→    // All passes are always constructed (cheap to instantiate); only
+   421→   421→    // composer.render() is gated by quality tier in render().
+   422→   422→    this.composer = new EffectComposer(this.renderer);
+   423→   423→    this.composer.addPass(new RenderPass(this.scene, this.camera));
+   424→   424→    const bloom = new UnrealBloomPass(
+   425→   425→      new THREE.Vector2(container.clientWidth, container.clientHeight),
+   426→   426→      PrismConfig.bloom.strength,
+   427→   427→      PrismConfig.bloom.radius,
+   428→   428→      PrismConfig.bloom.threshold,
+   429→   429→    );
+   430→   430→    this.composer.addPass(bloom);
+   431→   431→    this.caPass = new ShaderPass(CA_VIGNETTE_SHADER);
+   432→   432→    this.composer.addPass(this.caPass);
+   433→   433→    this.composer.addPass(new OutputPass());
+   434→   434→    // NOTE: the FILM_GRAIN_SHADER pass was removed — its per-pixel hash noise
+   435→   435→    // animated every frame and read as 'TV static covering the whole 3D scene'
+   436→   436→    // even at uAmount = 0.04. Not premium; just noisy. The vignette in CA_VIGNETTE
+   437→   437→    // is enough cinematic depth.
+   438→   438→
+   439→   439→    this.loadPreset(preset);
+   440→   440→  }
+   441→   441→
+   442→   442→  // ---- presets ----------------------------------------------------------
+   443→   443→
+   444→   444→  get currentPreset(): PresetId {
+   445→   445→    return this.presetId;
+   446→   446→  }
+   447→   447→
+   448→   448→  get currentWorld(): WorldAPI | null {
+   449→   449→    return this.api;
+   450→   450→  }
+   451→   451→
+   452→   452→  /** Forward the smoothed pointer to worlds that pick their own targets. */
+   453→   453→  trackPointer(ndcX: number, ndcY: number): void {
+   454→   454→    this.api?.updatePointer?.(ndcX, ndcY, this.camera);
+   455→   455→  }
+   456→   456→
+   457→   457→  /** True when the pointer is over world-owned content (voxel ground). */
+   458→   458→  capturesPointer(): boolean {
+   459→   459→    return this.api?.capturesPointer?.() ?? false;
+   460→   460→  }
+   461→   461→
+   462→   462→  /** 3D focus point from world-owned picking (shared cursor placement). */
+   463→   463→  pointerFocus(out: THREE.Vector3): boolean {
+   464→   464→    return this.api?.pointerFocus?.(out) ?? false;
+   465→   465→  }
+   466→   466→
+   467→   467→  get grabbables(): THREE.Object3D[] {
+   468→   468→    return this.api?.grabbables ?? [];
+   469→   469→  }
+   470→   470→
+   471→   471→  loadPreset(id: PresetId): void {
+   472→   472→    if (this.api) {
+   473→   473→      this.api.dispose();
+   474→   474→      this.world.clear();
+   475→   475→      this.labelLayer.clear();
+   476→   476→    }
+   477→   477→    this.presetId = id;
+   478→   478→    // Two-hand transform must not leak between worlds.
+   479→   479→    this.world.scale.setScalar(1);
+   480→   480→    this.world.rotation.set(0, 0, 0);
+   481→   481→    this.world.position.set(0, 0, 0);
+   482→   482→    const builder = BUILDERS[id];
+   483→   483→    this.api = builder({
+   484→   484→      world: this.world,
+   485→   485→      labelLayer: this.labelLayer,
+   486→   486→      glowTex: this.glowTex,
+   487→   487→      nebulaTex: this.nebulaTex,
+   488→   488→      planetTex: this.planetTex,
+   489→   489→      shakeCamera: (amount: number) => this.shakeCamera(amount),
+   490→   490→      quality: this.quality,
+   491→   491→    });
+   492→   492→    const bg = this.api.background;
+   493→   493→    if (bg === 'nebula') {
+   494→   494→      this.scene.background = null;
+   495→   495→      this.nebula.visible = true;
+   496→   496→    } else {
+   497→   497→      this.nebula.visible = false;
+   498→   498→      this.scene.background = new THREE.Color(bg);
+   499→   499→    }
+   500→   500→    this.stars.visible = this.api.stars ?? true;
+   501→   501→    this.rig.setHome(this.api.view);
+   502→   502→    this.setHover(null);
+   503→   503→    this.applyTextureMaps();
+   504→   504→  }
+   505→   505→
+   506→   506→  setOrbitFromPoint(mesh: THREE.Mesh, localPoint: THREE.Vector3): void {
+   507→   507→    this.api?.setOrbitFromPoint?.(mesh, localPoint);
+   508→   508→  }
+   509→   509→
+   510→   510→  bodyInfo(name: string | null): string | null {
+   511→   511→    return this.api?.bodyInfo?.(name) ?? null;
+   512→   512→  }
+   513→   513→
+   514→   514→  /** Rattle the camera (impacts, detonations). Worlds call, rig owns decay. */
+   515→   515→  shakeCamera(amount: number): void {
+   516→   516→    this.rig.addShake(amount);
+   517→   517→  }
+   518→   518→
+   519→   519→  // ---- quality ----------------------------------------------------------
+   520→   520→
+   521→   521→  private applyPixelRatio(): void {
+   522→   522→    const ratio = PrismConfig.quality[this.quality]?.pixelRatio ?? 1.5;
+   523→   523→    const pr = Math.min(window.devicePixelRatio || 1, ratio);
+   524→   524→    this.renderer.setPixelRatio(pr);
+   525→   525→    this.composer?.setPixelRatio(pr);
+   526→   526→    // Star point-size scales with framebuffer pixel ratio; keep the uniform
+   527→   527→    // in sync so stars stay a consistent visual size across DPR changes.
+   528→   528→    if (this.starMat) this.starMat.uniforms.uPixelRatio.value = pr;
+   529→   529→  }
+   530→   530→
+   531→   531→  /** High+ tier gets procedural planet maps; low/med use flat colors. */
+   532→   532→  private applyTextureMaps(): void {
+   533→   533→    const on = this.quality === 'high' || this.quality === 'ultra';
+   534→   534→    this.world.traverse((obj) => {
+   535→   535→      const mesh = obj as THREE.Mesh;
+   536→   536→      const mat = mesh.material as (THREE.MeshStandardMaterial | THREE.MeshBasicMaterial) | undefined;
+   537→   537→      const texMap = mat?.userData.texMap as THREE.Texture | undefined;
+   538→   538→      if (mat && texMap) {
+   539→   539→        mat.map = on ? texMap : null;
+   540→   540→        mat.needsUpdate = true;
+   541→   541→      }
+   542→   542→    });
+   543→   543→  }
+   544→   544→
+   545→   545→  applyQuality(tier: QualityTier): void {
+   546→   546→    this.quality = tier;
+   547→   547→    this.applyPixelRatio();
+   548→   548→    this.applyTextureMaps();
+   549→   549→  }
+   550→   550→
+   551→   551→  // ---- frame ------------------------------------------------------------
+   552→   552→
+   553→   553→  resize(width: number, height: number): void {
+   554→   554→    this.camera.aspect = width / Math.max(1, height);
+   555→   555→    this.camera.updateProjectionMatrix();
+   556→   556→    this.renderer.setSize(width, height);
+   557→   557→    this.composer.setSize(width, height);
+   558→   558→  }
+   559→   559→
+   560→   560→  /**
+   561→   561→   * Premium shader-driven starfield. Each star carries per-vertex attributes
+   562→   562→   * (brightness, twinkle phase/freq, stellar-class color) feeding a custom
+   563→   563→   * ShaderMaterial. Count scales with quality tier. Always rendered (every
+   564→   564→   * tier) — the shader is essentially free; the cost is the point count.
+   565→   565→   */
+   566→   566→  private buildStarfield(): void {
+   567→   567→    const tier = this.quality;
+   568→   568→    const count = tier === 'ultra' ? 1500 : tier === 'high' ? 1000 : tier === 'medium' ? 600 : 400;
+   569→   569→    const positions = new Float32Array(count * 3);
+   570→   570→    const brightness = new Float32Array(count);
+   571→   571→    const phase = new Float32Array(count);
+   572→   572→    const freq = new Float32Array(count);
+   573→   573→    const color = new Float32Array(count * 3);
+   574→   574→
+   575→   575→    // Stellar classification distribution (approximate, tuned for visual
+   576→   576→    // variety rather than astrophysical accuracy):
+   577→   577→    //   ~15% blue (hot O/B), 20% white (A), 30% yellow-white (F/G),
+   578→   578→    //   25% orange (K), 10% red (M).
+   579→   579→    const classes: Array<{ weight: number; rgb: [number, number, number] }> = [
+   580→   580→      { weight: 0.15, rgb: [0.62, 0.72, 1.0] }, // blue
+   581→   581→      { weight: 0.2, rgb: [1.0, 1.0, 1.0] }, // white
+   582→   582→      { weight: 0.3, rgb: [1.0, 0.97, 0.85] }, // yellow-white
+   583→   583→      { weight: 0.25, rgb: [1.0, 0.78, 0.55] }, // orange
+   584→   584→      { weight: 0.1, rgb: [1.0, 0.55, 0.42] }, // red
+   585→   585→    ];
+   586→   586→
+   587→   587→    for (let i = 0; i < count; i++) {
+   588→   588→      // Spherical shell distribution: stars sit on a 60–120 unit sphere so
+   589→   589→      // they're always behind world geometry but inside the far plane (300).
+   590→   590→      const r = 60 + Math.random() * 60;
+   591→   591→      const theta = Math.random() * Math.PI * 2;
+   592→   592→      const phi = Math.acos(2 * Math.random() - 1);
+   593→   593→      positions[i * 3] = r * Math.sin(phi) * Math.cos(theta);
+   594→   594→      positions[i * 3 + 1] = r * Math.cos(phi);
+   595→   595→      positions[i * 3 + 2] = r * Math.sin(phi) * Math.sin(theta);
+   596→   596→
+   597→   597→      // Brightness in [0.3, 1.0] — biases toward dim stars (looks more
+   598→   598→      // realistic; few bright, many faint).
+   599→   599→      brightness[i] = 0.3 + Math.random() * 0.7;
+   600→   600→      phase[i] = Math.random() * Math.PI * 2;
+   601→   601→      // Twinkle frequency 0.5–3.0 Hz (slow drift to fast shimmer).
+   602→   602→      freq[i] = 0.5 + Math.random() * 2.5;
+   603→   603→
+   604→   604→      // Weighted random pick of stellar class.
+   605→   605→      const roll = Math.random();
+   606→   606→      let acc = 0;
+   607→   607→      let chosen = classes[2]; // default yellow-white
+   608→   608→      for (const c of classes) {
+   609→   609→        acc += c.weight;
+   610→   610→        if (roll <= acc) {
+   611→   611→          chosen = c;
+   612→   612→          break;
+   613→   613→        }
+   614→   614→      }
+   615→   615→      color[i * 3] = chosen.rgb[0];
+   616→   616→      color[i * 3 + 1] = chosen.rgb[1];
+   617→   617→      color[i * 3 + 2] = chosen.rgb[2];
+   618→   618→    }
+   619→   619→
+   620→   620→    const geo = new THREE.BufferGeometry();
+   621→   621→    geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+   622→   622→    geo.setAttribute('aBrightness', new THREE.BufferAttribute(brightness, 1));
+   623→   623→    geo.setAttribute('aPhase', new THREE.BufferAttribute(phase, 1));
+   624→   624→    geo.setAttribute('aFreq', new THREE.BufferAttribute(freq, 1));
+   625→   625→    geo.setAttribute('aColor', new THREE.BufferAttribute(color, 3));
+   626→   626→
+   627→   627→    this.starMat = new THREE.ShaderMaterial({
+   628→   628→      uniforms: {
+   629→   629→        uTime: { value: 0 },
+   630→   630→        uPixelRatio: { value: this.renderer.getPixelRatio() },
+   631→   631→      },
+   632→   632→      vertexShader: STAR_VERTEX,
+   633→   633→      fragmentShader: STAR_FRAGMENT,
+   634→   634→      transparent: true,
+   635→   635→      depthWrite: false,
+   636→   636→      // Additive: stars never darken what's behind them, they only brighten —
+   637→   637→      // so overlapping stars sum into a believable bright cluster.
+   638→   638→      blending: THREE.AdditiveBlending,
+   639→   639→    });
+   640→   640→    this.stars = new THREE.Points(geo, this.starMat);
+   641→   641→    this.scene.add(this.stars);
+   642→   642→  }
+   643→   643→
+   644→   644→  /** Highlight the hovered body; previous hover is always restored. */
+   645→   645→  setHover(mesh: THREE.Object3D | null): void {
+   646→   646→    if (this.hovered === mesh) return;
+   647→   647→    if (this.hovered) {
+   648→   648→      setEmissiveBoost(this.hovered, this.hovered.userData.grabbed ? 0.9 : null);
+   649→   649→    }
+   650→   650→    this.hovered = mesh;
+   651→   651→    if (this.hovered) setEmissiveBoost(this.hovered, 0.85);
+   652→   652→  }
+   653→   653→
+   654→   654→  markGrabbed(mesh: THREE.Object3D | null): void {
+   655→   655→    for (const obj of this.grabbables) {
+   656→   656→      obj.userData.grabbed = obj === mesh;
+   657→   657→      if (obj !== this.hovered) {
+   658→   658→        setEmissiveBoost(obj, obj === mesh ? 0.9 : null);
+   659→   659→      }
+   660→   660→    }
+   661→   661→  }
+   662→   662→
+   663→   663→  /** Move the 3D cursor to a world position and recolor by mode. */
+   664→   664→  setCursor(worldPos: THREE.Vector3 | null, mode: CursorMode, sizeScale = 1, closeness = 0): void {
+   665→   665→    if (!worldPos) {
+   666→   666→      this.cursor.visible = false;
+   667→   667→      this.cursorRing.visible = false;
+   668→   668→      this.rayLine.visible = false;
+   669→   669→      return;
+   670→   670→    }
+   671→   671→    this.cursor.visible = true;
+   672→   672→    this.cursor.position.copy(worldPos);
+   673→   673→    this.cursor.scale.setScalar(sizeScale);
+   674→   674→    // Progress ring cinches from wide/faint to tight/bright with the pinch.
+   675→   675→    const c = Math.min(1, Math.max(0, closeness));
+   676→   676→    this.cursorRing.visible = true;
+   677→   677→    this.cursorRing.position.copy(worldPos);
+   678→   678→    this.cursorRing.lookAt(this.camera.position);
+   679→   679→    this.cursorRing.scale.setScalar(pinchRingScale(c));
+   680→   680→    this.cursorRingMat.opacity = 0.22 + 0.68 * c;
+   681→   681→    this.cursorRingMat.color.copy(this.ringCyan).lerp(this.ringMagenta, c);
+   682→   682→    const colors: Record<CursorMode, number> = {
+   683→   683→      hidden: 0x9adcff,
+   684→   684→      point: 0x9adcff,
+   685→   685→      hover: 0xa8ffc9,
+   686→   686→      pinch: 0xffa8d8,
+   687→   687→      grab: 0xffd2a8,
+   688→   688→    };
+   689→   689→    this.cursorMat.color.setHex(colors[mode]);
+   690→   690→    (this.rayLine.material as THREE.LineBasicMaterial).color.setHex(colors[mode]);
+   691→   691→
+   692→   692→    this.tmpVec.copy(worldPos).sub(this.camera.position).normalize();
+   693→   693→    this.rayPositions[0] = this.camera.position.x;
+   694→   694→    this.rayPositions[1] = this.camera.position.y;
+   695→   695→    this.rayPositions[2] = this.camera.position.z;
+   696→   696→    this.rayPositions[3] = worldPos.x + this.tmpVec.x * 10;
+   697→   697→    this.rayPositions[4] = worldPos.y + this.tmpVec.y * 10;
+   698→   698→    this.rayPositions[5] = worldPos.z + this.tmpVec.z * 10;
+   699→   699→    (this.rayLine.geometry.getAttribute('position') as THREE.BufferAttribute).needsUpdate = true;
+   700→   700→    this.rayLine.visible = true;
+   701→   701→  }
+   702→   702→
+   703→   703→  update(dt: number, elapsed: number): void {
+   704→   704→    // Honor cinematic camera override from worlds (e.g. blackhole detonation).
+   705→   705→    const cam = this.api?.cinematicCamera;
+   706→   706→    if (cam) {
+   707→   707→      this.rig.yaw = cam.yaw;
+   708→   708→      this.rig.pitch = cam.pitch;
+   709→   709→      this.rig.distance = cam.distance;
+   710→   710→    }
+   711→   711→    this.rig.update(dt, this.camera);
+   712→   712→    this.api?.update(dt, elapsed);
+   713→   713→    this.cursor.rotation.y += dt * 2.2;
+   714→   714→    // Drive per-frame shader uniforms. Starfield twinkle needs elapsed time
+   715→   715→    // (seconds, monotonically increasing). Runs on every tier.
+   716→   716→    this.starMat.uniforms.uTime.value = elapsed;
+   717→   717→  }
+   718→   718→
+   719→   719→  render(): void {
+   720→   720→    if (this.quality === 'high' || this.quality === 'ultra') {
+   721→   721→      this.composer.render();
+   722→   722→    } else {
+   723→   723→      this.renderer.render(this.scene, this.camera);
+   724→   724→    }
+   725→   725→  }
+   726→   726→
+   727→   727→  get drawCalls(): number {
+   728→   728→    return this.renderer.info.render.calls;
+   729→   729→  }
+   730→   730→
+   731→   731→  get triangles(): number {
+   732→   732→    return this.renderer.info.render.triangles;
+   733→   733→  }
+   734→   734→
+   735→   735→  dispose(): void {
+   736→   736→    disposeGroup(this.world);
+   737→   737→    disposeGroup(this.labelLayer);
+   738→   738→    // Free starfield GPU resources (geometry attributes + shader program).
+   739→   739→    this.stars?.geometry.dispose();
+   740→   740→    this.starMat?.dispose();
+   741→   741→    // Free the fullscreen-quad shader materials backing the post passes.
+   742→   742→    (this.caPass?.material as THREE.ShaderMaterial | undefined)?.dispose();
+   743→   743→    this.composer?.dispose();
+   744→   744→    this.renderer.dispose();
+   745→   745→  }
+   746→   746→}
+   747→   747→

@@ -238,7 +238,8 @@ export default function CommandPalette({ onClose, state, app }: Props) {
         justifyContent: "center",
         paddingTop: "12vh",
         background: "rgba(6, 4, 13, 0.55)",
-        backdropFilter: "blur(6px)",
+        backdropFilter: "blur(14px) saturate(80%)",
+        WebkitBackdropFilter: "blur(14px) saturate(80%)",
         animation: "prism-fade-in 160ms cubic-bezier(0.2,0,0,1)",
       }}
       onClick={onClose}

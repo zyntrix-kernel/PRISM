@@ -23,16 +23,32 @@ export const PrismConfig = {
     minHandDetectionConfidence: 0.3,
     minHandPresenceConfidence: 0.3,
     minTrackingConfidence: 0.3,
+    // Detection-loop throttle. detectForVideo is SYNCHRONOUS and blocks
+    // the main thread, so we cap the inference rate to leave the render
+    // loop (rAF) headroom between detections.
+    //   intervalMs       — 10fps (100ms): safe default for low-end PCs
+    //                      where inference alone can take 80–150ms.
+    //   tabletIntervalMs — 15fps (66ms): tablets (iPad Pro, Galaxy Tab S,
+    //                      Surface) have faster CPUs than low-end PCs and
+    //                      comfortably absorb the extra 5fps of inference.
+    //                      HandTracker picks the right one via detectTablet().
+    intervalMs: 100,
+    tabletIntervalMs: 66,
   },
 
   camera: {
-    // 320x240: MINIMAL resolution to keep MediaPipe inference fast.
-    // 2-hand inference at 640x480 = ~150ms; at 320x240 = ~80ms.
-    // The render loop needs <16ms per frame to stay at 60fps, so every
-    // millisecond of inference saved matters. 320x240 is enough for hand
-    // tracking — MediaPipe's model was trained on low-res input anyway.
-    idealWidth: 320,
-    idealHeight: 240,
+    // ADVISORY ONLY. startCamera() deliberately does NOT request a specific
+    // resolution — asking for 320x240 caused "Camera unavailable" on
+    // laptops whose webcams don't support that exact mode. The browser
+    // picks its native resolution (usually 640x480 on laptops, 1280x720 on
+    // tablets, 1920x1080 on phones) and the tracking throttle above keeps
+    // inference cost bounded regardless. These fields are kept only as
+    // documentation of the intended target resolutions per device class:
+    //   - low-end PCs:  320x240 (browser usually delivers 640x480 anyway)
+    //   - tablets:      640x480 (native, crisp for hand landmarking)
+    //   - phones:       1280x720+ (cropped by the model internally)
+    idealWidth: 640,
+    idealHeight: 480,
   },
 
   gestures: {
@@ -108,9 +124,23 @@ export const PrismConfig = {
   },
 
   quality: {
+    // Pixel-ratio caps per tier. `applyPixelRatio()` clamps
+    // `window.devicePixelRatio` to these values — a 3x-retina tablet
+    // rendering at full DPR would shred the GPU, so we cap.
+    //
+    // Tablet routing: detectTablet() (device.ts) maps iPads, Android
+    // tablets, and iPadOS-13+-as-Mac to the `high` tier. Their GPUs
+    // outclass low-end exhibition PCs and run PRISM at 60–120fps, so
+    // they get premium shaders + bloom + MSAA. Phones still get `low`.
     ultra: { pixelRatio: 1.75 },
-    high: { pixelRatio: 1.5 },
-    medium: { pixelRatio: 1.25 },
+    // high: 1.5 → 1.75. Tablets have crisp high-DPI screens (iPad = 2x+,
+    // Galaxy Tab S = 2.5x+); capping at 1.5 looked soft. 1.75 keeps
+    // edges sharp under bloom + AA without overloading the fill rate.
+    high: { pixelRatio: 1.75 },
+    // medium: 1.25 → 1.5. Mid GPUs (modern integrated graphics, M1
+    // MacBook Air baseline) handle 1.5x comfortably; 1.25 was leaving
+    // sharpness on the table for no measurable FPS gain.
+    medium: { pixelRatio: 1.5 },
     low: { pixelRatio: 1.0 },
   } as Record<string, { pixelRatio: number }>,
 };

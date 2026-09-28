@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 /**
  * ZynashIntro — cinematic startup animation.
@@ -37,10 +37,14 @@ export default function ZynashIntro({ onDone }: { onDone: () => void }) {
   const [phase, setPhase] = useState<Phase>("title");
   const [visibleCredit, setVisibleCredit] = useState(-1);
   const [skipped, setSkipped] = useState(false);
+  // Stable ref to onDone so the effect doesn't re-run when the parent
+  // re-renders (which would clear all timers + restart the intro).
+  const onDoneRef = useRef(onDone);
+  onDoneRef.current = onDone;
 
   useEffect(() => {
     if (skipped) {
-      const t = setTimeout(onDone, 400);
+      const t = setTimeout(() => onDoneRef.current(), 400);
       return () => clearTimeout(t);
     }
 
@@ -61,11 +65,11 @@ export default function ZynashIntro({ onDone }: { onDone: () => void }) {
     timers.push(setTimeout(() => setPhase("done"), 2500 + CREDITS.length * 1300 + 800 + 1000));
 
     return () => timers.forEach(clearTimeout);
-  }, [skipped, onDone]);
+  }, [skipped]); // onDoneRef is stable — not in deps
 
   useEffect(() => {
-    if (phase === "done") onDone();
-  }, [phase, onDone]);
+    if (phase === "done") onDoneRef.current();
+  }, [phase]);
 
   const skip = () => {
     if (!skipped) setSkipped(true);
@@ -141,7 +145,7 @@ export default function ZynashIntro({ onDone }: { onDone: () => void }) {
               textTransform: "uppercase",
             }}
           >
-            Projected Reality Interaction
+            Projected Reality Interaction &amp; Spatial Manipulation
           </div>
         </div>
       )}

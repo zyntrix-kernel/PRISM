@@ -62,6 +62,7 @@ export default function PrismStage() {
   const overlayRef = useRef<HTMLCanvasElement>(null);
   const appRef = useRef<PrismApp | null>(null);
   const [showIntro, setShowIntro] = useState(true);
+  const dismissIntro = useRef(() => setShowIntro(false)).current;
 
   // Stable refs to all HUD elements (imperative engine writes to these)
   const els = useRef<Record<string, HTMLElement | null>>({});
@@ -158,7 +159,7 @@ export default function PrismStage() {
   return (
     <div className="prism-root" ref={rootRef}>
       {/* Cinematic ZYNASH LABS startup intro — plays once on first load */}
-      {showIntro && <ZynashIntro onDone={() => setShowIntro(false)} />}
+      {showIntro && <ZynashIntro onDone={dismissIntro} />}
 
       {/* Preset-switch transition overlay (dreamy radial flash on world change) */}
       <PresetTransitionOverlay key={preset} preset={preset} />

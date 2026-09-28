@@ -116,6 +116,12 @@ export class HandTracker {
     return this.landmarker !== null;
   }
 
+  /** True when the detection loop is actively running (start() called,
+   *  stop() not yet called). Distinct from isReady (model loaded). */
+  get isTracking(): boolean {
+    return this.running;
+  }
+
   /** Begins the detection loop over a playing video element.
    *  HEAVY THROTTLE: runs at most 10fps (every 100ms) to leave maximum CPU
    *  for the render loop. MediaPipe's detectForVideo is SYNCHRONOUS and

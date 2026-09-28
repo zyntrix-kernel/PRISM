@@ -437,15 +437,23 @@ export class PrismApp {
   }
 
   private async ensureTracking(): Promise<void> {
-    if (!this.cameraHandle || this.tracker.isReady) return;
-    this.setStatus('Loading hand-tracking model…');
-    try {
-      await this.tracker.init((m) => this.setStatus(m));
-    } catch (err) {
-      const full = err instanceof Error ? err.message : String(err);
-      this.setStatus('Tracking unavailable — mouse active', full);
-      this.toast(`Tracking init failed: ${full.substring(0, 100)}`, 'warn');
-      return;
+    // Guard: must have a camera, and must NOT already be running the detect
+    // loop. Note: tracker.isReady means the MODEL is loaded — it does NOT
+    // mean the detect loop is running. We must still call tracker.start()
+    // even when isReady is true (the preload loads the model but doesn't
+    // start detection — that needs the video element).
+    if (!this.cameraHandle) return;
+    if (this.tracker.isTracking) return; // already running the detect loop
+    if (!this.tracker.isReady) {
+      this.setStatus('Loading hand-tracking model…');
+      try {
+        await this.tracker.init((m) => this.setStatus(m));
+      } catch (err) {
+        const full = err instanceof Error ? err.message : String(err);
+        this.setStatus('Tracking unavailable — mouse active', full);
+        this.toast(`Tracking init failed: ${full.substring(0, 100)}`, 'warn');
+        return;
+      }
     }
     if (!this.tracker.isReady) return; // init failed silently
     this.tracker.start(this.el.video);

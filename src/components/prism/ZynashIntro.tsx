@@ -1,24 +1,35 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { motion, AnimatePresence } from "motion/react";
 
 /**
- * ZynashIntro — dreamy glass UI cinematic startup animation.
+ * ZynashIntro — INSANE cinematic startup animation.
  *
- * NOT a cheap decrypt effect. NOT a broken 3D canvas. This is a premium
- * glass-morphism intro with:
- *   - Layered glass panels with backdrop-blur + refraction feel
- *   - CSS 3D perspective transforms (rotateX, rotateY, translateZ)
- *   - A light sweep that sweeps across the title (ShinyText pattern)
- *   - Particles drifting in 3D space (CSS, not WebGL — always works)
- *   - Credits that fade + scale in with spring easing (clean, not scrambled)
- *   - An aurora gradient that shifts behind everything
+ * Motion design that will blow people away at the expo. Built with
+ * motion/react (Framer Motion successor) for buttery spring physics
+ * + CSS for the glass/3D layers.
  *
- * Phases:
- *   1. (0-2s)    Aurora fades in + glass title card rotates in from 3D
- *   2. (2-5s)   Credits appear one by one with glass card spring entrance
- *   3. (5-6s)   Everything dissolves
- *   4. (6s)     Done
+ * Sequence:
+ *   1. (0-0.8s)   Black screen → light burst from center
+ *   2. (0.8-3s)   "ZYNASH LABS" title explodes in from particles
+ *                  with glass panel + light sweep + 3D rotate
+ *   3. (3-3.5s)   Title panel dissolves upward
+ *   4. (3.5-7.5s) Credits appear as glass cards, one by one,
+ *                  each with spring physics + light sweep
+ *   5. (7.5-8.5s) Everything dissolves
+ *   6. (8.5s)     Done
+ *
+ * Effects:
+ *   - Light burst (radial gradient expanding from center)
+ *   - Glass panels with backdrop-blur + refraction shimmer
+ *   - 3D perspective transforms (rotateX, rotateY, translateZ)
+ *   - Light sweep across glass surfaces (moving gradient)
+ *   - Floating particles in 3D space (CSS transform-style: preserve-3d)
+ *   - Aurora gradient that shifts behind everything
+ *   - Spring physics on every element (motion/react)
+ *   - Staggered credit reveals with AnimatePresence
+ *   - Vignette for cinematic depth
  */
 
 interface CreditEntry {
@@ -33,14 +44,22 @@ const CREDITS: CreditEntry[] = [
   { name: "Debroop", role: "distortus_rexx" },
 ];
 
-type Phase = "title" | "credits" | "fadeout" | "done";
+type Phase = "burst" | "title" | "credits" | "fadeout" | "done";
 
-// ── Floating particle (CSS 3D) ──────────────────────────────────────────
-function Particle({ delay, duration, x, y, z, size, hue }: {
-  delay: number; duration: number; x: number; y: number; z: number; size: number; hue: string;
-}) {
+// ── Floating particle ───────────────────────────────────────────────────
+function FloatingParticle({ index }: { index: number }) {
+  const seed = index * 137.5;
+  const x = (seed % 100);
+  const y = ((seed * 1.7) % 100);
+  const z = (seed % 200) - 100;
+  const size = 2 + (seed % 5);
+  const colors = ["#0a84ff", "#5e9eff", "#a0c4ff", "#ffffff", "#7c3aed", "#c084fc"];
+  const hue = colors[index % colors.length];
+  const duration = 3 + (seed % 4);
+  const delay = (seed % 30) / 10;
+
   return (
-    <div
+    <motion.div
       style={{
         position: "absolute",
         left: `${x}%`,
@@ -49,36 +68,152 @@ function Particle({ delay, duration, x, y, z, size, hue }: {
         height: size,
         borderRadius: "50%",
         background: hue,
-        boxShadow: `0 0 ${size * 4}px ${hue}`,
-        transform: `translateZ(${z}px)`,
-        opacity: 0,
-        animation: `zynash-particle-float ${duration}s ease-in-out ${delay}s infinite alternate`,
+        boxShadow: `0 0 ${size * 6}px ${hue}`,
+        transformStyle: "preserve-3d",
         pointerEvents: "none",
+      }}
+      initial={{ opacity: 0, scale: 0, z: z }}
+      animate={{
+        opacity: [0, 0.8, 0.8, 0],
+        scale: [0, 1, 1, 0.5],
+        y: [0, -40, -80],
+        z: [z, z + 50, z + 100],
+      }}
+      transition={{
+        duration,
+        delay,
+        repeat: Infinity,
+        ease: "easeInOut",
       }}
     />
   );
 }
 
+// ── Glass card with light sweep ──────────────────────────────────────────
+function GlassCard({
+  children,
+  isLead = false,
+  delay = 0,
+}: {
+  children: React.ReactNode;
+  isLead?: boolean;
+  delay?: number;
+}) {
+  return (
+    <motion.div
+      initial={{
+        opacity: 0,
+        rotateX: 25,
+        y: 60,
+        z: -150,
+        scale: 0.7,
+        filter: "blur(12px)",
+      }}
+      animate={{
+        opacity: 1,
+        rotateX: 0,
+        y: 0,
+        z: 0,
+        scale: 1,
+        filter: "blur(0px)",
+      }}
+      exit={{
+        opacity: 0,
+        y: -40,
+        scale: 0.9,
+        filter: "blur(8px)",
+      }}
+      transition={{
+        duration: 0.7,
+        delay,
+        type: "spring",
+        stiffness: 120,
+        damping: 16,
+        mass: 0.8,
+      }}
+      style={{
+        position: "relative",
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        gap: 6,
+        padding: isLead
+          ? "clamp(20px, 4vw, 36px) clamp(36px, 7vw, 70px)"
+          : "clamp(14px, 3vw, 24px) clamp(28px, 5vw, 50px)",
+        borderRadius: "16px",
+        background: isLead
+          ? "linear-gradient(135deg, rgba(10,132,255,0.08), rgba(124,58,237,0.04))"
+          : "rgba(255,255,255,0.02)",
+        backdropFilter: "blur(20px) saturate(180%)",
+        WebkitBackdropFilter: "blur(20px) saturate(180%)",
+        border: isLead
+          ? "1px solid rgba(10,132,255,0.25)"
+          : "1px solid rgba(255,255,255,0.06)",
+        boxShadow: isLead
+          ? "0 8px 40px rgba(10,132,255,0.12), inset 0 1px 0 rgba(255,255,255,0.1), 0 0 60px rgba(10,132,255,0.05)"
+          : "0 4px 20px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.04)",
+        overflow: "hidden",
+        transformStyle: "preserve-3d",
+      }}
+    >
+      {/* Light sweep */}
+      <motion.div
+        style={{
+          position: "absolute",
+          inset: 0,
+          background: "linear-gradient(105deg, transparent 40%, rgba(255,255,255,0.08) 50%, transparent 60%)",
+          backgroundSize: "200% 100%",
+          pointerEvents: "none",
+        }}
+        animate={{ backgroundPosition: ["-100% 0", "200% 0"] }}
+        transition={{
+          duration: 3,
+          repeat: Infinity,
+          ease: "easeInOut",
+          delay: delay + 0.3,
+        }}
+      />
+      {/* Top edge highlight */}
+      <div
+        style={{
+          position: "absolute",
+          top: 0,
+          left: "10%",
+          right: "10%",
+          height: 1,
+          background: isLead
+            ? "linear-gradient(90deg, transparent, rgba(10,132,255,0.5), transparent)"
+            : "linear-gradient(90deg, transparent, rgba(255,255,255,0.12), transparent)",
+        }}
+      />
+      {children}
+    </motion.div>
+  );
+}
+
+// ── Main intro ──────────────────────────────────────────────────────────
 export default function ZynashIntro({ onDone }: { onDone: () => void }) {
-  const [phase, setPhase] = useState<Phase>("title");
-  const [visibleCredit, setVisibleCredit] = useState(-1);
+  const [phase, setPhase] = useState<Phase>("burst");
+  const [visibleCredits, setVisibleCredits] = useState(0);
   const [skipped, setSkipped] = useState(false);
   const onDoneRef = useRef(onDone);
   useEffect(() => { onDoneRef.current = onDone; }, [onDone]);
 
   useEffect(() => {
     if (skipped) {
-      const t = setTimeout(() => onDoneRef.current(), 400);
+      const t = setTimeout(() => onDoneRef.current(), 500);
       return () => clearTimeout(t);
     }
 
     const timers: ReturnType<typeof setTimeout>[] = [];
-    timers.push(setTimeout(() => setPhase("credits"), 2500));
+    timers.push(setTimeout(() => setPhase("title"), 800));
+    timers.push(setTimeout(() => setPhase("credits"), 3500));
+    // Reveal credits one by one
     CREDITS.forEach((_, i) => {
-      timers.push(setTimeout(() => setVisibleCredit(i), 2500 + i * 1200));
+      timers.push(setTimeout(() => setVisibleCredits(i + 1), 3500 + i * 1400));
     });
-    timers.push(setTimeout(() => setPhase("fadeout"), 2500 + CREDITS.length * 1200 + 800));
-    timers.push(setTimeout(() => setPhase("done"), 2500 + CREDITS.length * 1200 + 800 + 1000));
+    timers.push(setTimeout(() => setPhase("fadeout"), 3500 + CREDITS.length * 1400 + 800));
+    timers.push(setTimeout(() => setPhase("done"), 3500 + CREDITS.length * 1400 + 800 + 1000));
     return () => timers.forEach(clearTimeout);
   }, [skipped]);
 
@@ -89,23 +224,13 @@ export default function ZynashIntro({ onDone }: { onDone: () => void }) {
   const skip = () => { if (!skipped) setSkipped(true); };
   if (phase === "done") return null;
 
+  const showBurst = phase === "burst";
+  const showTitle = phase === "title" || phase === "credits" || phase === "fadeout";
+  const showCredits = phase === "credits" || phase === "fadeout";
   const isFading = phase === "fadeout";
-  const showTitle = phase === "title";
-  const showCredits = phase === "credits" || isFading;
-
-  // Generate particles
-  const particles = Array.from({ length: 30 }, (_, i) => ({
-    delay: Math.random() * 4,
-    duration: 3 + Math.random() * 4,
-    x: Math.random() * 100,
-    y: Math.random() * 100,
-    z: Math.random() * 200 - 100,
-    size: 2 + Math.random() * 4,
-    hue: ["#0a84ff", "#5e9eff", "#a0c4ff", "#ffffff", "#7c3aed"][Math.floor(Math.random() * 5)],
-  }));
 
   return (
-    <div
+    <motion.div
       onClick={skip}
       style={{
         position: "fixed",
@@ -113,40 +238,71 @@ export default function ZynashIntro({ onDone }: { onDone: () => void }) {
         zIndex: 9999,
         background: "#000000",
         cursor: "pointer",
-        opacity: isFading ? 0 : 1,
-        transition: "opacity 1s ease-out",
         overflow: "hidden",
-        perspective: "1000px",
+        perspective: "1200px",
       }}
+      animate={{ opacity: isFading ? 0 : 1 }}
+      transition={{ duration: 1, ease: "easeOut" }}
     >
-      {/* Aurora gradient background — shifts slowly */}
-      <div
+      {/* ── Aurora background ─────────────────────────────────────────── */}
+      <motion.div
         style={{
           position: "absolute",
-          inset: "-20%",
+          inset: "-30%",
           background: `
-            radial-gradient(ellipse at 30% 40%, rgba(10,132,255,0.15) 0%, transparent 50%),
-            radial-gradient(ellipse at 70% 60%, rgba(124,58,237,0.12) 0%, transparent 50%),
-            radial-gradient(ellipse at 50% 50%, rgba(10,132,255,0.05) 0%, transparent 70%)
+            radial-gradient(ellipse at 25% 35%, rgba(10,132,255,0.12) 0%, transparent 50%),
+            radial-gradient(ellipse at 75% 65%, rgba(124,58,237,0.10) 0%, transparent 50%),
+            radial-gradient(ellipse at 50% 50%, rgba(10,132,255,0.03) 0%, transparent 70%)
           `,
-          animation: "zynash-aurora 8s ease-in-out infinite alternate",
         }}
+        animate={{
+          scale: [1, 1.15, 1],
+          rotate: [0, 3, 0],
+          opacity: [0.5, 1, 0.5],
+        }}
+        transition={{ duration: 8, repeat: Infinity, ease: "easeInOut" }}
       />
 
-      {/* Floating particles in 3D space */}
+      {/* ── Light burst from center ──────────────────────────────────── */}
+      <AnimatePresence>
+        {showBurst && (
+          <motion.div
+            key="burst"
+            style={{
+              position: "absolute",
+              left: "50%",
+              top: "50%",
+              width: 10,
+              height: 10,
+              borderRadius: "50%",
+              background: "radial-gradient(circle, rgba(10,132,255,0.9), rgba(10,132,255,0.2) 40%, transparent 70%)",
+            }}
+            initial={{ scale: 0, opacity: 0, x: "-50%", y: "-50%" }}
+            animate={{ scale: 200, opacity: [0, 1, 0.3, 0] }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 1.5, ease: [0.16, 1, 0.3, 1] }}
+          />
+        )}
+      </AnimatePresence>
+
+      {/* ── Floating particles ───────────────────────────────────────── */}
+      <div style={{ position: "absolute", inset: 0, transformStyle: "preserve-3d" }}>
+        {Array.from({ length: 40 }, (_, i) => (
+          <FloatingParticle key={i} index={i} />
+        ))}
+      </div>
+
+      {/* ── Vignette ─────────────────────────────────────────────────── */}
       <div
         style={{
           position: "absolute",
           inset: 0,
-          transformStyle: "preserve-3d",
+          background: "radial-gradient(ellipse at center, transparent 40%, rgba(0,0,0,0.6) 100%)",
+          pointerEvents: "none",
         }}
-      >
-        {particles.map((p, i) => (
-          <Particle key={i} {...p} />
-        ))}
-      </div>
+      />
 
-      {/* Content container — 3D centered */}
+      {/* ── Content ─────────────────────────────────────────────────── */}
       <div
         style={{
           position: "absolute",
@@ -155,268 +311,211 @@ export default function ZynashIntro({ onDone }: { onDone: () => void }) {
           flexDirection: "column",
           alignItems: "center",
           justifyContent: "center",
+          gap: "clamp(16px, 3vh, 28px)",
           transformStyle: "preserve-3d",
-          gap: "clamp(20px, 4vh, 40px)",
         }}
       >
-        {/* Phase 1: Glass title card */}
-        {showTitle && (
-          <div
-            style={{
-              transformStyle: "preserve-3d",
-              animation: "zynash-title-3d 2.5s cubic-bezier(0.16, 1, 0.3, 1) forwards",
-            }}
-          >
-            {/* Glass panel behind the title */}
-            <div
-              style={{
-                position: "relative",
-                padding: "clamp(30px, 6vw, 60px) clamp(40px, 8vw, 100px)",
-                borderRadius: "24px",
-                background: "rgba(255,255,255,0.03)",
-                backdropFilter: "blur(20px) saturate(180%)",
-                WebkitBackdropFilter: "blur(20px) saturate(180%)",
-                border: "1px solid rgba(255,255,255,0.08)",
-                boxShadow: `
-                  0 8px 32px rgba(0,0,0,0.4),
-                  inset 0 1px 0 rgba(255,255,255,0.1),
-                  0 0 80px rgba(10,132,255,0.08)
-                `,
-                textAlign: "center",
-                overflow: "hidden",
+        {/* ── Title panel ───────────────────────────────────────────── */}
+        <AnimatePresence mode="wait">
+          {showTitle && !showCredits && (
+            <motion.div
+              key="title"
+              style={{ transformStyle: "preserve-3d" }}
+              initial={{
+                opacity: 0,
+                rotateX: -50,
+                rotateY: 20,
+                z: -300,
+                scale: 0.4,
+                filter: "blur(20px)",
+              }}
+              animate={{
+                opacity: 1,
+                rotateX: 0,
+                rotateY: 0,
+                z: 0,
+                scale: 1,
+                filter: "blur(0px)",
+              }}
+              exit={{
+                opacity: 0,
+                y: -80,
+                scale: 0.85,
+                filter: "blur(15px)",
+              }}
+              transition={{
+                duration: 1,
+                type: "spring",
+                stiffness: 80,
+                damping: 18,
+                mass: 1,
               }}
             >
-              {/* Light sweep across the glass */}
               <div
                 style={{
-                  position: "absolute",
-                  inset: 0,
-                  background: "linear-gradient(105deg, transparent 30%, rgba(255,255,255,0.08) 50%, transparent 70%)",
-                  backgroundSize: "200% 100%",
-                  animation: "zynash-sweep 3s ease-in-out infinite",
-                  pointerEvents: "none",
-                }}
-              />
-
-              {/* Title with metallic gradient */}
-              <div
-                style={{
-                  fontSize: "clamp(2rem, 7vw, 5rem)",
-                  fontWeight: 800,
-                  letterSpacing: "0.12em",
-                  background: "linear-gradient(180deg, #ffffff 0%, #c0c0c8 50%, #e8e8ec 100%)",
-                  WebkitBackgroundClip: "text",
-                  WebkitTextFillColor: "transparent",
-                  backgroundClip: "text",
-                  filter: "drop-shadow(0 4px 20px rgba(10,132,255,0.25))",
                   position: "relative",
+                  padding: "clamp(30px, 6vw, 55px) clamp(40px, 8vw, 90px)",
+                  borderRadius: "24px",
+                  background: "rgba(255,255,255,0.025)",
+                  backdropFilter: "blur(24px) saturate(200%)",
+                  WebkitBackdropFilter: "blur(24px) saturate(200%)",
+                  border: "1px solid rgba(255,255,255,0.08)",
+                  boxShadow: "0 12px 48px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.12), 0 0 100px rgba(10,132,255,0.06)",
+                  textAlign: "center",
+                  overflow: "hidden",
                 }}
               >
-                ZYNASH LABS
-              </div>
+                {/* Light sweep */}
+                <motion.div
+                  style={{
+                    position: "absolute",
+                    inset: 0,
+                    background: "linear-gradient(105deg, transparent 35%, rgba(255,255,255,0.1) 50%, transparent 65%)",
+                    backgroundSize: "200% 100%",
+                    pointerEvents: "none",
+                  }}
+                  animate={{ backgroundPosition: ["-100% 0", "200% 0"] }}
+                  transition={{ duration: 2.5, repeat: Infinity, ease: "easeInOut", delay: 0.5 }}
+                />
+                {/* Top edge highlight */}
+                <div style={{ position: "absolute", top: 0, left: "15%", right: "15%", height: 1, background: "linear-gradient(90deg, transparent, rgba(10,132,255,0.4), transparent)" }} />
 
-              {/* Subtitle */}
-              <div
-                style={{
-                  marginTop: "clamp(10px, 2vw, 16px)",
-                  fontSize: "clamp(0.65rem, 1.3vw, 0.85rem)",
-                  fontWeight: 500,
-                  letterSpacing: "0.35em",
-                  color: "rgba(10,132,255,0.65)",
-                  textTransform: "uppercase",
-                  animation: "zynash-fade-in 1s ease-out 1s forwards",
-                  opacity: 0,
-                }}
-              >
-                Projected Reality Interaction &amp; Spatial Manipulation
+                <div
+                  style={{
+                    fontSize: "clamp(2rem, 7vw, 5rem)",
+                    fontWeight: 800,
+                    letterSpacing: "0.12em",
+                    background: "linear-gradient(180deg, #ffffff 0%, #b0b0b8 45%, #d8d8dc 70%, #ffffff 100%)",
+                    WebkitBackgroundClip: "text",
+                    WebkitTextFillColor: "transparent",
+                    backgroundClip: "text",
+                    filter: "drop-shadow(0 6px 24px rgba(10,132,255,0.3))",
+                    position: "relative",
+                  }}
+                >
+                  ZYNASH LABS
+                </div>
+                <motion.div
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.6, duration: 0.8 }}
+                  style={{
+                    marginTop: "clamp(10px, 2vw, 16px)",
+                    fontSize: "clamp(0.6rem, 1.2vw, 0.8rem)",
+                    fontWeight: 500,
+                    letterSpacing: "0.35em",
+                    color: "rgba(10,132,255,0.6)",
+                    textTransform: "uppercase",
+                    position: "relative",
+                  }}
+                >
+                  Projected Reality Interaction &amp; Spatial Manipulation
+                </motion.div>
               </div>
-            </div>
-          </div>
-        )}
+            </motion.div>
+          )}
+        </AnimatePresence>
 
-        {/* Phase 2: Credits with glass card entrance */}
+        {/* ── Credits ──────────────────────────────────────────────── */}
         {showCredits && (
           <div
             style={{
               display: "flex",
               flexDirection: "column",
               alignItems: "center",
-              gap: "clamp(16px, 3vh, 28px)",
-              textAlign: "center",
+              gap: "clamp(14px, 2.5vh, 24px)",
               transformStyle: "preserve-3d",
             }}
           >
-            {/* Small header */}
-            <div
+            <motion.div
+              initial={{ opacity: 0, y: -20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.6 }}
               style={{
-                fontSize: "clamp(0.7rem, 1.5vw, 0.95rem)",
+                fontSize: "clamp(0.65rem, 1.4vw, 0.85rem)",
                 fontWeight: 700,
-                letterSpacing: "0.3em",
-                color: "rgba(255,255,255,0.15)",
+                letterSpacing: "0.35em",
+                color: "rgba(255,255,255,0.12)",
                 textTransform: "uppercase",
-                marginBottom: 8,
+                marginBottom: 6,
               }}
             >
               ZYNASH LABS
-            </div>
+            </motion.div>
 
-            {CREDITS.map((credit, i) => {
-              if (i > visibleCredit) return null;
-              const isLead = credit.badge === "LEAD";
-              return (
-                <div
-                  key={i}
-                  style={{
-                    display: "flex",
-                    flexDirection: "column",
-                    alignItems: "center",
-                    gap: 6,
-                    padding: "clamp(16px, 3vw, 28px) clamp(30px, 6vw, 60px)",
-                    borderRadius: "16px",
-                    background: isLead
-                      ? "rgba(10,132,255,0.06)"
-                      : "rgba(255,255,255,0.02)",
-                    backdropFilter: "blur(16px) saturate(160%)",
-                    WebkitBackdropFilter: "blur(16px) saturate(160%)",
-                    border: isLead
-                      ? "1px solid rgba(10,132,255,0.2)"
-                      : "1px solid rgba(255,255,255,0.06)",
-                    boxShadow: isLead
-                      ? "0 4px 24px rgba(10,132,255,0.1), inset 0 1px 0 rgba(255,255,255,0.08)"
-                      : "0 4px 16px rgba(0,0,0,0.2), inset 0 1px 0 rgba(255,255,255,0.04)",
-                    animation: "zynash-credit-glass 0.7s cubic-bezier(0.34, 1.56, 0.64, 1) forwards",
-                    overflow: "hidden",
-                    position: "relative",
-                  }}
-                >
-                  {/* Light sweep on the glass card */}
-                  <div
-                    style={{
-                      position: "absolute",
-                      inset: 0,
-                      background: "linear-gradient(105deg, transparent 40%, rgba(255,255,255,0.06) 50%, transparent 60%)",
-                      backgroundSize: "200% 100%",
-                      animation: "zynash-sweep 4s ease-in-out infinite",
-                      pointerEvents: "none",
-                    }}
-                  />
-
-                  {isLead && (
+            <AnimatePresence>
+              {CREDITS.slice(0, visibleCredits).map((credit, i) => {
+                const isLead = credit.badge === "LEAD";
+                return (
+                  <GlassCard key={i} isLead={isLead} delay={0}>
+                    {isLead && (
+                      <div
+                        style={{
+                          fontSize: 9,
+                          fontWeight: 700,
+                          letterSpacing: "0.25em",
+                          color: "#0a84ff",
+                          textTransform: "uppercase",
+                          padding: "3px 10px",
+                          border: "1px solid rgba(10,132,255,0.35)",
+                          borderRadius: "999px",
+                          background: "rgba(10,132,255,0.08)",
+                          position: "relative",
+                        }}
+                      >
+                        LEAD
+                      </div>
+                    )}
                     <div
                       style={{
-                        fontSize: 9,
-                        fontWeight: 700,
-                        letterSpacing: "0.25em",
-                        color: "#0a84ff",
-                        textTransform: "uppercase",
-                        padding: "3px 10px",
-                        border: "1px solid rgba(10,132,255,0.35)",
-                        borderRadius: "999px",
-                        background: "rgba(10,132,255,0.08)",
+                        fontSize: isLead
+                          ? "clamp(1.3rem, 3.2vw, 2rem)"
+                          : "clamp(1rem, 2.4vw, 1.4rem)",
+                        fontWeight: 600,
+                        letterSpacing: "0.01em",
+                        color: isLead ? "#ffffff" : "rgba(245,245,247,0.88)",
+                        textShadow: isLead ? "0 2px 12px rgba(10,132,255,0.35)" : "none",
+                        position: "relative",
                       }}
                     >
-                      LEAD
+                      {credit.name}
                     </div>
-                  )}
-                  <div
-                    style={{
-                      fontSize: isLead
-                        ? "clamp(1.3rem, 3.2vw, 2rem)"
-                        : "clamp(1.05rem, 2.5vw, 1.5rem)",
-                      fontWeight: 600,
-                      letterSpacing: "0.01em",
-                      color: isLead ? "#ffffff" : "rgba(245,245,247,0.9)",
-                      textShadow: isLead
-                        ? "0 2px 12px rgba(10,132,255,0.3)"
-                        : "none",
-                      position: "relative",
-                    }}
-                  >
-                    {credit.name}
-                  </div>
-                  <div
-                    style={{
-                      fontSize: "clamp(0.7rem, 1.3vw, 0.85rem)",
-                      fontWeight: 500,
-                      letterSpacing: "0.1em",
-                      color: isLead
-                        ? "rgba(10,132,255,0.8)"
-                        : "rgba(255,255,255,0.35)",
-                      fontFamily: "var(--font-mono, 'SF Mono', monospace)",
-                      position: "relative",
-                    }}
-                  >
-                    {credit.role}
-                  </div>
-                </div>
-              );
-            })}
+                    <div
+                      style={{
+                        fontSize: "clamp(0.68rem, 1.2vw, 0.82rem)",
+                        fontWeight: 500,
+                        letterSpacing: "0.1em",
+                        color: isLead ? "rgba(10,132,255,0.8)" : "rgba(255,255,255,0.3)",
+                        fontFamily: "var(--font-mono, 'SF Mono', monospace)",
+                        position: "relative",
+                      }}
+                    >
+                      {credit.role}
+                    </div>
+                  </GlassCard>
+                );
+              })}
+            </AnimatePresence>
           </div>
         )}
 
         {/* Skip hint */}
-        <div
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 1.5, duration: 1 }}
           style={{
             position: "fixed",
             bottom: 30,
             fontSize: 10,
             letterSpacing: "0.2em",
-            color: "rgba(255,255,255,0.15)",
+            color: "rgba(255,255,255,0.12)",
             textTransform: "uppercase",
-            animation: "zynash-fade-in 1s ease-out 1s forwards",
-            opacity: 0,
           }}
         >
           Click anywhere to skip
-        </div>
+        </motion.div>
       </div>
-
-      <style>{`
-        @keyframes zynash-title-3d {
-          0% {
-            transform: perspective(1000px) rotateX(-45deg) rotateY(15deg) translateZ(-200px) scale(0.5);
-            opacity: 0;
-            filter: blur(15px);
-          }
-          60% {
-            opacity: 1;
-            filter: blur(0px);
-          }
-          100% {
-            transform: perspective(1000px) rotateX(0deg) rotateY(0deg) translateZ(0px) scale(1);
-            opacity: 1;
-            filter: blur(0px);
-          }
-        }
-        @keyframes zynash-credit-glass {
-          0% {
-            transform: perspective(800px) rotateX(20deg) translateY(40px) translateZ(-100px) scale(0.8);
-            opacity: 0;
-            filter: blur(10px);
-          }
-          100% {
-            transform: perspective(800px) rotateX(0deg) translateY(0px) translateZ(0px) scale(1);
-            opacity: 1;
-            filter: blur(0px);
-          }
-        }
-        @keyframes zynash-sweep {
-          0% { background-position: -100% 0; }
-          100% { background-position: 200% 0; }
-        }
-        @keyframes zynash-aurora {
-          0% { transform: scale(1) rotate(0deg); opacity: 0.6; }
-          100% { transform: scale(1.1) rotate(5deg); opacity: 1; }
-        }
-        @keyframes zynash-particle-float {
-          0% { opacity: 0; transform: translateZ(var(--z, 0px)) translateY(0px); }
-          50% { opacity: 0.8; }
-          100% { opacity: 0; transform: translateZ(var(--z, 0px)) translateY(-30px); }
-        }
-        @keyframes zynash-fade-in {
-          to { opacity: 1; }
-        }
-      `}</style>
-    </div>
+    </motion.div>
   );
 }

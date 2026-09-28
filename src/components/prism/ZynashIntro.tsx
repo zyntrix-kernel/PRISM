@@ -1,26 +1,24 @@
 "use client";
 
-import { useEffect, useRef, useState, useMemo, Suspense } from "react";
-import { Canvas, useFrame, useThree } from "@react-three/fiber";
-import { Text } from "@react-three/drei";
-import * as THREE from "three";
+import { useEffect, useRef, useState } from "react";
 
 /**
- * ZynashIntro — cinematic 3D startup animation.
+ * ZynashIntro — dreamy glass UI cinematic startup animation.
  *
- * Built by combining techniques from 3 reference repos:
- *   - anastasiya1155/3d-text (MIT): TextGeometry + particle field pattern
- *   - Imagineer99/Three.js-3D-Text: MeshMatcapMaterial metallic shading
- *   - DavidHDev/react-bits (MIT + Commons Clause): ShinyText gradient sweep,
- *     DecryptedText scramble reveal, Particles background
+ * NOT a cheap decrypt effect. NOT a broken 3D canvas. This is a premium
+ * glass-morphism intro with:
+ *   - Layered glass panels with backdrop-blur + refraction feel
+ *   - CSS 3D perspective transforms (rotateX, rotateY, translateZ)
+ *   - A light sweep that sweeps across the title (ShinyText pattern)
+ *   - Particles drifting in 3D space (CSS, not WebGL — always works)
+ *   - Credits that fade + scale in with spring easing (clean, not scrambled)
+ *   - An aurora gradient that shifts behind everything
  *
  * Phases:
- *   1. (0-3s)   "ZYNASH LABS" 3D text rotates in + metallic shimmer
- *   2. (3-7s)   Credits appear one by one with decrypt/scramble effect
- *   3. (7-8s)   Fade out
- *   4. (8s)     Done — app visible
- *
- * Attributions: see THIRD_PARTY_LICENSES.md
+ *   1. (0-2s)    Aurora fades in + glass title card rotates in from 3D
+ *   2. (2-5s)   Credits appear one by one with glass card spring entrance
+ *   3. (5-6s)   Everything dissolves
+ *   4. (6s)     Done
  */
 
 interface CreditEntry {
@@ -37,261 +35,36 @@ const CREDITS: CreditEntry[] = [
 
 type Phase = "title" | "credits" | "fadeout" | "done";
 
-// ── 3D Title mesh with metallic shimmer ─────────────────────────────────
-function Title3D({ visible }: { visible: boolean }) {
-  const meshRef = useRef<THREE.Mesh>(null);
-  const matRef = useRef<THREE.MeshStandardMaterial>(null);
-  const { viewport } = useThree();
-
-  useFrame((state) => {
-    const t = state.clock.getElapsedTime();
-    if (meshRef.current) {
-      // Gentle floating + rotation
-      meshRef.current.rotation.y = Math.sin(t * 0.5) * 0.15;
-      meshRef.current.rotation.x = Math.sin(t * 0.3) * 0.05;
-      meshRef.current.position.y = Math.sin(t * 0.8) * 0.05;
-    }
-    // Animate the shimmer uniform (moving highlight band)
-    if (matRef.current) {
-      const uniforms = matRef.current.uniforms;
-      if (uniforms?.uTime) uniforms.uTime.value = t;
-    }
-  });
-
-  if (!visible) return null;
-
-  return (
-    <mesh ref={meshRef}>
-      <Text
-        fontSize={viewport.width < 6 ? 0.6 : 0.9}
-        color="#f5f5f7"
-        anchorX="center"
-        anchorY="middle"
-        outlineWidth={0.005}
-        outlineColor="#0a84ff"
-        outlineOpacity={0.3}
-      >
-        ZYNASH LABS
-        {/* Custom onBeforeCompile adds a metallic shimmer sweep */}
-        <meshStandardMaterial
-          ref={matRef}
-          color="#e8e8ec"
-          metalness={0.9}
-          roughness={0.2}
-          emissive="#0a84ff"
-          emissiveIntensity={0.05}
-          onBeforeCompile={(shader) => {
-            shader.uniforms.uTime = { value: 0 };
-            shader.vertexShader = shader.vertexShader.replace(
-              "varying vec3 vViewPosition;",
-              "varying vec3 vViewPosition;\nvarying vec2 vUv2;",
-            );
-            shader.vertexShader = shader.vertexShader.replace(
-              "#include <project_vertex>",
-              `#include <project_vertex>
-               vUv2 = uv;`,
-            );
-            shader.fragmentShader = shader.fragmentShader.replace(
-              "varying vec3 vViewPosition;",
-              "varying vec3 vViewPosition;\nvarying vec2 vUv2;\nuniform float uTime;",
-            );
-            shader.fragmentShader = shader.fragmentShader.replace(
-              "#include <dithering_fragment>",
-              `#include <dithering_fragment>
-               // Metallic shimmer sweep: a moving highlight band across the text
-               float sweep = sin(vUv2.x * 3.14 + uTime * 1.5) * 0.5 + 0.5;
-               sweep = pow(sweep, 3.0);
-               gl_FragColor.rgb += vec3(0.4, 0.5, 0.6) * sweep * 0.3;`,
-            );
-          }}
-        />
-      </Text>
-    </mesh>
-  );
-}
-
-// ── Particle field behind the title ──────────────────────────────────────
-function ParticleField({ count = 800 }: { count?: number }) {
-  const pointsRef = useRef<THREE.Points>(null);
-
-  const { positions, colors } = useMemo(() => {
-    const pos = new Float32Array(count * 3);
-    const col = new Float32Array(count * 3);
-    for (let i = 0; i < count; i++) {
-      // Sphere distribution
-      const r = 3 + Math.random() * 8;
-      const theta = Math.random() * Math.PI * 2;
-      const phi = Math.acos(2 * Math.random() - 1);
-      pos[i * 3] = r * Math.sin(phi) * Math.cos(theta);
-      pos[i * 3 + 1] = r * Math.sin(phi) * Math.sin(theta);
-      pos[i * 3 + 2] = r * Math.cos(phi) - 5;
-      // Blue-white color variance
-      const hue = 0.55 + Math.random() * 0.1;
-      const c = new THREE.Color().setHSL(hue, 0.6, 0.5 + Math.random() * 0.3);
-      col[i * 3] = c.r;
-      col[i * 3 + 1] = c.g;
-      col[i * 3 + 2] = c.b;
-    }
-    return { positions: pos, colors: col };
-  }, [count]);
-
-  useFrame((state) => {
-    if (pointsRef.current) {
-      const t = state.clock.getElapsedTime();
-      pointsRef.current.rotation.y = t * 0.03;
-      pointsRef.current.rotation.x = Math.sin(t * 0.1) * 0.05;
-    }
-  });
-
-  return (
-    <points ref={pointsRef}>
-      <bufferGeometry>
-        <bufferAttribute attach="attributes-position" args={[positions, 3]} />
-        <bufferAttribute attach="attributes-color" args={[colors, 3]} />
-      </bufferGeometry>
-      <pointsMaterial
-        size={0.04}
-        vertexColors
-        transparent
-        opacity={0.6}
-        blending={THREE.AdditiveBlending}
-        depthWrite={false}
-        sizeAttenuation
-      />
-    </points>
-  );
-}
-
-// ── Scene lighting ───────────────────────────────────────────────────────
-function SceneLights() {
-  return (
-    <>
-      <ambientLight intensity={0.4} />
-      <pointLight position={[5, 5, 5]} intensity={2} color="#ffffff" />
-      <pointLight position={[-5, -3, 3]} intensity={1.5} color="#0a84ff" />
-      <pointLight position={[0, 0, -5]} intensity={1} color="#3060ff" />
-    </>
-  );
-}
-
-// ── Credit text with decrypt/scramble reveal (react-bits DecryptedText) ──
-function DecryptedCredit({
-  credit,
-  index,
-  visibleIndex,
-  isLead,
-}: {
-  credit: CreditEntry;
-  index: number;
-  visibleIndex: number;
-  isLead: boolean;
+// ── Floating particle (CSS 3D) ──────────────────────────────────────────
+function Particle({ delay, duration, x, y, z, size, hue }: {
+  delay: number; duration: number; x: number; y: number; z: number; size: number; hue: string;
 }) {
-  const [displayText, setDisplayText] = useState("");
-  const [done, setDone] = useState(false);
-  const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789._-";
-
-  useEffect(() => {
-    if (index > visibleIndex) {
-      setDisplayText("");
-      setDone(false);
-      return;
-    }
-    if (index < visibleIndex || done) return;
-
-    // Scramble reveal
-    const target = credit.name;
-    let iteration = 0;
-    const maxIterations = target.length * 3;
-    const interval = setInterval(() => {
-      setDisplayText(
-        target
-          .split("")
-          .map((char, i) => {
-            if (i < iteration / 3) return target[i];
-            return chars[Math.floor(Math.random() * chars.length)];
-          })
-          .join(""),
-      );
-      iteration++;
-      if (iteration > maxIterations) {
-        setDisplayText(target);
-        setDone(true);
-        clearInterval(interval);
-      }
-    }, 40);
-    return () => clearInterval(interval);
-  }, [index, visibleIndex, credit.name, done]);
-
-  if (index > visibleIndex) return null;
-
   return (
     <div
       style={{
-        display: "flex",
-        flexDirection: "column",
-        alignItems: "center",
-        gap: 4,
-        animation: "zynash-credit-in 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) forwards",
+        position: "absolute",
+        left: `${x}%`,
+        top: `${y}%`,
+        width: size,
+        height: size,
+        borderRadius: "50%",
+        background: hue,
+        boxShadow: `0 0 ${size * 4}px ${hue}`,
+        transform: `translateZ(${z}px)`,
+        opacity: 0,
+        animation: `zynash-particle-float ${duration}s ease-in-out ${delay}s infinite alternate`,
+        pointerEvents: "none",
       }}
-    >
-      {isLead && (
-        <div
-          style={{
-            fontSize: 9,
-            fontWeight: 700,
-            letterSpacing: "0.2em",
-            color: "#0a84ff",
-            textTransform: "uppercase",
-            padding: "2px 8px",
-            border: "1px solid rgba(10,132,255,0.4)",
-            borderRadius: "999px",
-            marginBottom: 4,
-          }}
-        >
-          LEAD
-        </div>
-      )}
-      <div
-        style={{
-          fontSize: isLead ? "clamp(1.4rem, 3.5vw, 2.2rem)" : "clamp(1.1rem, 2.8vw, 1.7rem)",
-          fontWeight: 600,
-          letterSpacing: "0.02em",
-          color: isLead ? "#f5f5f7" : "rgba(245,245,247,0.85)",
-          textShadow: isLead ? "0 2px 12px rgba(10,132,255,0.25)" : "none",
-          fontFamily: "var(--font-mono, 'SF Mono', monospace)",
-          minHeight: "1.2em",
-        }}
-      >
-        {displayText || "\u00A0"}
-      </div>
-      {done && (
-        <div
-          style={{
-            fontSize: "clamp(0.75rem, 1.4vw, 0.9rem)",
-            fontWeight: 500,
-            letterSpacing: "0.1em",
-            color: isLead ? "rgba(10,132,255,0.8)" : "rgba(255,255,255,0.35)",
-            fontFamily: "var(--font-mono, monospace)",
-            animation: "zynash-fade-in 0.4s ease-out forwards",
-            opacity: 0,
-          }}
-        >
-          {credit.role}
-        </div>
-      )}
-    </div>
+    />
   );
 }
 
-// ── Main intro component ────────────────────────────────────────────────
 export default function ZynashIntro({ onDone }: { onDone: () => void }) {
   const [phase, setPhase] = useState<Phase>("title");
   const [visibleCredit, setVisibleCredit] = useState(-1);
   const [skipped, setSkipped] = useState(false);
   const onDoneRef = useRef(onDone);
-  useEffect(() => {
-    onDoneRef.current = onDone;
-  }, [onDone]);
+  useEffect(() => { onDoneRef.current = onDone; }, [onDone]);
 
   useEffect(() => {
     if (skipped) {
@@ -300,21 +73,12 @@ export default function ZynashIntro({ onDone }: { onDone: () => void }) {
     }
 
     const timers: ReturnType<typeof setTimeout>[] = [];
-
-    // Phase 1: title (0-3s)
-    timers.push(setTimeout(() => setPhase("credits"), 3000));
-
-    // Phase 2: credits one by one (3s start, 1.5s each)
+    timers.push(setTimeout(() => setPhase("credits"), 2500));
     CREDITS.forEach((_, i) => {
-      timers.push(setTimeout(() => setVisibleCredit(i), 3000 + i * 1500));
+      timers.push(setTimeout(() => setVisibleCredit(i), 2500 + i * 1200));
     });
-
-    // Phase 3: fade out
-    timers.push(setTimeout(() => setPhase("fadeout"), 3000 + CREDITS.length * 1500 + 1000));
-
-    // Phase 4: done
-    timers.push(setTimeout(() => setPhase("done"), 3000 + CREDITS.length * 1500 + 1000 + 1000));
-
+    timers.push(setTimeout(() => setPhase("fadeout"), 2500 + CREDITS.length * 1200 + 800));
+    timers.push(setTimeout(() => setPhase("done"), 2500 + CREDITS.length * 1200 + 800 + 1000));
     return () => timers.forEach(clearTimeout);
   }, [skipped]);
 
@@ -322,15 +86,23 @@ export default function ZynashIntro({ onDone }: { onDone: () => void }) {
     if (phase === "done") onDoneRef.current();
   }, [phase]);
 
-  const skip = () => {
-    if (!skipped) setSkipped(true);
-  };
-
+  const skip = () => { if (!skipped) setSkipped(true); };
   if (phase === "done") return null;
 
   const isFading = phase === "fadeout";
   const showTitle = phase === "title";
   const showCredits = phase === "credits" || isFading;
+
+  // Generate particles
+  const particles = Array.from({ length: 30 }, (_, i) => ({
+    delay: Math.random() * 4,
+    duration: 3 + Math.random() * 4,
+    x: Math.random() * 100,
+    y: Math.random() * 100,
+    z: Math.random() * 200 - 100,
+    size: 2 + Math.random() * 4,
+    hue: ["#0a84ff", "#5e9eff", "#a0c4ff", "#ffffff", "#7c3aed"][Math.floor(Math.random() * 5)],
+  }));
 
   return (
     <div
@@ -340,125 +112,306 @@ export default function ZynashIntro({ onDone }: { onDone: () => void }) {
         inset: 0,
         zIndex: 9999,
         background: "#000000",
-        display: "flex",
-        flexDirection: "column",
-        alignItems: "center",
-        justifyContent: "center",
         cursor: "pointer",
         opacity: isFading ? 0 : 1,
         transition: "opacity 1s ease-out",
         overflow: "hidden",
+        perspective: "1000px",
       }}
     >
-      {/* 3D Canvas — title + particles */}
-      {showTitle && (
-        <div
-          style={{
-            position: "absolute",
-            inset: 0,
-            animation: "zynash-canvas-in 0.5s ease-out forwards",
-            opacity: 0,
-          }}
-        >
-          <Canvas
-            camera={{ position: [0, 0, 5], fov: 50 }}
-            style={{ background: "transparent" }}
-            dpr={[1, 2]}
-          >
-            <Suspense fallback={null}>
-              <SceneLights />
-              <ParticleField count={600} />
-              <Title3D visible={showTitle} />
-            </Suspense>
-          </Canvas>
-        </div>
-      )}
-
-      {/* Subtitle below the 3D title */}
-      {showTitle && (
-        <div
-          style={{
-            position: "absolute",
-            bottom: "30%",
-            textAlign: "center",
-            animation: "zynash-fade-in 1s ease-out 1.5s forwards",
-            opacity: 0,
-          }}
-        >
-          <div
-            style={{
-              fontSize: "clamp(0.7rem, 1.5vw, 0.9rem)",
-              fontWeight: 500,
-              letterSpacing: "0.4em",
-              color: "rgba(10,132,255,0.7)",
-              textTransform: "uppercase",
-            }}
-          >
-            Projected Reality Interaction &amp; Spatial Manipulation
-          </div>
-        </div>
-      )}
-
-      {/* Phase 2: Credits with decrypt reveal */}
-      {showCredits && (
-        <div
-          style={{
-            display: "flex",
-            flexDirection: "column",
-            alignItems: "center",
-            gap: "clamp(20px, 4vh, 40px)",
-            textAlign: "center",
-            zIndex: 10,
-          }}
-        >
-          <div
-            style={{
-              fontSize: "clamp(0.8rem, 1.8vw, 1.1rem)",
-              fontWeight: 700,
-              letterSpacing: "0.3em",
-              color: "rgba(255,255,255,0.2)",
-              textTransform: "uppercase",
-              marginBottom: 10,
-            }}
-          >
-            ZYNASH LABS
-          </div>
-
-          {CREDITS.map((credit, i) => (
-            <DecryptedCredit
-              key={i}
-              credit={credit}
-              index={i}
-              visibleIndex={visibleCredit}
-              isLead={credit.badge === "LEAD"}
-            />
-          ))}
-        </div>
-      )}
-
-      {/* Skip hint */}
+      {/* Aurora gradient background — shifts slowly */}
       <div
         style={{
-          position: "fixed",
-          bottom: 30,
-          fontSize: 10,
-          letterSpacing: "0.2em",
-          color: "rgba(255,255,255,0.2)",
-          textTransform: "uppercase",
-          animation: "zynash-fade-in 1s ease-out 1s forwards",
-          opacity: 0,
+          position: "absolute",
+          inset: "-20%",
+          background: `
+            radial-gradient(ellipse at 30% 40%, rgba(10,132,255,0.15) 0%, transparent 50%),
+            radial-gradient(ellipse at 70% 60%, rgba(124,58,237,0.12) 0%, transparent 50%),
+            radial-gradient(ellipse at 50% 50%, rgba(10,132,255,0.05) 0%, transparent 70%)
+          `,
+          animation: "zynash-aurora 8s ease-in-out infinite alternate",
+        }}
+      />
+
+      {/* Floating particles in 3D space */}
+      <div
+        style={{
+          position: "absolute",
+          inset: 0,
+          transformStyle: "preserve-3d",
         }}
       >
-        Click anywhere to skip
+        {particles.map((p, i) => (
+          <Particle key={i} {...p} />
+        ))}
+      </div>
+
+      {/* Content container — 3D centered */}
+      <div
+        style={{
+          position: "absolute",
+          inset: 0,
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          justifyContent: "center",
+          transformStyle: "preserve-3d",
+          gap: "clamp(20px, 4vh, 40px)",
+        }}
+      >
+        {/* Phase 1: Glass title card */}
+        {showTitle && (
+          <div
+            style={{
+              transformStyle: "preserve-3d",
+              animation: "zynash-title-3d 2.5s cubic-bezier(0.16, 1, 0.3, 1) forwards",
+            }}
+          >
+            {/* Glass panel behind the title */}
+            <div
+              style={{
+                position: "relative",
+                padding: "clamp(30px, 6vw, 60px) clamp(40px, 8vw, 100px)",
+                borderRadius: "24px",
+                background: "rgba(255,255,255,0.03)",
+                backdropFilter: "blur(20px) saturate(180%)",
+                WebkitBackdropFilter: "blur(20px) saturate(180%)",
+                border: "1px solid rgba(255,255,255,0.08)",
+                boxShadow: `
+                  0 8px 32px rgba(0,0,0,0.4),
+                  inset 0 1px 0 rgba(255,255,255,0.1),
+                  0 0 80px rgba(10,132,255,0.08)
+                `,
+                textAlign: "center",
+                overflow: "hidden",
+              }}
+            >
+              {/* Light sweep across the glass */}
+              <div
+                style={{
+                  position: "absolute",
+                  inset: 0,
+                  background: "linear-gradient(105deg, transparent 30%, rgba(255,255,255,0.08) 50%, transparent 70%)",
+                  backgroundSize: "200% 100%",
+                  animation: "zynash-sweep 3s ease-in-out infinite",
+                  pointerEvents: "none",
+                }}
+              />
+
+              {/* Title with metallic gradient */}
+              <div
+                style={{
+                  fontSize: "clamp(2rem, 7vw, 5rem)",
+                  fontWeight: 800,
+                  letterSpacing: "0.12em",
+                  background: "linear-gradient(180deg, #ffffff 0%, #c0c0c8 50%, #e8e8ec 100%)",
+                  WebkitBackgroundClip: "text",
+                  WebkitTextFillColor: "transparent",
+                  backgroundClip: "text",
+                  filter: "drop-shadow(0 4px 20px rgba(10,132,255,0.25))",
+                  position: "relative",
+                }}
+              >
+                ZYNASH LABS
+              </div>
+
+              {/* Subtitle */}
+              <div
+                style={{
+                  marginTop: "clamp(10px, 2vw, 16px)",
+                  fontSize: "clamp(0.65rem, 1.3vw, 0.85rem)",
+                  fontWeight: 500,
+                  letterSpacing: "0.35em",
+                  color: "rgba(10,132,255,0.65)",
+                  textTransform: "uppercase",
+                  animation: "zynash-fade-in 1s ease-out 1s forwards",
+                  opacity: 0,
+                }}
+              >
+                Projected Reality Interaction &amp; Spatial Manipulation
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Phase 2: Credits with glass card entrance */}
+        {showCredits && (
+          <div
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              gap: "clamp(16px, 3vh, 28px)",
+              textAlign: "center",
+              transformStyle: "preserve-3d",
+            }}
+          >
+            {/* Small header */}
+            <div
+              style={{
+                fontSize: "clamp(0.7rem, 1.5vw, 0.95rem)",
+                fontWeight: 700,
+                letterSpacing: "0.3em",
+                color: "rgba(255,255,255,0.15)",
+                textTransform: "uppercase",
+                marginBottom: 8,
+              }}
+            >
+              ZYNASH LABS
+            </div>
+
+            {CREDITS.map((credit, i) => {
+              if (i > visibleCredit) return null;
+              const isLead = credit.badge === "LEAD";
+              return (
+                <div
+                  key={i}
+                  style={{
+                    display: "flex",
+                    flexDirection: "column",
+                    alignItems: "center",
+                    gap: 6,
+                    padding: "clamp(16px, 3vw, 28px) clamp(30px, 6vw, 60px)",
+                    borderRadius: "16px",
+                    background: isLead
+                      ? "rgba(10,132,255,0.06)"
+                      : "rgba(255,255,255,0.02)",
+                    backdropFilter: "blur(16px) saturate(160%)",
+                    WebkitBackdropFilter: "blur(16px) saturate(160%)",
+                    border: isLead
+                      ? "1px solid rgba(10,132,255,0.2)"
+                      : "1px solid rgba(255,255,255,0.06)",
+                    boxShadow: isLead
+                      ? "0 4px 24px rgba(10,132,255,0.1), inset 0 1px 0 rgba(255,255,255,0.08)"
+                      : "0 4px 16px rgba(0,0,0,0.2), inset 0 1px 0 rgba(255,255,255,0.04)",
+                    animation: "zynash-credit-glass 0.7s cubic-bezier(0.34, 1.56, 0.64, 1) forwards",
+                    overflow: "hidden",
+                    position: "relative",
+                  }}
+                >
+                  {/* Light sweep on the glass card */}
+                  <div
+                    style={{
+                      position: "absolute",
+                      inset: 0,
+                      background: "linear-gradient(105deg, transparent 40%, rgba(255,255,255,0.06) 50%, transparent 60%)",
+                      backgroundSize: "200% 100%",
+                      animation: "zynash-sweep 4s ease-in-out infinite",
+                      pointerEvents: "none",
+                    }}
+                  />
+
+                  {isLead && (
+                    <div
+                      style={{
+                        fontSize: 9,
+                        fontWeight: 700,
+                        letterSpacing: "0.25em",
+                        color: "#0a84ff",
+                        textTransform: "uppercase",
+                        padding: "3px 10px",
+                        border: "1px solid rgba(10,132,255,0.35)",
+                        borderRadius: "999px",
+                        background: "rgba(10,132,255,0.08)",
+                      }}
+                    >
+                      LEAD
+                    </div>
+                  )}
+                  <div
+                    style={{
+                      fontSize: isLead
+                        ? "clamp(1.3rem, 3.2vw, 2rem)"
+                        : "clamp(1.05rem, 2.5vw, 1.5rem)",
+                      fontWeight: 600,
+                      letterSpacing: "0.01em",
+                      color: isLead ? "#ffffff" : "rgba(245,245,247,0.9)",
+                      textShadow: isLead
+                        ? "0 2px 12px rgba(10,132,255,0.3)"
+                        : "none",
+                      position: "relative",
+                    }}
+                  >
+                    {credit.name}
+                  </div>
+                  <div
+                    style={{
+                      fontSize: "clamp(0.7rem, 1.3vw, 0.85rem)",
+                      fontWeight: 500,
+                      letterSpacing: "0.1em",
+                      color: isLead
+                        ? "rgba(10,132,255,0.8)"
+                        : "rgba(255,255,255,0.35)",
+                      fontFamily: "var(--font-mono, 'SF Mono', monospace)",
+                      position: "relative",
+                    }}
+                  >
+                    {credit.role}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {/* Skip hint */}
+        <div
+          style={{
+            position: "fixed",
+            bottom: 30,
+            fontSize: 10,
+            letterSpacing: "0.2em",
+            color: "rgba(255,255,255,0.15)",
+            textTransform: "uppercase",
+            animation: "zynash-fade-in 1s ease-out 1s forwards",
+            opacity: 0,
+          }}
+        >
+          Click anywhere to skip
+        </div>
       </div>
 
       <style>{`
-        @keyframes zynash-canvas-in {
-          to { opacity: 1; }
+        @keyframes zynash-title-3d {
+          0% {
+            transform: perspective(1000px) rotateX(-45deg) rotateY(15deg) translateZ(-200px) scale(0.5);
+            opacity: 0;
+            filter: blur(15px);
+          }
+          60% {
+            opacity: 1;
+            filter: blur(0px);
+          }
+          100% {
+            transform: perspective(1000px) rotateX(0deg) rotateY(0deg) translateZ(0px) scale(1);
+            opacity: 1;
+            filter: blur(0px);
+          }
         }
-        @keyframes zynash-credit-in {
-          0% { transform: translateY(30px) scale(0.8); opacity: 0; filter: blur(8px); }
-          100% { transform: translateY(0) scale(1); opacity: 1; filter: blur(0px); }
+        @keyframes zynash-credit-glass {
+          0% {
+            transform: perspective(800px) rotateX(20deg) translateY(40px) translateZ(-100px) scale(0.8);
+            opacity: 0;
+            filter: blur(10px);
+          }
+          100% {
+            transform: perspective(800px) rotateX(0deg) translateY(0px) translateZ(0px) scale(1);
+            opacity: 1;
+            filter: blur(0px);
+          }
+        }
+        @keyframes zynash-sweep {
+          0% { background-position: -100% 0; }
+          100% { background-position: 200% 0; }
+        }
+        @keyframes zynash-aurora {
+          0% { transform: scale(1) rotate(0deg); opacity: 0.6; }
+          100% { transform: scale(1.1) rotate(5deg); opacity: 1; }
+        }
+        @keyframes zynash-particle-float {
+          0% { opacity: 0; transform: translateZ(var(--z, 0px)) translateY(0px); }
+          50% { opacity: 0.8; }
+          100% { opacity: 0; transform: translateZ(var(--z, 0px)) translateY(-30px); }
         }
         @keyframes zynash-fade-in {
           to { opacity: 1; }

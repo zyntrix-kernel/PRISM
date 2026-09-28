@@ -9,7 +9,7 @@ import PresetTransitionOverlay from "./PresetTransitionOverlay";
 import InputModeIndicator from "./InputModeIndicator";
 import PrismToast from "./PrismToast";
 import SettingsPanel from "./SettingsPanel";
-import ZynashIntro from "./ZynashIntro";
+import PrismCinematicIntro from "./PrismCinematicIntro";
 import {
   Camera,
   Eye,
@@ -159,7 +159,13 @@ export default function PrismStage() {
   return (
     <div className="prism-root" ref={rootRef}>
       {/* Cinematic ZYNASH LABS startup intro — plays once on first load */}
-      {showIntro && <ZynashIntro onDone={dismissIntro} />}
+      {showIntro && (
+        <PrismCinematicIntro
+          onComplete={dismissIntro}
+          showSkip={true}
+          duration={11200}
+        />
+      )}
 
       {/* Preset-switch transition overlay (dreamy radial flash on world change) */}
       <PresetTransitionOverlay key={preset} preset={preset} />

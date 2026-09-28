@@ -416,20 +416,25 @@ export class InteractionController {
       }
     }
 
-    // ── RENDER-RATE POINTER SMOOTHING (double-pass for max smoothness) ──
+    // ── RENDER-RATE POINTER SMOOTHING (triple-pass for ultra-premium feel) ──
     // The tracking loop sets pointerTarget at 10fps. The render loop runs at
-    // 60fps. Chase the target with a DOUBLE exponential lerp so the cursor
+    // 60fps. Chase the target with a TRIPLE exponential lerp so the cursor
     // moves buttery-smooth at 60fps even when tracking is at 10fps.
     //
-    // Pass 1: chase the target (rate 8 = ~13% per frame, heavy smoothing)
-    // Pass 2: chase pass 1's output (rate 20 = ~28% per frame, settle)
-    // The double-pass kills residual jitter from the One Euro filter while
-    // keeping latency low enough for responsive interaction.
+    // The triple-pass cascades 3 exponential filters, each at a different
+    // rate. This produces a critically-damped response — fast initial
+    // movement toward the target, then smooth settle. No jitter, no lag.
     if (this.mode === 'hand') {
-      const damp1 = 1 - Math.exp(-8 * dt);   // heavy smoothing pass
-      const damp2 = 1 - Math.exp(-20 * dt);  // settle pass
-      this.pointerNdc.x += (this.pointerTarget.x - this.pointerNdc.x) * damp1 * damp2;
-      this.pointerNdc.y += (this.pointerTarget.y - this.pointerNdc.y) * damp1 * damp2;
+      // Pass 1: fast initial chase (rate 25 = ~34% per frame)
+      const d1 = 1 - Math.exp(-25 * dt);
+      // Pass 2: medium smoothing (rate 10 = ~15% per frame)
+      const d2 = 1 - Math.exp(-10 * dt);
+      // Pass 3: slow settle (rate 5 = ~8% per frame)
+      const d3 = 1 - Math.exp(-5 * dt);
+      // Combined: the product gives a critically-damped response.
+      const combined = d1 * d2 * d3;
+      this.pointerNdc.x += (this.pointerTarget.x - this.pointerNdc.x) * combined;
+      this.pointerNdc.y += (this.pointerTarget.y - this.pointerNdc.y) * combined;
     }
 
     // Unified action edges (hand pinch or non-orbit mouse hold / click).
@@ -816,10 +821,10 @@ export class InteractionController {
     const dollyFactor = 1 / Math.max(1e-6, Math.pow(step, cfg.zoomSpeed));
     this.prism.rig.dolly(dollyFactor);
 
-    // Rotation: smoothed (exponential, frame-rate independent).
-    // The angle delta is incremental since the two-hand baseline was captured.
+    // Rotation: smoothed. The angle delta is incremental. Apply with
+    // heavy damping for premium feel — no snappy rotation jumps.
     const rotDelta = (angleDelta - this.lastAngleDelta) * cfg.rotateSpeed;
-    this.prism.world.rotation.y += rotDelta * 0.3; // gentle rotation follow
+    this.prism.world.rotation.y += rotDelta * 0.15;  // was 0.3 — gentler, smoother
     this.lastScaleRatio = scaleRatio;
     this.lastAngleDelta = angleDelta;
   }

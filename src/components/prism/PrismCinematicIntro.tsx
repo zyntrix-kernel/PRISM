@@ -27,7 +27,7 @@ const TEAM = [
   },
 ];
 
-const INTRO_DURATION = 11200;
+const INTRO_DURATION = 16000; // was 11200 — longer so people can actually read it
 
 type Particle = {
   x: number;

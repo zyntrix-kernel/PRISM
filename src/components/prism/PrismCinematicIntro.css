@@ -600,7 +600,7 @@
 
   bottom: 25px;
 
-  font-size: 8px;
+  font-size: 12px;
 
   letter-spacing: .5em;
 
@@ -663,7 +663,7 @@
 }
 
 .micro {
-  font-size: 9px;
+  font-size: 13px;
 
   letter-spacing: .55em;
 
@@ -703,7 +703,7 @@
   margin: 12px 0 0;
 
   font-size:
-    clamp(60px, 10vw, 150px);
+    clamp(80px, 13vw, 200px);
 
   font-weight: 200;
 
@@ -730,7 +730,7 @@
 ================================ */
 
 .labs-small {
-  font-size: 15px;
+  font-size: 22px;
 
   letter-spacing: .7em;
 
@@ -745,7 +745,7 @@
   margin: 8px 0 0;
 
   font-size:
-    clamp(82px, 13vw, 175px);
+    clamp(105px, 16vw, 230px);
 
   line-height: .8;
 
@@ -805,7 +805,7 @@
 .copy-labs p {
   margin: 0;
 
-  font-size: 9px;
+  font-size: 13px;
 
   letter-spacing: .54em;
 
@@ -823,7 +823,7 @@
 }
 
 .project-overline {
-  font-size: 9px;
+  font-size: 13px;
 
   letter-spacing: .45em;
 
@@ -835,7 +835,7 @@
   margin: 15px 0 12px;
 
   font-size:
-    clamp(90px, 18vw, 230px);
+    clamp(120px, 23vw, 300px);
 
   font-weight: 150;
 
@@ -863,7 +863,7 @@
 }
 
 .prism-subline {
-  font-size: 10px;
+  font-size: 22px;
 
   line-height: 1.8;
 
@@ -883,7 +883,7 @@
 }
 
 .title-kicker {
-  font-size: 9px;
+  font-size: 13px;
 
   letter-spacing: .55em;
 
@@ -895,7 +895,7 @@
   margin: 15px 0 18px;
 
   font-size:
-    clamp(95px, 18vw, 250px);
+    clamp(125px, 23vw, 320px);
 
   line-height: .72;
 
@@ -928,7 +928,7 @@
 .copy-title p {
   margin: 0;
 
-  font-size: 14px;
+  font-size: 20px;
 
   line-height: 1.75;
 
@@ -978,7 +978,7 @@
     1px solid
     rgba(142,205,255,.12);
 
-  font-size: 9px;
+  font-size: 13px;
 
   letter-spacing: .48em;
 
@@ -1037,7 +1037,7 @@
 }
 
 .member-handle {
-  font-size: 11px;
+  font-size: 18px;
 
   letter-spacing: .25em;
 
@@ -1051,7 +1051,7 @@
   margin-top: 5px;
 
   font-size:
-    clamp(23px, 3.5vw, 45px);
+    clamp(32px, 5vw, 65px);
 
   line-height: 1.15;
 
@@ -1065,7 +1065,7 @@
 .member-role {
   margin-top: 9px;
 
-  font-size: 9px;
+  font-size: 13px;
 
   letter-spacing: .4em;
 
@@ -1114,7 +1114,7 @@
 }
 
 .launch-small {
-  font-size: 9px;
+  font-size: 13px;
 
   letter-spacing: .48em;
 
@@ -1126,7 +1126,7 @@
   margin-top: 17px;
 
   font-size:
-    clamp(45px, 8vw, 110px);
+    clamp(60px, 11vw, 150px);
 
   font-weight: 250;
 
@@ -1167,7 +1167,7 @@
 
   z-index: 50;
 
-  font-size: 8px;
+  font-size: 12px;
 
   letter-spacing: .38em;
 
@@ -1194,7 +1194,7 @@
   color:
     rgba(190,233,255,.75);
 
-  font-size: 10px;
+  font-size: 22px;
 
   letter-spacing: 0;
 }
@@ -1359,7 +1359,7 @@
     1px solid
     rgba(174,224,255,.15);
 
-  font-size: 7px;
+  font-size: 11px;
 
   letter-spacing: .1em;
 }

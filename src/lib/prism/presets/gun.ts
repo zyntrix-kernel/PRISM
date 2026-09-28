@@ -193,9 +193,9 @@ const SMOKE_COUNT = 8;
 const SPARK_COUNT = 7;
 const HAZE_COUNT_MED = 60;
 // Hit radius: how close the aim point must be to register a hit.
-// Was 0.55 (barely bigger than the 0.45 target). Now 1.0 — generous,
-// forgives hand-tracking jitter. The target visual radius is 0.6 now.
-const HIT_RADIUS = 1.0;
+// 1.3 = very generous — forgives hand-tracking jitter. The target visual
+// radius is 0.6, so you can hit even if your aim is off by 0.7 units.
+const HIT_RADIUS = 1.3;
 
 export function buildGunGame(ctx: BuilderCtx): WorldAPI {
   const { world, glowTex, shakeCamera, quality } = ctx;
@@ -1241,11 +1241,13 @@ export function buildGunGame(ctx: BuilderCtx): WorldAPI {
     },
     capturesPointer: () => true,
     pointerFocus(out: THREE.Vector3) { if (!hasAim) return false; out.copy(aimPoint); return true; },
-    // Fire on EITHER a quick tap (instant pinch-tap) OR a press (held pinch
-    // down / mouse click). The tap makes rapid pinch-tapping feel instant;
-    // the press covers held-fire / mouse users.
-    setPointerAction(pressed: boolean, _held: boolean, _released: boolean, tap?: boolean) {
-      if (pressed || tap) fire();
+    // Fire on PRESS (pinch-down edge) — this is more reliable than tap
+    // because tap fires on RELEASE, which can be missed if the pinch
+    // happens between tracking frames. Firing on press means the gun
+    // fires the instant the pinch is detected, with no timing window.
+    // The FIRE_COOLDOWN (0.08s) prevents double-fire from press+tap.
+    setPointerAction(pressed: boolean, _held: boolean, _released: boolean, _tap?: boolean) {
+      if (pressed) fire();
     },
     bodyInfo(name: string | null) { return name === 'Target' ? `Target · ${score} pts` : null; },
     coachHint() {

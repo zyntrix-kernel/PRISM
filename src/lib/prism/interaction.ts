@@ -416,17 +416,20 @@ export class InteractionController {
       }
     }
 
-    // ── RENDER-RATE POINTER SMOOTHING ─────────────────────────────────
+    // ── RENDER-RATE POINTER SMOOTHING (double-pass for max smoothness) ──
     // The tracking loop sets pointerTarget at 10fps. The render loop runs at
-    // 60fps. Chase the target with an exponential lerp so the cursor moves
-    // smoothly at 60fps even when tracking is at 10fps. This is the key to
-    // a smooth hand pointer — the cursor glides between tracking samples
-    // instead of jumping in 100ms steps.
-    // damp = 1 - exp(-rate * dt): frame-rate independent, ~25% per frame at 60fps.
+    // 60fps. Chase the target with a DOUBLE exponential lerp so the cursor
+    // moves buttery-smooth at 60fps even when tracking is at 10fps.
+    //
+    // Pass 1: chase the target (rate 8 = ~13% per frame, heavy smoothing)
+    // Pass 2: chase pass 1's output (rate 20 = ~28% per frame, settle)
+    // The double-pass kills residual jitter from the One Euro filter while
+    // keeping latency low enough for responsive interaction.
     if (this.mode === 'hand') {
-      const damp = 1 - Math.exp(-15 * dt);
-      this.pointerNdc.x += (this.pointerTarget.x - this.pointerNdc.x) * damp;
-      this.pointerNdc.y += (this.pointerTarget.y - this.pointerNdc.y) * damp;
+      const damp1 = 1 - Math.exp(-8 * dt);   // heavy smoothing pass
+      const damp2 = 1 - Math.exp(-20 * dt);  // settle pass
+      this.pointerNdc.x += (this.pointerTarget.x - this.pointerNdc.x) * damp1 * damp2;
+      this.pointerNdc.y += (this.pointerTarget.y - this.pointerNdc.y) * damp1 * damp2;
     }
 
     // Unified action edges (hand pinch or non-orbit mouse hold / click).

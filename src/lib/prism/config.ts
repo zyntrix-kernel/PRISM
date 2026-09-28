@@ -68,12 +68,12 @@ export const PrismConfig = {
     // feed holds still while a 120 fps clean feed stays wide open.
     pointerAdaptive: {
       maxSpeed: 3.5, // fastest plausible fingertip travel, NDC/sec
-      slowCutoff: 0.25, // HEAVIER rest smoothing (was 0.42 — too lively, jittery)
-      fastCutoff: 2.2, // slightly smoother at high fps (was 2.8)
-      betaBase: 0.06, // less speed-opening (was 0.09 — felt twitchy)
-      betaRate: 0.05, // less extra opening (was 0.08)
-      maxLeadSec: 0.10, // shorter prediction horizon (was 0.12 — led to overshoot)
-      maxLeadDist: 0.035, // tighter travel cap (was 0.05 — flung on fast moves)
+      slowCutoff: 0.15, // HEAVY rest smoothing (was 0.25 — still jittery on bad cams)
+      fastCutoff: 1.5,  // heavier at high fps (was 2.2)
+      betaBase: 0.04,   // less speed-opening (was 0.06)
+      betaRate: 0.03,   // less extra opening (was 0.05)
+      maxLeadSec: 0.08, // shorter prediction (was 0.10 — led to overshoot)
+      maxLeadDist: 0.025, // tighter cap (was 0.035)
     },
     // Smoothing factor for grabbed-object motion (higher = tighter follow,
     // more responsive to hand movement). Was 0.3 (floaty/disconnected);

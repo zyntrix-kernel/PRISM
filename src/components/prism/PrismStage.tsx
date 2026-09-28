@@ -9,6 +9,7 @@ import PresetTransitionOverlay from "./PresetTransitionOverlay";
 import InputModeIndicator from "./InputModeIndicator";
 import PrismToast from "./PrismToast";
 import SettingsPanel from "./SettingsPanel";
+import ZynashIntro from "./ZynashIntro";
 import {
   Camera,
   Eye,
@@ -60,6 +61,7 @@ export default function PrismStage() {
   const videoRef = useRef<HTMLVideoElement>(null);
   const overlayRef = useRef<HTMLCanvasElement>(null);
   const appRef = useRef<PrismApp | null>(null);
+  const [showIntro, setShowIntro] = useState(true);
 
   // Stable refs to all HUD elements (imperative engine writes to these)
   const els = useRef<Record<string, HTMLElement | null>>({});
@@ -155,6 +157,9 @@ export default function PrismStage() {
 
   return (
     <div className="prism-root" ref={rootRef}>
+      {/* Cinematic ZYNASH LABS startup intro — plays once on first load */}
+      {showIntro && <ZynashIntro onDone={() => setShowIntro(false)} />}
+
       {/* Preset-switch transition overlay (dreamy radial flash on world change) */}
       <PresetTransitionOverlay key={preset} preset={preset} />
 
@@ -641,7 +646,7 @@ export default function PrismStage() {
           <div className="prism-credits-team">
             <div className="prism-credit-row">
               <span className="prism-credit-name">Tanay Bhandari</span>
-              <span className="prism-credit-handle">Zyntrix.krnl.sys</span>
+              <span className="prism-credit-handle" style={{ color: "var(--accent)" }}>Zyntrix.krnl.sys · LEAD</span>
             </div>
             <div className="prism-credit-row">
               <span className="prism-credit-name">Ashwin Nagaranjan Ramnath</span>

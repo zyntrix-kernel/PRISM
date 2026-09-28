@@ -2,8 +2,6 @@
 // camera failures (no device, permission denied) surface as friendly UI
 // messages instead of silent tracking loss.
 
-import { PrismConfig } from './config';
-
 export interface CameraHandle {
   stream: MediaStream;
   width: number;
@@ -51,10 +49,13 @@ export async function startCamera(video: HTMLVideoElement): Promise<CameraHandle
 
   let stream: MediaStream;
   try {
+    // Request camera with MINIMAL constraints. Asking for a specific
+    // resolution (320x240) caused "Camera unavailable" on laptops whose
+    // webcams don't support that exact mode — the browser would return an
+    // empty stream or fail the readyState poll. Let the browser pick its
+    // native resolution; MediaPipe downscales internally anyway.
     stream = await navigator.mediaDevices.getUserMedia({
       video: {
-        width: { ideal: PrismConfig.camera.idealWidth },
-        height: { ideal: PrismConfig.camera.idealHeight },
         facingMode: 'user',
       },
       audio: false,
@@ -66,36 +67,30 @@ export async function startCamera(video: HTMLVideoElement): Promise<CameraHandle
     const hint =
       name === 'NotAllowedError' || name === 'SecurityError'
         ? 'Camera blocked: click the camera icon in the address bar, choose Allow, then press Enable camera again. Until then the mouse works fully.'
-        : 'You can still try the mouse fallback (move = point, hold = grab).';
+        : name === 'NotFoundError' || name === 'DevicesNotFoundError'
+          ? 'No camera found. The mouse works fully (move = point, hold = grab).'
+          : name === 'NotReadableError' || name === 'TrackStartError'
+            ? 'Camera is in use by another app. Close it and try again. Mouse works fully.'
+            : 'You can still try the mouse fallback (move = point, hold = grab).';
     throw new Error(`Camera unavailable: ${describeMediaError(err)}. ${hint}`);
   }
 
   // CRITICAL: set all autoplay-required properties BEFORE assigning the stream.
-  // If these are set after srcObject, some browsers fire canplay/loadeddata
-  // events before the properties take effect, causing the readyState check
-  // to fail and the camera to appear "unavailable" even when permission is granted.
   video.muted = true;
   video.playsInline = true;
   video.autoplay = true;
   video.srcObject = stream;
 
-  // Try to play — this returns a promise that can reject due to autoplay
-  // policy, but since we set muted=true, it should succeed. Don't timeout
-  // on play() itself; just catch and continue to the readyState poll below.
+  // Try to play — catch autoplay rejection (the poll below handles it).
   try {
-    await video.play().catch(() => {
-      /* autoplay rejection — the polling loop below will still detect
-         frames once the browser decides to start playback */
-    });
+    await video.play().catch(() => { /* poll below */ });
   } catch {
     /* fall through to polling */
   }
 
-  // Poll for readyState instead of relying on a single canplay event.
-  // The canplay event can fire BEFORE we attach the listener (race condition),
-  // or never fire on some browsers/drivers. Polling is reliable.
+  // Poll for readyState (reliable, no race conditions with event listeners).
   const pollStart = performance.now();
-  const POLL_TIMEOUT_MS = 12_000; // 12s — generous for slow camera init
+  const POLL_TIMEOUT_MS = 15_000; // 15s — very generous for slow cameras
   const POLL_INTERVAL_MS = 50;
   await new Promise<void>((resolve, reject) => {
     const check = (): void => {

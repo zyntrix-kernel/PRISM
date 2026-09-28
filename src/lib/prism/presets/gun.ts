@@ -186,12 +186,16 @@ interface ImpactFlash {
 }
 
 const TARGET_COUNT = 6;
-const RANGE = 9;
-const SPREAD = 6;
+const RANGE = 7;       // was 9 — closer targets appear bigger on screen
+const SPREAD = 4;      // was 6 — less spread, targets more central/easier to aim
 const FRAGMENTS_PER_TARGET = 8;
 const SMOKE_COUNT = 8;
 const SPARK_COUNT = 7;
 const HAZE_COUNT_MED = 60;
+// Hit radius: how close the aim point must be to register a hit.
+// Was 0.55 (barely bigger than the 0.45 target). Now 1.0 — generous,
+// forgives hand-tracking jitter. The target visual radius is 0.6 now.
+const HIT_RADIUS = 1.0;
 
 export function buildGunGame(ctx: BuilderCtx): WorldAPI {
   const { world, glowTex, shakeCamera, quality } = ctx;
@@ -617,10 +621,10 @@ export function buildGunGame(ctx: BuilderCtx): WorldAPI {
 
   // ══ TARGET SYSTEM (premium bullseye) ════════════════════════════════
   const bullseyeTex = makeBullseyeTexture();
-  const targetGeo = new THREE.CircleGeometry(0.45, 32);
-  const rimGeo = new THREE.TorusGeometry(0.45, 0.05, 12, 32);
+  const targetGeo = new THREE.CircleGeometry(0.6, 32);  // was 0.45 — bigger targets
+  const rimGeo = new THREE.TorusGeometry(0.6, 0.06, 12, 32);  // bigger rim
   // Fragment geometry — a pie-slice wedge of the target disc
-  const fragGeo = new THREE.CircleGeometry(0.45, 16, 0, Math.PI / 4);
+  const fragGeo = new THREE.CircleGeometry(0.6, 16, 0, Math.PI / 4);
 
   const targets: Target[] = [];
   function spawnTarget(): void {
@@ -659,7 +663,7 @@ export function buildGunGame(ctx: BuilderCtx): WorldAPI {
     group.add(rimGlow);
     // Backing plate (solid 3D feel)
     const back = new THREE.Mesh(
-      new THREE.CircleGeometry(0.46, 32),
+      new THREE.CircleGeometry(0.62, 32),
       new THREE.MeshStandardMaterial({ color: 0x1a1a22, roughness: 0.7, metalness: 0.4 }),
     );
     back.position.z = -0.04;
@@ -679,7 +683,7 @@ export function buildGunGame(ctx: BuilderCtx): WorldAPI {
       group,
       alive: true,
       spawnAt: performance.now() / 1000,
-      lifetime: 4 + Math.random() * 3,
+      lifetime: 6 + Math.random() * 4,  // was 4+3 — more time to aim
       hit: false,
       shatterT: 0,
       expiring: 0,
@@ -818,7 +822,7 @@ export function buildGunGame(ctx: BuilderCtx): WorldAPI {
   let hasAim = false;
   let hoveringTarget = false;
   let lastFireAt = 0;
-  const FIRE_COOLDOWN = 0.18;
+  const FIRE_COOLDOWN = 0.08;  // was 0.18 — faster fire for rapid pinch-taps
   let slideRecoil = 0; // 0..1, decays to 0 after fire (~120ms)
   let gunRecoil = 0;   // 0..1, decays to 0 after fire (~130ms)
   const muzzleWorld = new THREE.Vector3();
@@ -1043,16 +1047,40 @@ export function buildGunGame(ctx: BuilderCtx): WorldAPI {
         }
       }
 
-      // ── Crosshair: follow aim, detect hover ──
+      // ── Crosshair: follow aim, detect hover, MAGNETIZE to nearby targets ──
       hoveringTarget = false;
       if (hasAim) {
         crosshair.visible = true;
-        crosshair.position.lerp(aimPoint, Math.min(1, dt * 18));
+        // MAGNETISM: if a target is within MAGNET_RADIUS of the aim point,
+        // snap the aim toward it. This makes hitting targets much easier —
+        // the crosshair "locks on" when you're close. The snap is partial
+        // (lerp) so it feels like attraction, not teleportation.
+        const MAGNET_RADIUS = 1.6;  // generous — catches near-misses
+        let nearest: Target | null = null;
+        let nearestDist = Infinity;
         for (const t of targets) {
-          if (t.alive && !t.hit && t.group.position.distanceTo(aimPoint) < 0.55) {
-            hoveringTarget = true; break;
+          if (!t.alive || t.hit) continue;
+          const d = t.group.position.distanceTo(aimPoint);
+          if (d < MAGNET_RADIUS && d < nearestDist) {
+            nearest = t;
+            nearestDist = d;
           }
         }
+        if (nearest) {
+          // Lerp the aim point toward the target (60% of the way per frame
+          // = strong magnetism but not a full snap). This forgives hand
+          // jitter and makes pinch-tap shooting feel natural.
+          aimPoint.lerp(nearest.group.position, Math.min(1, dt * 12));
+          hoveringTarget = true;
+        } else {
+          // No target nearby — check if we're directly on one
+          for (const t of targets) {
+            if (t.alive && !t.hit && t.group.position.distanceTo(aimPoint) < HIT_RADIUS) {
+              hoveringTarget = true; break;
+            }
+          }
+        }
+        crosshair.position.lerp(aimPoint, Math.min(1, dt * 18));
       } else {
         crosshair.visible = false;
       }

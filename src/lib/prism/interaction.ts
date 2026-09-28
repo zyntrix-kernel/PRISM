@@ -39,6 +39,11 @@ function pinchPoint2D(landmarks: Landmark[]): Point2D {
 export class InteractionController {
   private readonly raycaster = new THREE.Raycaster();
   private readonly pointerNdc = new THREE.Vector2(0, 0);
+  // The TARGET position from tracking (updated at 10fps). pointerNdc chases
+  // this at the RENDER rate (60fps) via exponential lerp. This decouples
+  // cursor smoothness from tracking rate — a 10fps camera produces a smooth
+  // 60fps cursor instead of a jerky 10fps one.
+  private readonly pointerTarget = new THREE.Vector2(0, 0);
   // Adaptive pointer: self-retunes to any camera on earth (5–120 fps),
   // outlier-gates spikes, and predicts ~2 frames ahead to hide latency.
   private readonly pointerFilter = new AdaptivePointerFilter({
@@ -411,6 +416,19 @@ export class InteractionController {
       }
     }
 
+    // ── RENDER-RATE POINTER SMOOTHING ─────────────────────────────────
+    // The tracking loop sets pointerTarget at 10fps. The render loop runs at
+    // 60fps. Chase the target with an exponential lerp so the cursor moves
+    // smoothly at 60fps even when tracking is at 10fps. This is the key to
+    // a smooth hand pointer — the cursor glides between tracking samples
+    // instead of jumping in 100ms steps.
+    // damp = 1 - exp(-rate * dt): frame-rate independent, ~25% per frame at 60fps.
+    if (this.mode === 'hand') {
+      const damp = 1 - Math.exp(-15 * dt);
+      this.pointerNdc.x += (this.pointerTarget.x - this.pointerNdc.x) * damp;
+      this.pointerNdc.y += (this.pointerTarget.y - this.pointerNdc.y) * damp;
+    }
+
     // Unified action edges (hand pinch or non-orbit mouse hold / click).
     const held =
       this.mode === 'hand'
@@ -553,7 +571,8 @@ export class InteractionController {
     // Tracking-clock step (NOT render dt) + sensor confidence: the filter
     // stays honest whether frames arrive at 10 Hz or 120 Hz, clean or noisy.
     this.pointerFilter.update(this.tmpNdcSample, trackDtMs, primaryHand.confidence, this.tmpSmoothed);
-    this.pointerNdc.set(this.tmpSmoothed.x, this.tmpSmoothed.y);
+    // Set the TARGET — pointerNdc will chase this at render rate (below).
+    this.pointerTarget.set(this.tmpSmoothed.x, this.tmpSmoothed.y);
 
     // Two-hand transform takes precedence over single-hand dragging.
     // COAST for slow cameras: the second hand often drops out for 1-3 frames.
@@ -641,6 +660,9 @@ export class InteractionController {
     // render polling it stays wide open, and its spike gate still eats
     // single-frame glitches (alt-tab jumps, resolution snaps).
     this.pointerFilter.update(this.tmpNdcSample, dt * 1000, 1, this.tmpSmoothed);
+    // Mouse: set target directly (mouse is already 60fps, no need for the
+    // render-rate chase — but keeping it consistent with the hand path).
+    this.pointerTarget.set(this.tmpSmoothed.x, this.tmpSmoothed.y);
     this.pointerNdc.set(this.tmpSmoothed.x, this.tmpSmoothed.y);
     this.raycaster.setFromCamera(this.pointerNdc, this.prism.camera);
     this.prism.trackPointer(this.pointerNdc.x, this.pointerNdc.y);

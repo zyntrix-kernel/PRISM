@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { PrismApp, type PrismState } from "@/lib/prism/app";
 import "@/lib/prism/prism.css";
 import CommandPalette from "./CommandPalette";
@@ -62,7 +62,7 @@ export default function PrismStage() {
   const overlayRef = useRef<HTMLCanvasElement>(null);
   const appRef = useRef<PrismApp | null>(null);
   const [showIntro, setShowIntro] = useState(true);
-  const dismissIntro = useRef(() => setShowIntro(false)).current;
+  const dismissIntro = useCallback(() => setShowIntro(false), []);
 
   // Stable refs to all HUD elements (imperative engine writes to these)
   const els = useRef<Record<string, HTMLElement | null>>({});

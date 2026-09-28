@@ -40,7 +40,7 @@ export default function ZynashIntro({ onDone }: { onDone: () => void }) {
   // Stable ref to onDone so the effect doesn't re-run when the parent
   // re-renders (which would clear all timers + restart the intro).
   const onDoneRef = useRef(onDone);
-  onDoneRef.current = onDone;
+  useEffect(() => { onDoneRef.current = onDone; }, [onDone]);
 
   useEffect(() => {
     if (skipped) {

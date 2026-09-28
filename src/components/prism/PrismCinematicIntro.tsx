@@ -213,35 +213,56 @@ export default function PrismCinematicIntro({
 
     const start = performance.now();
 
+    // Scene timings are PROPORTIONAL to duration — so if duration is 16s,
+    // each scene gets longer too. The final "experience" scene is kept
+    // SHORT (only ~1.5s) so there's no dead air waiting at the end.
+    //   Scene 0 (void):        0.00 - 0.06   (0-0.96s @ 16s)
+    //   Scene 1 (field):       0.06 - 0.14   (0.96-2.24s)
+    //   Scene 2 (crystallize): 0.14 - 0.22   (2.24-3.52s)
+    //   Scene 3 (ZYNASH):      0.22 - 0.34   (3.52-5.44s)
+    //   Scene 4 (PRISM):       0.34 - 0.44   (5.44-7.04s)
+    //   Scene 5 (credits):     0.44 - 0.88   (7.04-14.08s)
+    //   Scene 6 (experience):  0.88 - 1.0    (14.08-16s) — only ~2s
+    const T = duration;
+    const t0 = 0;
+    const t1 = T * 0.06;
+    const t2 = T * 0.14;
+    const t3 = T * 0.22;
+    const t4 = T * 0.34;
+    const t5 = T * 0.44;
+    const t6 = T * 0.88;
+
     const render = (now: number) => {
       const elapsed = now - start;
       const pct = clamp(elapsed / duration, 0, 1);
 
       setProgress(pct);
 
-      if (elapsed < 1200) {
+      if (elapsed < t1) {
         setScene(0);
         setMember(-1);
-      } else if (elapsed < 2700) {
+      } else if (elapsed < t2) {
         setScene(1);
         setMember(-1);
-      } else if (elapsed < 4200) {
+      } else if (elapsed < t3) {
         setScene(2);
         setMember(-1);
-      } else if (elapsed < 6100) {
+      } else if (elapsed < t4) {
         setScene(3);
         setMember(-1);
-      } else if (elapsed < 7600) {
+      } else if (elapsed < t5) {
         setScene(4);
         setMember(-1);
-      } else if (elapsed < 9900) {
+      } else if (elapsed < t6) {
         setScene(5);
 
-        const local = elapsed - 7600;
+        // Credits are proportional within scene 5's time span
+        const creditSpan = t6 - t5;
+        const local = elapsed - t5;
 
-        if (local < 760) {
+        if (local < creditSpan * 0.30) {
           setMember(0);
-        } else if (local < 1520) {
+        } else if (local < creditSpan * 0.65) {
           setMember(1);
         } else {
           setMember(2);
@@ -297,11 +318,12 @@ export default function PrismCinematicIntro({
         height * 0.44 +
         pointer.current.y * 25;
 
+      // sceneEnergy uses proportional timings (t1 = duration * 0.075)
       const sceneEnergy =
-        elapsed < 1200
+        elapsed < t1
           ? 0
           : easeOutExpo(
-              clamp((elapsed - 1200) / 1300, 0, 1),
+              clamp((elapsed - t1) / (t2 - t1), 0, 1),
             );
 
       drawGlow(

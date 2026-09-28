@@ -1450,8 +1450,9 @@ video#prism-webcam.live + #prism-webcam-frame .prism-webcam-placeholder {
   inset: 0;
   z-index: 28;
   background: rgba(6, 4, 13, 0.42);
-  backdrop-filter: blur(3px) saturate(70%);
-  -webkit-backdrop-filter: blur(3px) saturate(70%);
+  /* NOTE: no backdrop-filter blur — it blurs the 3D canvas too, which the
+     user reported as 'dims everything'. The semi-transparent background
+     alone provides enough focus dimming without blurring the 3D scene. */
   transition: opacity var(--motion-med) var(--motion-ease);
   pointer-events: none;
 }

@@ -159,16 +159,10 @@ export default function PrismStage() {
       <PresetTransitionOverlay key={preset} preset={preset} />
 
       {/* Ambient backdrop dim when a modal is open (focus management).
-          pointer-events: ALWAYS none — the backdrop must never block clicks
-          to the HUD behind it. It's purely visual. */}
-      <div
-        className="prism-modal-backdrop"
-        aria-hidden="true"
-        style={{
-          opacity: modalOpen ? 1 : 0,
-          pointerEvents: "none",
-        }}
-      />
+          NOTE: the backdrop is DISABLED — it covered the entire viewport
+          and dimmed/blurred the 3D scene too, which the user reported as
+          'dims everything'. The help/settings panels now handle their own
+          visual focus without a full-screen overlay. */}
 
       {/* Toast notifications (action feedback) */}
       <PrismToast />
@@ -633,6 +627,10 @@ export default function PrismStage() {
             <div className="prism-credit-row">
               <span className="prism-credit-name">Ashwin Nagaranjan Ramnath</span>
               <span className="prism-credit-handle">Ash Collector</span>
+            </div>
+            <div className="prism-credit-row">
+              <span className="prism-credit-name">Debroop</span>
+              <span className="prism-credit-handle">distortus_rexx</span>
             </div>
           </div>
         </div>

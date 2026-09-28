@@ -43,17 +43,21 @@ function withTimeout<T>(promise: Promise<T>, ms: number, what: string): Promise<
 
 /** Requests the webcam and attaches it to the given video element. */
 export async function startCamera(video: HTMLVideoElement): Promise<CameraHandle> {
+  // Check for secure context — getUserMedia requires HTTPS or localhost.
+  // If served over plain HTTP on a non-localhost domain, the browser blocks it.
+  if (typeof window !== 'undefined' && window.isSecureContext === false) {
+    throw new Error('Camera requires HTTPS (or localhost). The page is served over HTTP on a non-local domain — the browser blocks camera access. Use HTTPS or access via localhost:3000.');
+  }
+
   if (!('mediaDevices' in navigator) || !navigator.mediaDevices?.getUserMedia) {
-    throw new Error('This browser does not support camera access (mediaDevices API missing).');
+    throw new Error('This browser does not support camera access (mediaDevices API missing). Try Chrome, Edge, or Firefox.');
   }
 
   let stream: MediaStream;
   try {
     // Request camera with MINIMAL constraints. Asking for a specific
-    // resolution (320x240) caused "Camera unavailable" on laptops whose
-    // webcams don't support that exact mode — the browser would return an
-    // empty stream or fail the readyState poll. Let the browser pick its
-    // native resolution; MediaPipe downscales internally anyway.
+    // resolution caused "Camera unavailable" on laptops whose webcams don't
+    // support that exact mode. Let the browser pick its native resolution.
     stream = await navigator.mediaDevices.getUserMedia({
       video: {
         facingMode: 'user',
@@ -70,9 +74,9 @@ export async function startCamera(video: HTMLVideoElement): Promise<CameraHandle
         : name === 'NotFoundError' || name === 'DevicesNotFoundError'
           ? 'No camera found. The mouse works fully (move = point, hold = grab).'
           : name === 'NotReadableError' || name === 'TrackStartError'
-            ? 'Camera is in use by another app. Close it and try again. Mouse works fully.'
+            ? 'Camera is in use by another app (Zoom, Teams, etc). Close it and try again.'
             : 'You can still try the mouse fallback (move = point, hold = grab).';
-    throw new Error(`Camera unavailable: ${describeMediaError(err)}. ${hint}`);
+    throw new Error(`${describeMediaError(err)} [${name ?? 'unknown'}]. ${hint}`);
   }
 
   // CRITICAL: set all autoplay-required properties BEFORE assigning the stream.

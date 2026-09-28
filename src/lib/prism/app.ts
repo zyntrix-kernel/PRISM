@@ -408,7 +408,8 @@ export class PrismApp {
     } catch (err) {
       const full = err instanceof Error ? err.message : String(err);
       this.setStatus('Mouse mode', full);
-      this.toast('Camera unavailable — using mouse fallback', 'warn');
+      // Show the ACTUAL error in the toast so the user knows WHY it failed.
+      this.toast(`Camera unavailable: ${full.substring(0, 120)}`, 'warn');
       cameraBtn.classList.remove('active');
       video.classList.remove('live');
       return false;

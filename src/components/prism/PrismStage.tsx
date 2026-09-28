@@ -358,46 +358,65 @@ export default function PrismStage() {
           {/* Premium separator between primary actions and utility group */}
           <span className="prism-btn-sep" aria-hidden="true" />
 
-          {/* Settings gear — opens drawer with Debug/AI/Quality/Easy */}
-          <SettingsPanel state={state} app={app} />
-
-          {/* Hidden native engine buttons (kept for keyboard-shortcut compat) */}
+          {/* Quality dropdown — directly in the top bar (moved from settings) */}
           <select
             id="prism-sel-quality"
             ref={setEl("qualitySel") as React.RefObject<HTMLSelectElement>}
             title="Render quality"
             aria-label="Render quality"
             defaultValue="auto"
-            style={{ position: "absolute", opacity: 0, pointerEvents: "none", width: 1, height: 1 }}
+            style={{
+              background: "rgba(255,255,255,0.06)",
+              border: "1px solid var(--glass-line)",
+              borderRadius: "var(--radius-pill)",
+              color: "var(--hud-fg-dim)",
+              fontFamily: "inherit",
+              fontSize: 11,
+              fontWeight: 500,
+              padding: "5px 8px",
+              cursor: "pointer",
+              outline: "none",
+              appearance: "none",
+              WebkitAppearance: "none",
+            }}
           >
+            <option value="auto">Auto</option>
             <option value="ultra">Ultra</option>
             <option value="high">High</option>
             <option value="medium">Medium</option>
             <option value="low">Low</option>
-            <option value="auto">Auto</option>
           </select>
-          <button
-            id="prism-btn-debug"
-            type="button"
-            ref={setEl("debugBtn") as React.RefObject<HTMLButtonElement>}
-            title="Toggle debug overlay (D)"
-            aria-label="Toggle debug overlay"
-            className={state?.debugVisible ? "active" : ""}
-            style={{ position: "absolute", opacity: 0, pointerEvents: "none", width: 1, height: 1 }}
-          >
-            Debug
-          </button>
+
+          {/* AI toggle — directly in the top bar */}
           <button
             id="prism-btn-ai"
             type="button"
             ref={setEl("aiBtn") as React.RefObject<HTMLButtonElement>}
             title="AI observer: watches the camera with FastVLM (off by default)"
             aria-label="Toggle AI observer"
-            className={state?.aiEnabled ? "active" : ""}
-            style={{ position: "absolute", opacity: 0, pointerEvents: "none", width: 1, height: 1 }}
+            className={`prism-pressable ${state?.aiEnabled ? "active" : ""}`}
+            style={{ padding: "7px 9px", display: "flex", alignItems: "center", gap: 5 }}
           >
-            AI
+            <Sparkles size={13} />
+            <span style={{ fontSize: 11, fontWeight: 500 }}>AI</span>
           </button>
+
+          {/* Debug toggle — directly in the top bar */}
+          <button
+            id="prism-btn-debug"
+            type="button"
+            ref={setEl("debugBtn") as React.RefObject<HTMLButtonElement>}
+            title="Toggle debug overlay (D)"
+            aria-label="Toggle debug overlay"
+            className={`prism-pressable ${state?.debugVisible ? "active" : ""}`}
+            style={{ padding: "7px 9px", display: "flex", alignItems: "center", gap: 5 }}
+          >
+            <Bug size={13} />
+          </button>
+
+          {/* Settings gear — opens drawer with remaining settings */}
+          <SettingsPanel state={state} app={app} />
+
           <button
             id="prism-btn-help"
             type="button"

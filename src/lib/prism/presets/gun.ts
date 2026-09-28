@@ -974,10 +974,13 @@ export function buildGunGame(ctx: BuilderCtx): WorldAPI {
       gunGroup.rotation.z = GUN_BASE_ROT.z;
 
       // ── Spawn targets ──
+      // Only spawn if we have fewer than TARGET_COUNT alive targets.
+      // Targets no longer expire (they stay until hit), so this only spawns
+      // replacements after a target is shattered. No timer-based spawning.
       nextSpawn -= dt;
       if (nextSpawn <= 0 && targets.filter((t) => t.alive && !t.hit).length < TARGET_COUNT) {
         spawnTarget();
-        nextSpawn = 1 + Math.random() * 2;
+        nextSpawn = 0.5; // quick check interval (not a spawn timer)
       }
 
       // ── Update targets ──
@@ -1016,8 +1019,8 @@ export function buildGunGame(ctx: BuilderCtx): WorldAPI {
             if (idx >= 0) grabbables.splice(idx, 1);
             targets.splice(i, 1);
             setTimeout(() => {
-              if (!disposed && targets.length < TARGET_COUNT) spawnTarget();
-            }, 1500);
+              if (!disposed && targets.filter((t) => t.alive && !t.hit).length < TARGET_COUNT) spawnTarget();
+            }, 800); // was 1500 — snappier respawn
           }
           continue;
         }
@@ -1029,22 +1032,9 @@ export function buildGunGame(ctx: BuilderCtx): WorldAPI {
           t.group.position.y += Math.sin(now * 2 + t.spawnAt) * dt * 0.15;
           // Slow rotation for shimmer
           t.group.rotation.z += dt * 0.3;
-          if (age > t.lifetime) {
-            // Expire — begin fade-out
-            t.alive = false;
-            t.expiring = 0;
-          }
-        } else {
-          // Expiring fade-out (~1s)
-          t.expiring += dt;
-          const fade = Math.max(0, 1 - t.expiring);
-          t.group.scale.setScalar(Math.max(0.01, fade));
-          if (t.expiring >= 1) {
-            world.remove(t.group);
-            const idx = grabbables.indexOf(t.group);
-            if (idx >= 0) grabbables.splice(idx, 1);
-            targets.splice(i, 1);
-          }
+          // NOTE: targets no longer expire — they stay until hit.
+          // The user explicitly asked for this: 'dont make targets disappear
+          // it is annoying, spawn new targets only if previous are hit.'
         }
       }
 

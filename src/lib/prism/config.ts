@@ -36,65 +36,54 @@ export const PrismConfig = {
   },
 
   gestures: {
-    // Pinch thresholds are normalized by hand size (wrist->middle-MCP), so
-    // they work for adults, children, and varying camera distances.
-    //
-    // PREMIUM TUNING: forgiving + sticky + smooth.
-    // - enter 0.40: fingers just need to be moderately close. Easier than
-    //   a real pinch — reduces missed grabs on low-quality cameras.
-    // - exit 0.62: very sticky. Once grabbed, the user must clearly open
-    //   their hand. No accidental releases from finger jitter.
-    // - minFrames 1 + enterMs 0: instant latch on the FIRST pinch frame.
-    // - exitMs 250: must sustain "open" for 250ms — filters all glitches.
-    pinchEnter: 0.40,
-    pinchExit: 0.62,
+    // NATURAL FEEL: responsive + forgiving + sticky.
+    // - enter 0.36: fingers moderately close (easier than a real pinch)
+    // - exit 0.55: sticky enough to survive jitter, releases when you open
+    // - exitMs 150: quick release (250 felt delayed)
+    pinchEnter: 0.36,
+    pinchExit: 0.55,
     pinchMinFrames: 1,
     pinchEnterMs: 0,
-    pinchExitMs: 250,
-    extendedRatio: 1.10, // slightly more forgiving finger extension
+    pinchExitMs: 150,
+    extendedRatio: 1.10,
   },
 
   interaction: {
-    // Adaptive hand pointer: the filter measures tracking fps + undirected
-    // noise online and retunes itself. Premium tuning = HEAVY smoothing.
+    // NATURAL POINTER: the cursor should feel like a direct extension of
+    // the hand — 1:1 mapping with just enough smoothing to kill jitter.
     pointerAdaptive: {
-      maxSpeed: 3.5,       // standard gate
-      slowCutoff: 0.20,    // heavy rest smoothing but not extreme (was 0.10 — too laggy)
-      fastCutoff: 2.0,     // responsive at high fps (was 1.2 — too heavy)
-      betaBase: 0.05,      // moderate speed-opening (was 0.03 — too sluggish)
-      betaRate: 0.04,      // moderate extra opening
-      maxLeadSec: 0.08,    // moderate prediction (was 0.06 — felt disconnected)
-      maxLeadDist: 0.030,  // moderate cap (was 0.018 — too tight, felt laggy)
+      maxSpeed: 4.0,       // wider gate — allow fast flicks
+      slowCutoff: 0.35,    // lighter rest smoothing (was 0.20 — too heavy, felt disconnected)
+      fastCutoff: 3.0,     // responsive at high fps (was 2.0 — too heavy)
+      betaBase: 0.07,      // more speed-opening (was 0.05 — felt sluggish on fast moves)
+      betaRate: 0.06,      // more extra opening
+      maxLeadSec: 0.10,    // more prediction (was 0.08 — felt disconnected on slow cams)
+      maxLeadDist: 0.040,  // wider cap (was 0.030 — too tight)
     },
-    // Grabbed-object follow: higher = tighter (glued to fingertip).
-    // 0.65 = responsive but still smooth (not robotic).
-    grabSmoothing: 0.65,
-    // Two-hand zoom: strong + smooth.
+    // Grabbed objects: tight follow, glued to fingertip.
+    // 0.72 = very responsive (was 0.65 — slightly floaty)
+    grabSmoothing: 0.72,
     zoomSpeed: 2.5,
-    // Two-hand twist: gentle, prevents accidental rotation during zoom.
     rotateSpeed: 0.6,
     worldScaleMin: 0.4,
     worldScaleMax: 3.0,
     gridSnap: 0.6,
-    // Grab assist: wider = easier to lock onto bodies.
-    hoverRadius: 0.12,   // was 0.09 — even easier to grab
-    hoverClearMs: 150,   // was 120 — hold hover a bit longer
-    // After tracking loss, keep the cursor alive longer for smooth re-entry.
-    coastMs: 500,        // was 350 — smoother re-entry
-    // TAP DETECTION: generous for slow cameras.
-    tapMaxMs: 700,       // was 600 — even more forgiving
-    tapMaxMove: 0.08,    // was 0.06 — allows more drift
+    hoverRadius: 0.12,
+    hoverClearMs: 150,
+    coastMs: 500,
+    tapMaxMs: 700,
+    tapMaxMove: 0.08,
   },
 
   cameraRig: {
-    // PREMIUM: slightly slower orbit for more controlled, cinematic feel.
-    orbitSpeed: 0.0040,  // was 0.0052 — smoother orbit
-    panSpeed: 0.003,     // was 0.004 — smoother pan
+    // NATURAL ORBIT: responsive but smooth. Rate 10 = steadicam with
+    // slight inertia (was 8 — slightly laggy on orbit stop).
+    orbitSpeed: 0.0045,  // was 0.0040 — slightly snappier
+    panSpeed: 0.0035,   // was 0.003 — slightly snappier
     zoomFactor: 0.0012,
     minDistance: 2,
     maxDistance: 200,
-    // Slightly slower auto-rotate for a more cinematic drift.
-    autoRotateSpeed: 0.15,  // was 0.22 — gentler
+    autoRotateSpeed: 0.15,
   },
 
   bloom: {

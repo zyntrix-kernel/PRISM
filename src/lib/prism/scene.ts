@@ -264,14 +264,14 @@ export class CameraRig {
 
   update(dt: number, camera: THREE.PerspectiveCamera): void {
     if (this.autoRotate) this.yaw += dt * PrismConfig.cameraRig.autoRotateSpeed;
-    // PREMIUM STEADICAM: smooth damping toward target position instead of
-    // instant set. Rate 8 = converges ~13% per frame at 60fps — weighty,
-    // cinematic inertia. Was 12 (too snappy). Lower = smoother + more lag.
+    // NATURAL STEADICAM: rate 10 = ~15% per frame at 60fps. Responsive enough
+    // to feel direct, with just enough inertia for smooth motion. Was 8
+    // (slightly laggy on orbit stop).
     const cp = Math.cos(this.pitch);
     const targetX = this.target.x + this.distance * cp * Math.sin(this.yaw);
     const targetY = this.target.y + this.distance * Math.sin(this.pitch);
     const targetZ = this.target.z + this.distance * cp * Math.cos(this.yaw);
-    const damp = 1 - Math.exp(-dt * 8);
+    const damp = 1 - Math.exp(-dt * 10);
     camera.position.x += (targetX - camera.position.x) * damp;
     camera.position.y += (targetY - camera.position.y) * damp;
     camera.position.z += (targetZ - camera.position.z) * damp;

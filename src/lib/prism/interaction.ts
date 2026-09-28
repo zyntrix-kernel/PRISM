@@ -428,14 +428,13 @@ export class InteractionController {
       }
     }
 
-    // ── RENDER-RATE POINTER SMOOTHING (single smooth pass) ─────────────
+    // ── RENDER-RATE POINTER SMOOTHING ─────────────────────────────────
     // The tracking loop sets pointerTarget at 10fps. The render loop runs at
-    // 60fps. Chase the target with a single exponential lerp — heavy enough
-    // to kill jitter, light enough to feel responsive (no lag).
-    // Rate 18 = ~26% per frame at 60fps — the cursor follows the hand with
-    // just enough smoothing to be buttery but not laggy.
+    // 60fps. Chase the target with a single exponential lerp — light enough
+    // to feel like a direct 1:1 extension of the hand, heavy enough to kill
+    // tracking jitter. Rate 22 = ~31% per frame at 60fps — natural + responsive.
     if (this.mode === 'hand') {
-      const damp = 1 - Math.exp(-18 * dt);
+      const damp = 1 - Math.exp(-22 * dt);
       this.pointerNdc.x += (this.pointerTarget.x - this.pointerNdc.x) * damp;
       this.pointerNdc.y += (this.pointerTarget.y - this.pointerNdc.y) * damp;
     }

@@ -154,7 +154,12 @@ export class HandTracker {
   private pump(): void {
     const video = this.video;
     if (!video || !this.landmarker) return;
-    if (video.readyState < 2 || video.videoWidth === 0) return;
+    // Accept readyState >= 1 (HAVE_METADATA) — some preview environments
+    // never reach readyState 2 (HAVE_CURRENT_DATA) but the stream is live
+    // and MediaPipe can still read frames. Also check videoWidth > 0 as
+    // a sanity gate (some browsers report readyState 1 with 0 dimensions).
+    if (video.readyState < 1) return;
+    if (video.videoWidth === 0 && video.readyState < 2) return;
     // Skip frames the video element hasn't refreshed: no wasted inference.
     if (video.currentTime === this.lastVideoTime) return;
     this.lastVideoTime = video.currentTime;

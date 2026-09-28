@@ -85,25 +85,43 @@ export async function startCamera(video: HTMLVideoElement): Promise<CameraHandle
   video.autoplay = true;
   video.srcObject = stream;
 
-  // Try to play — catch autoplay rejection (the poll below handles it).
-  try {
-    await video.play().catch(() => { /* poll below */ });
-  } catch {
-    /* fall through to polling */
+  // Force play — some browsers don't autoplay even with muted=true unless
+  // play() is explicitly called. Retry up to 3 times.
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      await video.play();
+      break;
+    } catch {
+      // Autoplay rejected — wait 200ms and retry.
+      await new Promise((r) => setTimeout(r, 200));
+    }
   }
 
-  // Poll for readyState (reliable, no race conditions with event listeners).
+  // Poll for readyState. But ALSO check the stream track's `readyState` —
+  // if the track is 'live' but the video element isn't producing frames,
+  // we can still proceed (MediaPipe can read from the track directly).
   const pollStart = performance.now();
-  const POLL_TIMEOUT_MS = 15_000; // 15s — very generous for slow cameras
+  const POLL_TIMEOUT_MS = 15_000;
   const POLL_INTERVAL_MS = 50;
   await new Promise<void>((resolve, reject) => {
     const check = (): void => {
+      // Success: video has frames
       if (video.readyState >= 2 && video.videoWidth > 0) {
         resolve();
         return;
       }
-      if (performance.now() - pollStart > POLL_TIMEOUT_MS) {
-        reject(new Error(`Camera stream started but no frames arrived within ${POLL_TIMEOUT_MS / 1000}s (readyState=${video.readyState}, videoWidth=${video.videoWidth}).`));
+      // Fallback success: stream track is live + video is trying to play.
+      // Some browsers (especially in iframes / previews) never reach
+      // readyState 2 but the stream IS active. If the track is 'live' and
+      // we've waited >3s, accept it — MediaPipe can still detect hands.
+      const track = stream.getVideoTracks()[0];
+      const elapsed = performance.now() - pollStart;
+      if (track?.readyState === 'live' && elapsed > 3000 && video.readyState >= 1) {
+        resolve();
+        return;
+      }
+      if (elapsed > POLL_TIMEOUT_MS) {
+        reject(new Error(`Camera stream started but no frames arrived within ${POLL_TIMEOUT_MS / 1000}s (readyState=${video.readyState}, videoWidth=${video.videoWidth}, track=${track?.readyState ?? 'none'}).`));
         return;
       }
       setTimeout(check, POLL_INTERVAL_MS);

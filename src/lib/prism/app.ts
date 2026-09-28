@@ -419,6 +419,7 @@ export class PrismApp {
       this.cameraHandle = await startCamera(video);
       video.classList.add('live');
       this.toast('Camera enabled — hand tracking active', 'success');
+      this.setStatus('Camera ready — starting hand tracking…');
       return true;
     } catch (err) {
       const full = err instanceof Error ? err.message : String(err);

@@ -57,6 +57,32 @@ PRISM incorporates ideas, algorithms, and code from the following open-source pr
 **License:** Apache License 2.0  
 **What was used:** Hand landmark detection for the gesture interaction pipeline.
 
+## 7. 3d-text by Anastasiia Solop (MIT License)
+**Repository:** https://github.com/anastasiya1155/3d-text  
+**License:** MIT — Copyright (c) 2022 Anastasiia Solop  
+**What was used:**  
+- TextGeometry + particle field rendering pattern for the cinematic ZYNASH LABS startup intro. The technique of combining extruded 3D text with a drifting point cloud was adapted from this project.
+
+## 8. react-bits by David Haz (MIT + Commons Clause License)
+**Repository:** https://github.com/DavidHDev/react-bits  
+**License:** MIT + Commons Clause License Condition v1.0 — Copyright (c) 2026 David Haz  
+**What was used:**  
+- ShinyText gradient sweep technique — adapted for the metallic shimmer on the 3D title (a moving highlight band implemented as a custom shader uniform).  
+- DecryptedText scramble-reveal pattern — adapted for the frame-by-frame credit reveal (characters scramble then settle into the real name).  
+- Particles background pattern — adapted for the particle field behind the title (3D sphere distribution with color variance + additive blending).  
+**Note:** Components are used internally within PRISM and are not redistributed as a standalone library.
+
+## 9. Three.js-3D-Text by Imagineer99 (reference only)
+**Repository:** https://github.com/Imagineer99/Three.js-3D-Text  
+**License:** No LICENSE file (All Rights Reserved) — used as REFERENCE ONLY  
+**What was used:**  
+- The pattern of MeshStandardMaterial with high metalness + low roughness for a metallic text look. No code was copied; only the generic Three.js API pattern was referenced.
+
+## 10. troika-three-text (MIT License)
+**Library:** troika-three-text (via @react-three/drei)  
+**License:** MIT  
+**What was used:** SDF-based 3D text rendering for the "ZYNASH LABS" title (via drei's `<Text>` component).
+
 ---
 
 All ported code has been attributed inline in the source files where it is used.

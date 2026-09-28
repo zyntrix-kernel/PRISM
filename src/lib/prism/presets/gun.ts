@@ -904,13 +904,14 @@ export function buildGunGame(ctx: BuilderCtx): WorldAPI {
 
     shakeCamera(0.18);
 
-    // Hit detection — find nearest alive target within hit radius
+    // Hit detection — find nearest alive target within HIT_RADIUS.
+    // MUST match the crosshair's HIT_RADIUS so what you see is what you hit.
     let hitTarget: Target | null = null;
     let hitDist = Infinity;
     for (const t of targets) {
       if (!t.alive || t.hit) continue;
       const d = t.group.position.distanceTo(target);
-      if (d < 0.5 && d < hitDist) {
+      if (d < HIT_RADIUS && d < hitDist) {
         hitDist = d;
         hitTarget = t;
       }
@@ -1047,40 +1048,39 @@ export function buildGunGame(ctx: BuilderCtx): WorldAPI {
         }
       }
 
-      // ── Crosshair: follow aim, detect hover, MAGNETIZE to nearby targets ──
+      // ── Crosshair: follow aim, detect hover, light magnetism ──
+      // The aim point stays 1:1 with the hand (no pulling). The CROSSHAIR
+      // visual snaps to the nearest target for visual feedback, but the
+      // actual shot uses the real aim point + generous HIT_RADIUS.
       hoveringTarget = false;
       if (hasAim) {
         crosshair.visible = true;
-        // MAGNETISM: if a target is within MAGNET_RADIUS of the aim point,
-        // snap the aim toward it. This makes hitting targets much easier —
-        // the crosshair "locks on" when you're close. The snap is partial
-        // (lerp) so it feels like attraction, not teleportation.
-        const MAGNET_RADIUS = 1.6;  // generous — catches near-misses
+        // Check if we're on a target (for hover state)
+        for (const t of targets) {
+          if (t.alive && !t.hit && t.group.position.distanceTo(aimPoint) < HIT_RADIUS) {
+            hoveringTarget = true; break;
+          }
+        }
+        // LIGHT magnetism: only move the CROSSHAIR visual (not the aim point)
+        // toward the nearest target within 1.2 units. This gives visual
+        // feedback ("lock-on") without making the aim feel pulled.
         let nearest: Target | null = null;
         let nearestDist = Infinity;
         for (const t of targets) {
           if (!t.alive || t.hit) continue;
           const d = t.group.position.distanceTo(aimPoint);
-          if (d < MAGNET_RADIUS && d < nearestDist) {
+          if (d < 1.2 && d < nearestDist) {
             nearest = t;
             nearestDist = d;
           }
         }
         if (nearest) {
-          // Lerp the aim point toward the target (60% of the way per frame
-          // = strong magnetism but not a full snap). This forgives hand
-          // jitter and makes pinch-tap shooting feel natural.
-          aimPoint.lerp(nearest.group.position, Math.min(1, dt * 12));
-          hoveringTarget = true;
+          // Crosshair snaps 40% toward the target (visual only)
+          crosshair.position.lerp(nearest.group.position, Math.min(1, dt * 8));
         } else {
-          // No target nearby — check if we're directly on one
-          for (const t of targets) {
-            if (t.alive && !t.hit && t.group.position.distanceTo(aimPoint) < HIT_RADIUS) {
-              hoveringTarget = true; break;
-            }
-          }
+          // No target nearby — crosshair follows the real aim point
+          crosshair.position.lerp(aimPoint, Math.min(1, dt * 20));
         }
-        crosshair.position.lerp(aimPoint, Math.min(1, dt * 18));
       } else {
         crosshair.visible = false;
       }

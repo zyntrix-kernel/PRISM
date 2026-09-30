@@ -1,167 +1,261 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import type { IntroMemberIndex, IntroQuality, IntroScene } from "@/lib/prism/intro/types";
+import type {
+  IntroMemberIndex,
+  IntroQuality,
+  IntroScene,
+} from "@/lib/prism/intro/types";
 import { PrismCinematicEngine } from "@/lib/prism/intro/engine";
 import "./PrismCinematicIntro.css";
 
-type IntroProps = {
-  onComplete?: () => void;
-  showSkip?: boolean;
-  duration?: number;
-  quality?: IntroQuality;
+type IntroProps={
+  onComplete?:()=>void;
+  showSkip?:boolean;
+  duration?:number;
+  quality?:IntroQuality;
 };
 
-const TEAM = [
+const TEAM=[
   {
-    handle: "Zyntrix.krnl.sys",
-    name: "Tanay Bhandari",
-    role: "LEAD",
+    handle:"Zyntrix.krnl.sys",
+    name:"Tanay Bhandari",
+    role:"LEAD",
   },
   {
-    handle: "Ash Collector",
-    name: "Ashwin Nagaranjan Ramnath",
-    role: "SCIENCE / BUILD",
+    handle:"Ash Collector",
+    name:"Ashwin Nagaranjan Ramnath",
+    role:"SCIENCE / BUILD",
   },
   {
-    handle: "distortus_rexx",
-    name: "Debroop Mojumder",
-    role: "ENGINEERING / DESIGN",
+    handle:"distortus_rexx",
+    name:"Debroop Mojumder",
+    role:"ENGINEERING / DESIGN",
   },
   {
-    handle: "Unknown",
-    name: "Maaz Mozzam",
-    role: "TEAM",
+    handle:"Unknown",
+    name:"Maaz Mozzam",
+    role:"TEAM",
   },
 ] as const;
 
-const SCENE_CLASS: Record<IntroScene, string> = {
-  boot: "scene-boot",
-  physics: "scene-physics",
-  chemistry: "scene-chemistry",
-  mathematics: "scene-mathematics",
-  synthesis: "scene-synthesis",
-  labs: "scene-labs",
-  prism: "scene-prism",
-  team: "scene-team",
-  launch: "scene-launch",
-  complete: "scene-complete",
+const CHAPTERS:Array<{
+  scene:IntroScene;
+  index:string;
+  title:string;
+}>=[
+  {scene:"physics",index:"01",title:"PHYSICS"},
+  {scene:"chemistry",index:"02",title:"CHEMISTRY"},
+  {scene:"mathematics",index:"03",title:"MATHEMATICS"},
+  {scene:"information",index:"04",title:"INFORMATION"},
+];
+
+const SCENE_CLASS:Record<IntroScene,string>={
+  boot:"scene-boot",
+  physics:"scene-physics",
+  chemistry:"scene-chemistry",
+  mathematics:"scene-mathematics",
+  information:"scene-information",
+  synthesis:"scene-synthesis",
+  labs:"scene-labs",
+  prism:"scene-prism",
+  team:"scene-team",
+  launch:"scene-launch",
+  complete:"scene-complete",
 };
+
+function ChapterRail({scene}:{scene:IntroScene}){
+  return (
+    <nav className="intro-chapter-rail" aria-label="PRISM chapters">
+      {CHAPTERS.map((chapter)=>(
+        <span
+          key={chapter.scene}
+          className={scene===chapter.scene?"active":""}
+        >
+          <i>{chapter.index}</i>
+          <b>{chapter.title}</b>
+        </span>
+      ))}
+    </nav>
+  );
+}
 
 function SceneCopy({
   scene,
   member,
-}: {
-  scene: IntroScene;
-  member: IntroMemberIndex;
-}) {
-  if (scene === "boot") {
+}:{
+  scene:IntroScene;
+  member:IntroMemberIndex;
+}){
+  if(scene==="boot"){
     return (
-      <section className="intro-scene-copy copy-boot" data-scene-copy="boot">
-        <div className="boot-micro">ZYNASH LABS / SPATIAL RESEARCH UNIT</div>
-        <div className="boot-core-word">OBSERVE</div>
-        <div className="boot-under">
+      <section className="intro-scene-copy copy-boot">
+        <div className="boot-overline">ZYNASH LABS / SPATIAL RESEARCH UNIT</div>
+        <div className="boot-title">
+          <span>FIRST</span>
+          <strong>PRINCIPLES</strong>
+        </div>
+        <div className="boot-line" />
+        <div className="boot-caption">
           <span>MATTER</span>
-          <i />
           <span>ENERGY</span>
-          <i />
           <span>INFORMATION</span>
         </div>
+        <div className="boot-status">OBSERVATION WINDOW OPEN</div>
       </section>
     );
   }
 
-  if (scene === "physics") {
+  if(scene==="physics"){
     return (
-      <section className="intro-scene-copy copy-discipline copy-physics" data-scene-copy="physics">
-        <div className="discipline-index">01 / PHYSICS</div>
-        <div className="discipline-title">MOTION<br />BECOMES<br />VISIBLE.</div>
-        <div className="science-equations">
+      <section className="intro-scene-copy copy-discipline copy-physics">
+        <div className="discipline-top">
+          <span>01 / PHYSICS</span>
+          <span>MECHANICS / ORBIT / OSCILLATION</span>
+        </div>
+        <div className="discipline-title">
+          <span>MOTION</span>
+          <span>BECOMES <em>VISIBLE.</em></span>
+        </div>
+        <div className="formula-line">
           <span>F = ma</span>
+          <span>p = mv</span>
           <span>v² = u² + 2as</span>
-          <span>g ≈ 9.81 m/s²</span>
         </div>
-        <p>Trajectories. Orbits. Oscillations. A world governed by measurable change.</p>
+        <p>
+          A trajectory is not decoration. It is a record of force,
+          momentum, gravity, and time.
+        </p>
       </section>
     );
   }
 
-  if (scene === "chemistry") {
+  if(scene==="chemistry"){
     return (
-      <section className="intro-scene-copy copy-discipline copy-chemistry" data-scene-copy="chemistry">
-        <div className="discipline-index">02 / CHEMISTRY</div>
-        <div className="discipline-title">MATTER<br />FINDS<br />BOND.</div>
-        <div className="chemistry-metrics">
-          <span><b>H₂O</b><small>molecular geometry</small></span>
-          <span><b>CO₂</b><small>linear structure</small></span>
-          <span><b>e⁻</b><small>quantized shell</small></span>
+      <section className="intro-scene-copy copy-discipline copy-chemistry">
+        <div className="discipline-top">
+          <span>02 / CHEMISTRY</span>
+          <span>ATOM / BOND / STRUCTURE</span>
         </div>
+        <div className="discipline-title">
+          <span>MATTER</span>
+          <span>FINDS <em>FORM.</em></span>
+        </div>
+        <div className="molecule-strip">
+          <div><b>H₂O</b><small>BOND ANGLE / 104.5°</small></div>
+          <div><b>CO₂</b><small>LINEAR MOLECULE</small></div>
+          <div><b>e⁻</b><small>ENERGY LEVELS</small></div>
+        </div>
+        <p>Atoms become structures. Structures become behavior.</p>
       </section>
     );
   }
 
-  if (scene === "mathematics") {
+  if(scene==="mathematics"){
     return (
-      <section className="intro-scene-copy copy-discipline copy-mathematics" data-scene-copy="mathematics">
-        <div className="discipline-index">03 / MATHEMATICS</div>
-        <div className="discipline-title">PATTERN<br />BECOMES<br />FORM.</div>
-        <div className="math-formula">
+      <section className="intro-scene-copy copy-discipline copy-mathematics">
+        <div className="discipline-top">
+          <span>03 / MATHEMATICS</span>
+          <span>FUNCTION / RATIO / GEOMETRY</span>
+        </div>
+        <div className="discipline-title">
+          <span>PATTERN</span>
+          <span>BECOMES <em>FORM.</em></span>
+        </div>
+        <div className="formula-line">
           <span>φ = 1.618033988…</span>
           <span>y = sin x</span>
-          <span>Σ → ∞</span>
+          <span>Σ aₙeⁱⁿˣ</span>
         </div>
-        <p>Functions become curves. Ratios become geometry. Numbers become space.</p>
+        <p>Equations stop being symbols when you let them occupy space.</p>
       </section>
     );
   }
 
-  if (scene === "synthesis") {
+  if(scene==="information"){
     return (
-      <section className="intro-scene-copy copy-synthesis" data-scene-copy="synthesis">
-        <div className="synthesis-kicker">THE THREE LANGUAGES OF REALITY</div>
-        <div className="synthesis-word">PHYSICS <i>×</i> CHEMISTRY <i>×</i> MATHEMATICS</div>
-        <div className="synthesis-line" />
-        <p>One visual language.</p>
+      <section className="intro-scene-copy copy-information">
+        <div className="discipline-top">
+          <span>04 / INFORMATION</span>
+          <span>SIGNAL / LOGIC / CONTROL</span>
+        </div>
+        <div className="info-title">
+          <span>IDEA</span>
+          <strong>→</strong>
+          <span>SIGNAL</span>
+          <strong>→</strong>
+          <span>ACTION</span>
+        </div>
+        <div className="info-readout">
+          <span>01001000</span>
+          <span>00110010</span>
+          <span>01010010</span>
+          <span>00100001</span>
+        </div>
+        <p>Measure it. Encode it. Control it. Then make it interactive.</p>
       </section>
     );
   }
 
-  if (scene === "labs") {
+  if(scene==="synthesis"){
     return (
-      <section className="intro-scene-copy copy-labs" data-scene-copy="labs">
-        <div className="labs-mini">A ZYNASH LABS INSTRUMENT</div>
-        <div className="labs-word">ZYNASH<br /><span>LABS</span></div>
-        <p>Engineering the invisible into something you can see.</p>
+      <section className="intro-scene-copy copy-synthesis">
+        <div className="synthesis-overline">ONE SYSTEM / MANY LANGUAGES</div>
+        <div className="synthesis-title">
+          <span>PHYSICS</span>
+          <i>×</i>
+          <span>CHEMISTRY</span>
+          <i>×</i>
+          <span>MATHEMATICS</span>
+          <i>×</i>
+          <span>INFORMATION</span>
+        </div>
+        <div className="synthesis-divider" />
+        <strong>THE SCIENCE BECOMES A SPACE.</strong>
       </section>
     );
   }
 
-  if (scene === "prism") {
+  if(scene==="labs"){
     return (
-      <section className="intro-scene-copy copy-prism" data-scene-copy="prism">
-        <div className="prism-kicker">PROJECT / 001</div>
-        <div className="prism-word">PRISM</div>
-        <div className="prism-expansion">PROJECTED REALITY INTERACTION<br />&amp; SPATIAL MANIPULATION</div>
-        <div className="prism-rule" />
-        <div className="prism-note">From equations to interaction.</div>
+      <section className="intro-scene-copy copy-labs">
+        <div className="labs-overline">A ZYNASH LABS PROJECT</div>
+        <div className="labs-title">
+          <span>ZYNASH</span>
+          <strong>LABS</strong>
+        </div>
+        <div className="labs-statement">ENGINEERING THE INVISIBLE.</div>
       </section>
     );
   }
 
-  if (scene === "team") {
-    const safeMember = member >= 0 ? member : 0;
-    const person = TEAM[safeMember];
-
+  if(scene==="prism"){
     return (
-      <section className="intro-scene-copy copy-team" data-scene-copy="team">
-        <div className="team-kicker">THE TEAM / PRISM</div>
-        <div className="team-index">{String(safeMember + 1).padStart(2, "0")} / 04</div>
+      <section className="intro-scene-copy copy-prism">
+        <div className="prism-project">PROJECT / 001</div>
+        <div className="prism-title">PRISM</div>
+        <div className="prism-full">
+          PROJECTED REALITY INTERACTION<br />
+          &amp; SPATIAL MANIPULATION
+        </div>
+        <div className="prism-tagline">FROM EQUATIONS TO INTERACTION.</div>
+      </section>
+    );
+  }
+
+  if(scene==="team"){
+    const safe=Math.max(0,Math.min(3,member));
+    const person=TEAM[safe];
+    return (
+      <section className="intro-scene-copy copy-team">
+        <div className="team-overline">THE PEOPLE BEHIND THE PROJECTION</div>
+        <div className="team-count">{String(safe+1).padStart(2,"0")} / 04</div>
         <div className="team-handle">{person.handle}</div>
         <div className="team-name">{person.name}</div>
         <div className="team-role">{person.role}</div>
-        <div className="team-track" aria-hidden="true">
-          {TEAM.map((_, index) => (
-            <span key={index} className={index === safeMember ? "active" : ""} />
+        <div className="team-progress">
+          {TEAM.map((_,index)=>(
+            <span key={index} className={index===safe?"active":""} />
           ))}
         </div>
       </section>
@@ -169,180 +263,164 @@ function SceneCopy({
   }
 
   return (
-    <section className="intro-scene-copy copy-launch" data-scene-copy={scene}>
-      <div className="launch-kicker">ZYNASH LABS PRESENTS</div>
-      <div className="launch-prism">PRISM</div>
-      <div className="launch-title">Projected Reality Interaction<br />&amp; Spatial Manipulation</div>
-      <div className="launch-enter">ENTER SPATIAL INTERFACE</div>
+    <section className="intro-scene-copy copy-launch">
+      <div className="launch-overline">ZYNASH LABS / PRISM</div>
+      <div className="launch-title">SEE<br /><em>THE INVISIBLE.</em></div>
+      <div className="launch-sub">PROJECTED REALITY INTERACTION &amp; SPATIAL MANIPULATION</div>
+      <div className="launch-cta">ENTER SPATIAL INTERFACE</div>
     </section>
   );
 }
 
 export default function PrismCinematicIntro({
   onComplete,
-  showSkip = false,
-  duration = 16000,
-  quality = "auto",
-}: IntroProps) {
-  const rootRef = useRef<HTMLDivElement>(null);
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const progressRef = useRef<HTMLDivElement>(null);
-  const engineRef = useRef<PrismCinematicEngine | null>(null);
-  const completionTimerRef = useRef<number | null>(null);
-  const onCompleteRef = useRef(onComplete);
+  showSkip=true,
+  duration=19200,
+  quality="auto",
+}:IntroProps){
+  const rootRef=useRef<HTMLDivElement>(null);
+  const canvasRef=useRef<HTMLCanvasElement>(null);
+  const progressRef=useRef<HTMLDivElement>(null);
+  const engineRef=useRef<PrismCinematicEngine|null>(null);
+  const completionTimerRef=useRef<number|null>(null);
+  const onCompleteRef=useRef(onComplete);
 
-  const [scene, setScene] = useState<IntroScene>("boot");
-  const [member, setMember] = useState<IntroMemberIndex>(-1);
-  const [exiting, setExiting] = useState(false);
+  const [scene,setScene]=useState<IntroScene>("boot");
+  const [member,setMember]=useState<IntroMemberIndex>(-1);
+  const [exiting,setExiting]=useState(false);
 
-  useEffect(() => {
-    onCompleteRef.current = onComplete;
-  }, [onComplete]);
+  useEffect(()=>{ onCompleteRef.current=onComplete; },[onComplete]);
 
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    const root = rootRef.current;
-    if (!canvas || !root) return;
+  useEffect(()=>{
+    const canvas=canvasRef.current;
+    const root=rootRef.current;
+    if(!canvas||!root)return;
 
-    let lastProgressInteger = -1;
+    let lastProgress=-1;
 
-    const engine = new PrismCinematicEngine({
+    const engine=new PrismCinematicEngine({
       canvas,
-      durationMs: duration,
+      durationMs:duration,
       quality,
-      seed: 0x5a17c0de,
-      reducedMotion: window.matchMedia("(prefers-reduced-motion: reduce)").matches,
-      onSceneChange: (nextScene, nextMember) => {
+      seed:0x5a17c0de,
+      reducedMotion:window.matchMedia("(prefers-reduced-motion: reduce)").matches,
+      onSceneChange:(nextScene,nextMember)=>{
         setScene(nextScene);
         setMember(nextMember);
-        root.dataset.scene = nextScene;
-        root.dataset.member = String(nextMember);
+        root.dataset.scene=nextScene;
+        root.dataset.member=String(nextMember);
       },
-      onProgress: (progress, label) => {
-        root.style.setProperty("--intro-progress", String(progress));
-        root.dataset.phase = label;
+      onProgress:(progress,label)=>{
+        root.style.setProperty("--intro-progress",String(progress));
+        root.dataset.phase=label;
 
-        const integer = Math.round(progress * 100);
-        if (progressRef.current && integer !== lastProgressInteger) {
-          lastProgressInteger = integer;
-          progressRef.current.textContent = String(integer).padStart(3, "0") + "%";
+        const rounded=Math.round(progress*100);
+        if(progressRef.current&&rounded!==lastProgress){
+          lastProgress=rounded;
+          progressRef.current.textContent=String(rounded).padStart(3,"0")+"%";
         }
       },
-      onComplete: () => {
+      onComplete:()=>{
         setExiting(true);
-        completionTimerRef.current = window.setTimeout(() => {
+        completionTimerRef.current=window.setTimeout(()=>{
           onCompleteRef.current?.();
-        }, 760);
+        },650);
       },
     });
 
-    engineRef.current = engine;
+    engineRef.current=engine;
     engine.start();
 
-    return () => {
-      if (completionTimerRef.current !== null) {
+    return ()=>{
+      if(completionTimerRef.current!==null){
         window.clearTimeout(completionTimerRef.current);
-        completionTimerRef.current = null;
+        completionTimerRef.current=null;
       }
       engine.dispose();
-      engineRef.current = null;
+      engineRef.current=null;
     };
-  }, [duration, quality]);
+  },[duration,quality]);
 
-  useEffect(() => {
-    if (!showSkip) return;
-
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") engineRef.current?.skip();
+  useEffect(()=>{
+    if(!showSkip)return;
+    const onKey=(event:KeyboardEvent)=>{
+      if(event.key==="Escape")engineRef.current?.skip();
     };
-
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [showSkip]);
+    window.addEventListener("keydown",onKey);
+    return()=>window.removeEventListener("keydown",onKey);
+  },[showSkip]);
 
   return (
     <div
       ref={rootRef}
       className={
-        "prism-cinematic " +
-        SCENE_CLASS[scene] +
-        (exiting ? " is-exiting" : "")
+        "prism-cinematic "+SCENE_CLASS[scene]+
+        (exiting?" is-exiting":"")
       }
       data-scene={scene}
       data-member={member}
-      data-phase="CALIBRATING THE OBSERVABLE"
+      data-phase="FIRST PRINCIPLES / SIGNAL ACQUIRED"
     >
-      <canvas ref={canvasRef} className="prism-canvas" aria-hidden="true" />
+      <canvas
+        ref={canvasRef}
+        className="prism-canvas"
+        aria-hidden="true"
+      />
 
-      <div className="intro-aurora aurora-a" aria-hidden="true" />
-      <div className="intro-aurora aurora-b" aria-hidden="true" />
+      <div className="intro-field intro-field-a" aria-hidden="true" />
+      <div className="intro-field intro-field-b" aria-hidden="true" />
+      <div className="intro-light-sweep" aria-hidden="true" />
       <div className="intro-vignette" aria-hidden="true" />
       <div className="intro-grain" aria-hidden="true" />
       <div className="intro-scan" aria-hidden="true" />
 
       <header className="intro-topbar">
         <div className="intro-brand">
-          <span className="intro-logo">Z</span>
+          <span className="intro-brand-mark">Z</span>
           <span>
-            <b>ZYNASH LABS</b>
+            <strong>ZYNASH LABS</strong>
             <small>PRISM / SPATIAL SCIENCE</small>
           </span>
         </div>
 
-        <div className="intro-system-readout">
-          <span className="readout-pulse" />
+        <div className="intro-mode">
+          <span className="mode-live" />
           <span>REALTIME / 3D</span>
-          <span className="readout-divider" />
+          <i />
           <span>{scene.toUpperCase()}</span>
         </div>
 
-        {showSkip && !exiting && (
+        {showSkip&&!exiting&&(
           <button
             type="button"
             className="intro-skip"
-            onClick={() => engineRef.current?.skip()}
-            aria-label="Skip PRISM introduction"
+            onClick={()=>engineRef.current?.skip()}
           >
-            <span>SKIP</span>
-            <kbd>ESC</kbd>
+            <span>SKIP</span><kbd>ESC</kbd>
           </button>
         )}
       </header>
 
-      <aside className="intro-left-rail" aria-hidden="true">
-        <span>F = ma</span>
-        <span>H₂O</span>
-        <span>φ</span>
-        <span>∑</span>
-        <span>001</span>
-      </aside>
-
-      <aside className="intro-right-rail" aria-hidden="true">
-        <span>36.74° N</span>
-        <span>SCIENCE</span>
-        <span>∞</span>
-        <span>2026</span>
-      </aside>
+      <ChapterRail scene={scene} />
 
       <main className="intro-content">
         <SceneCopy scene={scene} member={member} />
       </main>
 
+      <aside className="intro-metric-stack" aria-hidden="true">
+        <span>PHI <b>1.618</b></span>
+        <span>GRAVITY <b>9.81</b></span>
+        <span>STATE <b>ONLINE</b></span>
+      </aside>
+
       <footer className="intro-bottombar">
-        <div className="bottom-meta">
-          <span>ZYNASH LABS</span>
-          <i />
-          <span>PRISM / 001</span>
+        <div className="bottom-left">
+          <span>PROJECT 001</span><i /> <span>2026</span>
         </div>
-
-        <div className="progress-shell" aria-hidden="true">
+        <div className="progress-track">
           <div className="progress-fill" />
-          <div className="progress-glint" />
         </div>
-
-        <div className="bottom-progress" ref={progressRef}>
-          000%
-        </div>
+        <div className="bottom-progress" ref={progressRef}>000%</div>
       </footer>
 
       <div className="intro-corner corner-tl" aria-hidden="true" />
@@ -350,7 +428,7 @@ export default function PrismCinematicIntro({
       <div className="intro-corner corner-bl" aria-hidden="true" />
       <div className="intro-corner corner-br" aria-hidden="true" />
 
-      <div className="launch-flash" aria-hidden="true" />
+      <div className="launch-flare" aria-hidden="true" />
     </div>
   );
 }

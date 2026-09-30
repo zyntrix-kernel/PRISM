@@ -611,7 +611,8 @@
   letter-spacing:.12em;
 }
 .intro-metric-stack span{display:grid;gap:4px}
-.intro-metric-stack b{color:rgba(213,242,254,.5);font-weight:500}
+.intro-metric-stack small{font:500 7px/1 ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:.15em;color:rgba(166,213,236,.24);text-transform:uppercase}
+.intro-metric-stack b{color:rgba(213,242,254,.5);font-weight:500;font-size:8px}
 
 .intro-bottombar{
   position:absolute;

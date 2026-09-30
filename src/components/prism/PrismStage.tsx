@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { PrismApp, type PrismState } from "@/lib/prism/app";
+import { prismScore } from "@/lib/prism/audio";
 import "@/lib/prism/prism.css";
 import CommandPalette from "./CommandPalette";
 import PresetTransitionOverlay from "./PresetTransitionOverlay";
@@ -63,14 +64,31 @@ const PRESET_VISUALS: Record<string, { icon: LucideIcon; hue: string; blurb: str
   ]),
 );
 
+/*
+ * Startup phase machine:
+ *   film — the "FIRST LIGHT" ZYNASH LABS cinematic owns the machine.
+ *   boot — the film's final hyperflash hands off: the app mounts underneath a
+ *          white veil that dissolves into the live 3D scene (HUD cascades in).
+ *   live — the instrument is yours.
+ * Strict single-WebGL-context policy: PrismApp is constructed only when the
+ * film unmounts, so the cinematic and the engine never compete for the GPU.
+ */
+type StartupPhase = "film" | "boot" | "live";
+
 export default function PrismStage() {
   const rootRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const overlayRef = useRef<HTMLCanvasElement>(null);
   const appRef = useRef<PrismApp | null>(null);
-  const [showIntro, setShowIntro] = useState(true);
-  const dismissIntro = useCallback(() => setShowIntro(false), []);
+  const [phase, setPhase] = useState<StartupPhase>("film");
+  const showIntro = phase === "film";
+  const dismissIntro = useCallback(() => {
+    // The film ends on a white hyperflash — mount the app NOW so the veil
+    // dissolves from the flash straight into the live scene, then release.
+    setPhase("boot");
+    window.setTimeout(() => setPhase("live"), 1150);
+  }, []);
 
   // Stable refs to all HUD elements (imperative engine writes to these)
   const els = useRef<Record<string, HTMLElement | null>>({});
@@ -83,6 +101,83 @@ export default function PrismStage() {
   const [presetOpen, setPresetOpen] = useState(false);
   const [cmdOpen, setCmdOpen] = useState(false);
   const [onboardMin, setOnboardMin] = useState(false);
+  const [sfxMuted, setSfxMuted] = useState(true);
+
+  /*
+   * App-phase audio: the film score hands the AudioContext over to the
+   * instrument. The master ramp-back happens once the boot veil clears, and
+   * interaction SFX attach to the state stream (preset changes, grabs,
+   * camera lifecycle, toasts). A gesture listener covers late unlocks so the
+   * first click in the app also awakens audio if the film played silent.
+   */
+  useEffect(() => {
+    if (phase !== "live") return;
+    const score = prismScore();
+    setSfxMuted(score.isMuted);
+    score.restoreMaster(0.85, 0.9);
+    window.setTimeout(() => score.sfx("boot"), 480);
+
+    const unlock = () => score.unlock();
+    window.addEventListener("pointerdown", unlock);
+    window.addEventListener("keydown", unlock);
+    return () => {
+      window.removeEventListener("pointerdown", unlock);
+      window.removeEventListener("keydown", unlock);
+    };
+  }, [phase]);
+
+  // Preset change → world whoosh.
+  const prevPresetRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!state) return;
+    const prev = prevPresetRef.current;
+    prevPresetRef.current = state.preset;
+    if (prev && prev !== state.preset) prismScore().sfx("preset");
+  }, [state?.preset]);
+
+  // Grab / release ticks (pinch interaction feedback).
+  const prevGrabRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!state) return;
+    const prev = prevGrabRef.current;
+    prevGrabRef.current = state.grabbedName;
+    if (!prev && state.grabbedName) prismScore().sfx("grab");
+    else if (prev && !state.grabbedName) prismScore().sfx("release");
+  }, [state?.grabbedName]);
+
+  // Camera lifecycle → confirmation arpeggio.
+  const prevCamRef = useRef(false);
+  useEffect(() => {
+    if (!state) return;
+    const prev = prevCamRef.current;
+    prevCamRef.current = state.cameraOn;
+    if (!prev && state.cameraOn) prismScore().sfx("camera");
+  }, [state?.cameraOn]);
+
+  // Toasts → soft kind-aware blips (piggybacks on the imperative hook).
+  useEffect(() => {
+    if (phase !== "live") return;
+    const w = window as unknown as {
+      __prismToast?: (t: { message: string; kind?: string }) => void;
+    };
+    const original = w.__prismToast;
+    if (!original) return;
+    w.__prismToast = (t) => {
+      original(t);
+      const kind = t.kind ?? "info";
+      prismScore().sfx(kind === "success" ? "toast-ok" : kind === "warn" ? "toast-warn" : "toast-info");
+    };
+    return () => {
+      w.__prismToast = original;
+    };
+  }, [phase, app]);
+
+  const toggleAppSfx = useCallback(() => {
+    const score = prismScore();
+    const next = !score.isMuted;
+    score.setMuted(next);
+    setSfxMuted(next);
+  }, []);
 
   // Cmd/Ctrl + K opens the command palette
   useEffect(() => {
@@ -164,14 +259,42 @@ export default function PrismStage() {
   const quality = state?.quality ?? "auto";
 
   return (
-    <div className={`prism-root${state?.presentationMode ? " is-presentation" : ""}`} ref={rootRef}>
-      {/* Cinematic ZYNASH LABS startup intro — plays once on first load */}
+    <div
+      className={`prism-root${state?.presentationMode ? " is-presentation" : ""}${phase === "live" ? " prism-hud-cascade" : ""}`}
+      ref={rootRef}
+    >
+      {/* Cinematic ZYNASH LABS startup film — plays once per load */}
       {showIntro && (
         <PrismCinematicIntro
           onComplete={dismissIntro}
           showSkip={true}
-          duration={15200}
         />
+      )}
+
+      {/* Handoff veil — carries the film's final hyperflash over the mounted
+          app, then dissolves so the scene feels revealed, not swapped. */}
+      {phase === "boot" && <div className="prism-bootveil" aria-hidden="true" />}
+
+      {/* Sound toggle — glass chip, lives through the whole session */}
+      {phase === "live" && (
+        <button
+          type="button"
+          id="prism-sfx-chip"
+          className="prism-glass"
+          onClick={toggleAppSfx}
+          aria-label={sfxMuted ? "Enable sound effects" : "Mute sound effects"}
+          title={sfxMuted ? "SFX muted — click to enable" : "SFX on"}
+          data-armed={sfxMuted ? "off" : "on"}
+        >
+          <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
+            <path d="M2 6h2.6L8.4 2.8v10.4L4.6 10H2z" fill="currentColor" />
+            {sfxMuted ? (
+              <path d="M11 5.6l3.4 4.8M14.4 5.6L11 10.4" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" fill="none" />
+            ) : (
+              <path d="M10.8 5.2a4 4 0 010 5.6M12.6 3.4a6.4 6.4 0 010 9.2" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" fill="none" />
+            )}
+          </svg>
+        </button>
       )}
 
       {/* Preset-switch transition overlay (dreamy radial flash on world change) */}
@@ -688,14 +811,14 @@ export default function PrismStage() {
         }
       `}</style>
 
-      {!showIntro && state?.presentationMode && (
+      {phase === "live" && state?.presentationMode && (
         <div className="prism-presentation-hint" aria-live="polite">
           <span>P</span>
           <span>EXIT PRESENTATION</span>
         </div>
       )}
 
-      {!showIntro && <PrismExperienceChrome state={state} app={app} onCommand={() => { if (!state?.presentationMode) setCmdOpen(true); }} />}
+      {phase === "live" && <PrismExperienceChrome state={state} app={app} onCommand={() => { if (!state?.presentationMode) setCmdOpen(true); }} />}
 
     </div>
   );

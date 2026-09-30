@@ -3570,3 +3570,39 @@ Static repository audit passed for:
 - no per-frame BufferGeometry reconstruction
 
 Live browser verification is not available in the isolated runtime, so no claim of a successful local build or production deployment is made here.
+
+---
+Task ID: 24
+Agent: main (Super Z)
+Task: Fix "never enters the app", integrate FIRST LIGHT film + procedural SFX into the real app, polish, push
+
+Work Log:
+- Diagnosed the live preview bug: the deployed root project's page.tsx was a
+  preview stage that played the film into a dead-end "Replay" screen — the
+  real PrismStage was never mounted, so the app could never appear.
+- Ported the beloved "FIRST LIGHT" film into this repo as the canonical intro:
+  copied src/lib/prism/intro3d/{film,shaders,targets,timeline}.ts and replaced
+  the older particle-film intro (removed src/lib/prism/intro/).
+- Rebuilt PrismStage startup as a phase machine: film -> boot -> live.
+  Strict single-WebGL-context policy kept (PrismApp constructs only after the
+  film unmounts). The film's final hyperflash now carries into the app via a
+  dissolving boot veil, and HUD glass surfaces rise in a staggered cascade.
+- Added src/lib/prism/audio.ts: a zero-asset procedural Web Audio score.
+  Time-driven cue table synced to film beats (genesis boom, labs whoosh,
+  shatter chimes, beam riser, spectrum sparkle, benzene pads, chaos sparkles,
+  implosion riser, FLASH impact, PRISM chord, per-credit blips, hyperflash).
+  App-phase SFX: boot chord, preset whoosh, grab/release ticks, toast blips,
+  camera arpeggio. Autoplay-safe (context unlocks on first gesture), master
+  compressor, mute persisted to localStorage, skip fast-forwards cues.
+- Added SCORE chip in the film header and a session-wide glass SFX toggle in
+  the app (bottom-left), both with armed-state glow.
+- Fixed header collision: skip + score grouped right so the GENESIS act rail
+  stays visible.
+- Verified live in a real browser: film renders, ESC skip works, veil hands
+  off into the live instrument (HUD/telemetry/coach all present), preset
+  switching works, SFX chip toggles both ways, zero console errors.
+- bun run build passes (Next 16, 4/4 pages).
+
+Stage Summary:
+- The app now truly "goes into the app" after the film — the reported bug is dead.
+- FIRST LIGHT + full procedural score + cinematic handoff live in the repo.

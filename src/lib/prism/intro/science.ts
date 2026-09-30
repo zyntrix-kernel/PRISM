@@ -48,7 +48,7 @@ function setOpacity(
 function basic(
   color:string,
   opacity=1,
-  blending:THREE.Blending=THREE.AdditiveBlending,
+  blending=THREE.AdditiveBlending,
 ):THREE.MeshBasicMaterial {
   return new THREE.MeshBasicMaterial({
     color,
@@ -295,7 +295,7 @@ class PhysicsSystem {
   private readonly field:THREE.Points;
   private readonly pendulumPositions=new Float32Array(6);
 
-  constructor(random:SeededRandom){
+  constructor(){
     const v0=7.6;
     const launch=THREE.MathUtils.degToRad(54);
     const g=9.81;
@@ -915,7 +915,7 @@ export class ScienceShowcase {
   ){
     this.cosmos=new CosmicFieldSystem(profile,random);
     this.waves=new WaveRibbonSystem(random,5);
-    this.physics=new PhysicsSystem(random);
+    this.physics=new PhysicsSystem();
     this.chemistry=new ChemistrySystem();
     this.mathematics=new MathematicsSystem();
     this.core=new PrismCoreSystem(random);

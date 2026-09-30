@@ -244,7 +244,7 @@ export default function PrismExperienceChrome({ state, app, onCommand }: Props) 
               <article><span>01</span><Hand size={17} /><h3>Point + pinch</h3><p>Point with your index finger. Pinch to grab the highlighted body and release to place it.</p></article>
               <article><span>02</span><Orbit size={17} /><h3>Two hands</h3><p>Use two hands to scale and rotate the active world with continuous spatial control.</p></article>
               <article><span>03</span><CircleDot size={17} /><h3>Mouse fallback</h3><p>Move to point, hold to grab, drag to orbit, wheel to zoom, and right-drag to pan.</p></article>
-              <article><span>04</span><Zap size={17} /><h3>World controls</h3><p>Switch experiments above. R resets the view, X rebuilds the world, and number keys change presets.</p></article>
+              <article><span>04</span><Zap size={17} /><h3>World controls</h3><p>Switch experiments above. R resets the view, X rebuilds the world, P enters the clean presentation view, and number keys change presets.</p></article>
             </div>
             <footer><span>ESC</span> CLOSE <span>⌘K</span> COMMAND PALETTE <span>H</span> GUIDE</footer>
           </section>

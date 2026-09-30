@@ -45,10 +45,11 @@ export function mulberry32(seed: number) {
 export function genOrigin(n: number): Shape {
   const pos = new Float32Array(n * 3);
   const col = new Float32Array(n * 3);
+  const rng = mulberry32(0x101);
   for (let i = 0; i < n; i++) {
-    const r = Math.pow(mulberry32(i + 11)(), 2.7) * 0.62;
-    const u = mulberry32(i + 101)() * 2 - 1;
-    const a = mulberry32(i + 211)() * Math.PI * 2;
+    const r = Math.pow(rng(), 2.7) * 0.62;
+    const u = rng() * 2 - 1;
+    const a = rng() * Math.PI * 2;
     const s = Math.sqrt(1 - u * u);
     set(pos, col, i, Math.cos(a) * s * r, u * r, Math.sin(a) * s * r, hsl(0.54 + i % 17 * 0.002, 0.55, 0.72));
   }

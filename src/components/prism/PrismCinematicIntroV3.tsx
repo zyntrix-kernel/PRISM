@@ -527,7 +527,6 @@ export default function PrismCinematicIntroV3({
         <span />
       </div>
 
-      <FormulaBand scene={scene} />
       <div className="prism-v3__exit-flare" aria-hidden="true" />
     </main>
   );

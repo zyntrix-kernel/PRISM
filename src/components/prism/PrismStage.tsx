@@ -679,6 +679,8 @@ export default function PrismStage() {
         }
       `}</style>
 
+      {!showIntro && <PrismExperienceChrome state={state} app={app} onCommand={() => setCmdOpen(true)} />}
+
       {/* Keyboard shortcut legend (bottom-left chip) */}
       <ShortcutLegend
         onPickPreset={(n) => {

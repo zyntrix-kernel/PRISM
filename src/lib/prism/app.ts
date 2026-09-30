@@ -103,6 +103,7 @@ export class PrismApp {
   private cachedCandidatePreset = '';
   private _lastInfoName: string | null = null;
   private _overlayDirty = false;
+  private lastOverlayFrameTimestamp = -1;
   private readonly ONBOARD_KEY = 'prism:onboarded:v1';
   private onboardVisible = false;
   private seenHand = false;
@@ -216,7 +217,20 @@ export class PrismApp {
       world?.setPointerAction?.(this.interaction.actionPressed,this.interaction.actionHeld,this.interaction.actionReleased,this.interaction.tap);
       this.scene.update(dt,this.elapsed);
       if(now-this.lastUiAt>=250){this.lastUiAt=now;this.updateRailAndCoach(now);this.updateOnboard(now,frame?.hands.length??0,this.interaction.grabbedName);}
-      if(this.overlayCtx&&frame&&frame.hands.length>0){drawLandmarkOverlay(this.overlayCtx,frame);this._overlayDirty=true;}else if(this.overlayCtx&&this._overlayDirty){this.overlayCtx.clearRect(0,0,this.overlayCtx.canvas.width,this.overlayCtx.canvas.height);this._overlayDirty=false;}
+      if(this.overlayCtx&&frame&&frame.hands.length>0){
+        // Tracking runs slower than rendering. Redraw the 2D landmarks only
+        // when a fresh tracking frame arrives instead of repainting the
+        // overlay at the render rate.
+        if(frame.timestampMs!==this.lastOverlayFrameTimestamp){
+          drawLandmarkOverlay(this.overlayCtx,frame);
+          this.lastOverlayFrameTimestamp=frame.timestampMs;
+          this._overlayDirty=true;
+        }
+      }else if(this.overlayCtx&&this._overlayDirty){
+        this.overlayCtx.clearRect(0,0,this.overlayCtx.canvas.width,this.overlayCtx.canvas.height);
+        this.lastOverlayFrameTimestamp=-1;
+        this._overlayDirty=false;
+      }
       const infoName=this.interaction.grabbedName??this.interaction.hoveredName;if(infoName!==this._lastInfoName){this._lastInfoName=infoName;const info=this.scene.bodyInfo(infoName);if(info){this.el.planetInfo.textContent=info;this.el.planetInfo.classList.remove('hidden');}else this.el.planetInfo.classList.add('hidden');}
       this.debug.update(now,{renderFps:this.renderFps,hands:frame?.hands.length??0,confidence:frame?.hands[0]?.confidence??0,deviceLine:showDebug?this.deviceLine():''},this.interaction,this.tracker,this.scene.drawCalls,this.scene.triangles,this.scene.grabbables.length,showDebug?this.observer.snapshot():null);
       this.scene.render();

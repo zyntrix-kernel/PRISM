@@ -91,15 +91,6 @@ export class PrismCinematicEngine
   private readonly world =
     new THREE.Group();
 
-  private readonly systems: Array<{
-    update: (
-      time: number,
-      energy: number,
-      scene: IntroScene,
-    ) => void;
-    dispose: () => void;
-  }> = [];
-
   private readonly atmosphere:
     AtmosphereSystem;
 
@@ -856,11 +847,6 @@ export class PrismCinematicEngine
 
       const phase =
         getPhase(
-          timelineTime,
-        );
-
-      const phaseT =
-        phaseProgress(
           timelineTime,
         );
 

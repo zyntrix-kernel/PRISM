@@ -1,5 +1,4 @@
-
-export const TOTAL = 15.2;
+export const TOTAL = 18.8;
 
 export type ShapeId =
   | "origin"
@@ -24,28 +23,28 @@ export const CAMERA_KEYS: readonly CameraKey[] = [
   { t: 6.8, r: 7.0, az: 0.55, h: 0.28, ly: 0.10, fov: 38 },
   { t: 9.1, r: 5.3, az: 0.22, h: 0.15, ly: 0.12, fov: 37 },
   { t: 11.0, r: 4.2, az: -0.12, h: 0.06, ly: 0.10, fov: 36 },
-  { t: 12.8, r: 3.5, az: -0.45, h: 0.0, ly: 0.0, fov: 35 },
-  { t: 14.35, r: 2.7, az: -0.66, h: -0.03, ly: 0.0, fov: 34 },
-  { t: 15.2, r: 1.9, az: -0.72, h: 0.0, ly: 0.0, fov: 33 },
+  { t: 13.0, r: 3.5, az: -0.45, h: 0.0, ly: 0.0, fov: 35 },
+  { t: 16.9, r: 2.7, az: -0.66, h: -0.03, ly: 0.0, fov: 34 },
+  { t: 18.8, r: 1.9, az: -0.72, h: 0.0, ly: 0.0, fov: 33 },
 ];
 
 export const SHAPE_SCHEDULE: readonly { id: ShapeId; t0: number; t1: number }[] = [
   { id: "origin", t0: 0.0, t1: 1.2 },
   { id: "ribbon", t0: 1.2, t1: 4.6 },
-  { id: "orbit", t0: 4.6, t1: 7.5 },
-  { id: "prism", t0: 7.5, t1: 11.15 },
-  { id: "origin", t0: 11.15, t1: 12.6 },
+  { id: "orbit", t0: 4.6, t1: 8.1 },
+  { id: "prism", t0: 8.1, t1: 13.0 },
+  { id: "origin", t0: 13.0, t1: 15.2 },
 ];
 
 export const FINALE = {
-  implode0: 12.6,
-  flash0: 14.48,
-  flash1: 14.92,
+  implode0: 15.2,
+  flash0: 17.95,
+  flash1: 18.45,
   end: TOTAL,
 } as const;
 
 export const TEAM = [
-  { name: "Tanay Bhandari", handle: "Zyntrix.krnl.sys", role: "Lead" },
+  { name: "Tanay Bhandari", handle: "Zyntrix.krnl.sys", role: "LEAD" },
   { name: "Ashwin Nagaranjan Ramnath", handle: "Ash Collector", role: "" },
   { name: "Debroop Mojumder", handle: "distortus_rexx", role: "" },
   { name: "Maaz Mozzam", handle: "Unknown", role: "" },
@@ -53,7 +52,7 @@ export const TEAM = [
 
 export type Member = (typeof TEAM)[number];
 
-export const MEMBER_T0 = 11.65;
-export const MEMBER_DUR = 0.78;
-export const TEXT_T0 = 8.95;
-export const TEXT_T1 = 11.65;
+export const MEMBER_T0 = 14.15;
+export const MEMBER_DUR = 0.95;
+export const TEXT_T0 = 11.05;
+export const TEXT_T1 = 13.55;

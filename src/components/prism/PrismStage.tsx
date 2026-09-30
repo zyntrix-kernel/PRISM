@@ -4,7 +4,6 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { PrismApp, type PrismState } from "@/lib/prism/app";
 import "@/lib/prism/prism.css";
 import CommandPalette from "./CommandPalette";
-import ShortcutLegend from "./ShortcutLegend";
 import PresetTransitionOverlay from "./PresetTransitionOverlay";
 import InputModeIndicator from "./InputModeIndicator";
 import PrismToast from "./PrismToast";
@@ -681,15 +680,6 @@ export default function PrismStage() {
 
       {!showIntro && <PrismExperienceChrome state={state} app={app} onCommand={() => setCmdOpen(true)} />}
 
-      {/* Keyboard shortcut legend (bottom-left chip) */}
-      <ShortcutLegend
-        onPickPreset={(n) => {
-          // Preset keys 1-7 map to PRESET_ORDER indices
-          if (n >= 1 && n <= 7) {
-            window.dispatchEvent(new KeyboardEvent("keydown", { key: String(n) }));
-          }
-        }}
-      />
     </div>
   );
 }

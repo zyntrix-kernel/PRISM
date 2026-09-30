@@ -1,11 +1,9 @@
 // MediaPipe HandLandmarker wrapper.
 //
-// IMPORTANT PERFORMANCE ARCHITECTURE:
-// detectForVideo() is synchronous. Running it on the main thread can block
-// the browser's compositor/render loop for 100–300ms, which is catastrophic
-// on phones. PRISM therefore sends VideoFrames to a dedicated worker and only
-// returns small landmark data to the UI thread. A main-thread fallback is kept
-// for older browsers where VideoFrame/worker WASM is unavailable.
+// Performance architecture:
+// detectForVideo() is synchronous inside the worker, never the render thread.
+// Camera frames are sampled through requestVideoFrameCallback when available,
+// with strict backpressure so PRISM never queues stale frames.
 
 import { FilesetResolver, HandLandmarker } from '@mediapipe/tasks-vision';
 import { PrismConfig } from './config';
@@ -31,18 +29,26 @@ type WorkerError = { type: 'error' | 'pump-error'; message: string };
 type WorkerResult = { type: 'result'; hands: TrackedHand[]; timestampMs: number; inferenceMs: number };
 type WorkerMessage = WorkerReady | WorkerError | WorkerResult;
 
+type VideoFrameCallback = (now: number, metadata: VideoFrameCallbackMetadata) => void;
+type VideoFrameVideo = HTMLVideoElement & {
+  requestVideoFrameCallback?: (callback: VideoFrameCallback) => number;
+  cancelVideoFrameCallback?: (handle: number) => void;
+};
+
 export class HandTracker {
   private landmarker: HandLandmarker | null = null;
   private latest: HandFrame | null = null;
   private running = false;
   private loopHandle = 0;
-  private video: HTMLVideoElement | null = null;
+  private video: VideoFrameVideo | null = null;
   private worker: Worker | null = null;
   private workerBusy = false;
   private workerInitPromise: Promise<void> | null = null;
   private useWorker = false;
   private detectionCount = 0;
   private detectionTotalMs = 0;
+  private lastSubmittedAt = -Infinity;
+  private videoFrameCallbackHandle = 0;
 
   modelOffline = false;
   delegateUsed = 'GPU';
@@ -145,23 +151,35 @@ export class HandTracker {
 
   start(video: HTMLVideoElement, opts?: { intervalMs?: number }): void {
     if (!this.isReady) throw new Error('HandTracker.start() called before init().');
-    this.video = video;
+    this.stop();
+    this.video = video as VideoFrameVideo;
     this.running = true;
+    this.lastSubmittedAt = -Infinity;
 
-    // Worker inference is asynchronous, so this cadence controls sampling
-    // rather than blocking the WebGL/UI thread. Phones sample more slowly;
-    // landmark interpolation/smoothing keeps interaction usable between hits.
-    const defaultInterval = isTabletDevice() ? 100 : 140;
-    const targetInterval = opts?.intervalMs ?? defaultInterval;
+    // Vision is input sampling, not display rendering. Phones sample more
+    // slowly than the renderer; worker backpressure keeps stale frames out.
+    const defaultInterval = isTabletDevice() ? 100 : 180;
+    const targetInterval = Math.max(80, opts?.intervalMs ?? defaultInterval);
+    const videoWithCallback = this.video;
+
+    if (this.useWorker && videoWithCallback.requestVideoFrameCallback) {
+      const schedule = (): void => {
+        if (!this.running || !this.video || !videoWithCallback.requestVideoFrameCallback) return;
+        this.videoFrameCallbackHandle = videoWithCallback.requestVideoFrameCallback((now) => {
+          if (!this.running) return;
+          if (now - this.lastSubmittedAt >= targetInterval) this.pump(now);
+          schedule();
+        });
+      };
+      schedule();
+      return;
+    }
 
     const loop = (): void => {
       if (!this.running) return;
-      const started = performance.now();
-      this.pump();
-      const elapsed = performance.now() - started;
-      this.loopHandle = window.setTimeout(loop, Math.max(8, targetInterval - elapsed)) as unknown as number;
+      this.pump(performance.now());
+      this.loopHandle = window.setTimeout(loop, targetInterval) as unknown as number;
     };
-
     this.loopHandle = window.setTimeout(loop, targetInterval) as unknown as number;
   }
 
@@ -169,6 +187,10 @@ export class HandTracker {
     this.running = false;
     clearTimeout(this.loopHandle);
     this.loopHandle = 0;
+    if (this.videoFrameCallbackHandle && this.video?.cancelVideoFrameCallback) {
+      this.video.cancelVideoFrameCallback(this.videoFrameCallbackHandle);
+    }
+    this.videoFrameCallbackHandle = 0;
     this.workerBusy = false;
     this.video = null;
   }
@@ -197,21 +219,20 @@ export class HandTracker {
     return this.detectionTotalMs / this.detectionCount;
   }
 
-  private pump(): void {
+  private pump(timestampHint: number): void {
     const video = this.video;
     if (!video || video.readyState < 1) return;
     if (video.videoWidth === 0 && video.readyState < 2) return;
 
-    const now = performance.now();
-
     if (this.useWorker && this.worker) {
-      // Backpressure: never queue frames faster than the worker can consume.
+      // Never allocate/copy a camera frame if the worker is still processing.
       if (this.workerBusy) return;
       try {
         if (typeof VideoFrame === 'undefined') throw new Error('VideoFrame API unavailable');
         const frame = new VideoFrame(video);
         this.workerBusy = true;
-        this.worker.postMessage({ type: 'frame', frame, timestampMs: now }, [frame]);
+        this.lastSubmittedAt = performance.now();
+        this.worker.postMessage({ type: 'frame', frame, timestampMs: timestampHint }, [frame]);
       } catch (err) {
         this.workerBusy = false;
         this.pumpErrorCount += 1;
@@ -221,7 +242,8 @@ export class HandTracker {
     }
 
     if (!this.landmarker) return;
-    const t0 = performance.now();
+    const now = performance.now();
+    const t0 = now;
     try {
       const result = this.landmarker.detectForVideo(video, now);
       const elapsed = performance.now() - t0;

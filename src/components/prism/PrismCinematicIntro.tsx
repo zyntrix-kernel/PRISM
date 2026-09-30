@@ -235,7 +235,6 @@ export default function PrismCinematicIntro({
     //   Scene 5 (credits):     0.44 - 0.88   (7.04-14.08s)
     //   Scene 6 (experience):  0.88 - 1.0    (14.08-16s) — only ~2s
     const T = duration;
-    const t0 = 0;
     const t1 = T * 0.06;
     const t2 = T * 0.14;
     const t3 = T * 0.22;

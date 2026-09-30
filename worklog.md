@@ -3498,3 +3498,13 @@ Task: Begin motion-directed cinematic rebuild using the vendored LottieFiles ski
 
 - Kept the strict cinematic-first startup handoff so the main PRISM engine does not initialize during the intro.
 - Removed EffectComposer from the intro hot path and kept geometry updates preallocated.
+
+
+---
+Task ID: 22
+Agent: general-purpose
+Task: Fix production client exception: random is not defined
+
+- Root cause: the optimized PhysicsSystem constructor still referenced a seeded `random` object but had been changed to a zero-argument constructor, and ScienceShowcase still instantiated it without the RNG.
+- Restored `constructor(random: SeededRandom)` and changed the ScienceShowcase call to `new PhysicsSystem(random)`.
+- Static source audit confirms the constructor/call site pair is now consistent and no zero-argument PhysicsSystem instantiation remains.

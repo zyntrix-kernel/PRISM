@@ -12,13 +12,11 @@ import SettingsPanel from "./SettingsPanel";
 import PrismCinematicIntro from "./PrismCinematicIntro";
 import {
   Camera,
-  Eye,
   Hand,
   Activity,
   HelpCircle,
   Bug,
   Sparkles,
-  Cpu,
   Gauge,
   X,
   Check,

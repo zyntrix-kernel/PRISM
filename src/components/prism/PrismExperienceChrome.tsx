@@ -5,7 +5,7 @@ import type { CSSProperties } from "react";
 import type { LucideIcon } from "lucide-react";
 import {
   Atom, Camera, ChevronDown, CircleDot, Cloud, Command, Disc, Grid3X3,
-  Hand, HelpCircle, Info, Orbit, Sparkles, Target, Boxes, Car, Sun, X, Zap,
+  Hand, HelpCircle, Info, Orbit, Sparkles, Target, Boxes, Car, Sun, X, Zap, ScanLine,
 } from "lucide-react";
 import type { PrismApp, PrismState } from "@/lib/prism/app";
 import type { PresetId } from "@/lib/prism/presets/types";
@@ -157,6 +157,16 @@ export default function PrismExperienceChrome({ state, app, onCommand }: Props) 
 
             <button type="button" className={`prism-command-button ${state?.aiEnabled ? "is-active" : ""}`} onClick={() => app?.toggleAi()} aria-pressed={state?.aiEnabled ?? false} title="Toggle AI observer">
               <Sparkles size={14} /><span>AI</span>
+            </button>
+            <button
+              type="button"
+              className={`prism-command-button prism-command-presentation ${state?.presentationMode ? "is-active" : ""}`}
+              onClick={() => app?.togglePresentation()}
+              aria-pressed={state?.presentationMode ?? false}
+              aria-label={state?.presentationMode ? "Exit presentation mode" : "Enter presentation mode"}
+              title={state?.presentationMode ? "Exit presentation mode · P" : "Enter presentation mode · P"}
+            >
+              <ScanLine size={14} /><span>PRESENT</span>
             </button>
             <button type="button" className="prism-command-button prism-command-button--utility" onClick={onCommand} title="Open command palette"><Command size={14} /><span>COMMAND</span></button>
             <button type="button" className="prism-command-help" onClick={() => setHelpOpen(true)} aria-label="Open interaction guide"><HelpCircle size={15} /></button>

@@ -1,9 +1,11 @@
-// MediaPipe HandLandmarker wrapper (via @mediapipe/tasks-vision).
+// MediaPipe HandLandmarker wrapper.
 //
-// The tracker runs inference on its own cadence and stores only the latest
-// HandFrame. The render loop consumes getFrame() without ever blocking on
-// inference, satisfying the PLAN.md requirement that rendering never waits
-// for camera inference.
+// IMPORTANT PERFORMANCE ARCHITECTURE:
+// detectForVideo() is synchronous. Running it on the main thread can block
+// the browser's compositor/render loop for 100–300ms, which is catastrophic
+// on phones. PRISM therefore sends VideoFrames to a dedicated worker and only
+// returns small landmark data to the UI thread. A main-thread fallback is kept
+// for older browsers where VideoFrame/worker WASM is unavailable.
 
 import { FilesetResolver, HandLandmarker } from '@mediapipe/tasks-vision';
 import { PrismConfig } from './config';
@@ -11,10 +13,6 @@ import { isTabletDevice } from './device';
 import type { HandFrame, TrackedHand } from './types';
 
 async function resolveModelUrl(): Promise<{ url: string; offline: boolean }> {
-  // Prefer a locally bundled model (public/models/) for offline use.
-  // NOTE: dev servers / static hosts often return the index.html SPA
-  // fallback with status 200 for unknown paths, so a bare `ok` check is
-  // not enough — reject HTML responses and tiny payloads.
   try {
     const probe = await fetch(PrismConfig.tracking.localModelUrl, { method: 'HEAD' });
     const type = probe.headers.get('content-type') ?? '';
@@ -23,160 +21,172 @@ async function resolveModelUrl(): Promise<{ url: string; offline: boolean }> {
       return { url: PrismConfig.tracking.localModelUrl, offline: true };
     }
   } catch {
-    /* fall through to CDN */
+    // CDN fallback.
   }
   return { url: PrismConfig.tracking.cdnModelUrl, offline: false };
 }
 
+type WorkerReady = { type: 'ready'; delegate: string; offline: boolean };
+type WorkerError = { type: 'error' | 'pump-error'; message: string };
+type WorkerResult = { type: 'result'; hands: TrackedHand[]; timestampMs: number; inferenceMs: number };
+type WorkerMessage = WorkerReady | WorkerError | WorkerResult;
+
 export class HandTracker {
   private landmarker: HandLandmarker | null = null;
   private latest: HandFrame | null = null;
-  private lastVideoTime = -1;
-  private detectionCount = 0;
-  private detectionTotalMs = 0;
   private running = false;
   private loopHandle = 0;
   private video: HTMLVideoElement | null = null;
-  private lastFrameAt = 0;
+  private worker: Worker | null = null;
+  private workerBusy = false;
+  private workerInitPromise: Promise<void> | null = null;
+  private useWorker = false;
+  private detectionCount = 0;
+  private detectionTotalMs = 0;
+
   modelOffline = false;
   delegateUsed = 'GPU';
-  /** Consecutive detectForVideo failures (surfaced in debug; never silent). */
   pumpErrorCount = 0;
   lastPumpError = '';
 
-  /** Loads wasm + model. Must be called before start().
-   *  IDEMPOTENT: if already loaded (or currently loading), returns the
-   *  existing promise instead of starting a duplicate load. This prevents
-   *  the preload + ensureTracking race that caused "stuck on starting hand
-   *  tracking" (two concurrent init() calls deadlocking). */
-  private initPromise: Promise<void> | null = null;
   async init(onProgress: (msg: string) => void): Promise<void> {
-    // Already loaded? Skip.
-    if (this.landmarker) return;
-    // Currently loading? Return the existing promise (don't start a 2nd load).
-    if (this.initPromise) return this.initPromise;
-    this.initPromise = this.doInit(onProgress);
-    try {
-      await this.initPromise;
-    } finally {
-      // Keep the promise so concurrent callers can await it, but allow
-      // a retry if init failed (landmarker is still null).
-      if (!this.landmarker) this.initPromise = null;
+    if (this.landmarker || this.useWorker) return;
+    if (this.workerInitPromise) return this.workerInitPromise;
+
+    if (typeof Worker !== 'undefined') {
+      this.workerInitPromise = this.initWorker(onProgress);
+      try {
+        await this.workerInitPromise;
+        return;
+      } catch {
+        this.worker?.terminate();
+        this.worker = null;
+        this.workerInitPromise = null;
+      }
     }
+
+    await this.initMainThread(onProgress);
   }
 
-  private async doInit(onProgress: (msg: string) => void): Promise<void> {
+  private async initWorker(onProgress: (msg: string) => void): Promise<void> {
+    onProgress('Loading vision runtime off-thread…');
+    const worker = new Worker(new URL('./tracking-worker.ts', import.meta.url), { type: 'module' });
+    this.worker = worker;
+
+    await new Promise<void>((resolve, reject) => {
+      const timeout = window.setTimeout(() => reject(new Error('Tracking worker initialization timed out')), 20_000);
+      worker.onmessage = (event: MessageEvent<WorkerMessage>) => {
+        const message = event.data;
+        if (message.type === 'ready') {
+          window.clearTimeout(timeout);
+          this.modelOffline = message.offline;
+          this.delegateUsed = message.delegate;
+          this.useWorker = true;
+          resolve();
+        } else if (message.type === 'error') {
+          window.clearTimeout(timeout);
+          reject(new Error(message.message));
+        }
+      };
+      worker.onerror = (event) => {
+        window.clearTimeout(timeout);
+        reject(new Error(event.message || 'Tracking worker failed to initialize'));
+      };
+      worker.postMessage({ type: 'init' });
+    });
+
+    worker.onmessage = (event: MessageEvent<WorkerMessage>) => this.handleWorkerMessage(event.data);
+  }
+
+  private async initMainThread(onProgress: (msg: string) => void): Promise<void> {
     onProgress('Loading vision runtime…');
     const wasmUrls = [PrismConfig.tracking.wasmUrl, PrismConfig.tracking.cdnWasmUrl].filter(
       (u, i, all) => u && all.indexOf(u) === i,
     );
     let lastError: unknown = null;
+
     for (const wasmUrl of wasmUrls) {
       try {
-        await this.initWithWasm(wasmUrl, onProgress);
-        lastError = null;
-        break;
-      } catch (err) {
-        lastError = err; // e.g. unvendored public/wasm → try the CDN next
-      }
-    }
-    if (!this.landmarker) throw lastError instanceof Error ? lastError : new Error(String(lastError));
-  }
-
-  private async initWithWasm(wasmUrl: string, onProgress: (msg: string) => void): Promise<void> {
-    const vision = await FilesetResolver.forVisionTasks(wasmUrl);
-    const { url, offline } = await resolveModelUrl();
-    this.modelOffline = offline;
-    // GPU first for speed; fall back to CPU for headless browsers, VMs, and
-    // weak exhibition hardware where the GPU delegate cannot initialize.
-    let lastError: unknown = null;
-    for (const delegate of ['GPU', 'CPU'] as const) {
-      try {
-        onProgress(
-          `Loading hand model (${offline ? 'local' : 'CDN'}, ${delegate})…`,
-        );
-        this.landmarker = await HandLandmarker.createFromOptions(vision, {
-          baseOptions: { modelAssetPath: url, delegate },
-          runningMode: 'VIDEO',
-          numHands: PrismConfig.tracking.numHands,
-          minHandDetectionConfidence: PrismConfig.tracking.minHandDetectionConfidence,
-          minHandPresenceConfidence: PrismConfig.tracking.minHandPresenceConfidence,
-          minTrackingConfidence: PrismConfig.tracking.minTrackingConfidence,
-        });
-        this.delegateUsed = delegate;
-        lastError = null;
-        break;
+        const vision = await FilesetResolver.forVisionTasks(wasmUrl);
+        const { url, offline } = await resolveModelUrl();
+        for (const delegate of ['GPU', 'CPU'] as const) {
+          try {
+            onProgress(`Loading hand model (${offline ? 'local' : 'CDN'}, ${delegate})…`);
+            this.landmarker = await HandLandmarker.createFromOptions(vision, {
+              baseOptions: { modelAssetPath: url, delegate },
+              runningMode: 'VIDEO',
+              numHands: PrismConfig.tracking.numHands,
+              minHandDetectionConfidence: PrismConfig.tracking.minHandDetectionConfidence,
+              minHandPresenceConfidence: PrismConfig.tracking.minHandPresenceConfidence,
+              minTrackingConfidence: PrismConfig.tracking.minTrackingConfidence,
+            });
+            this.modelOffline = offline;
+            this.delegateUsed = delegate;
+            return;
+          } catch (err) {
+            lastError = err;
+          }
+        }
       } catch (err) {
         lastError = err;
       }
     }
-    if (!this.landmarker) throw lastError;
+
+    throw lastError instanceof Error ? lastError : new Error(String(lastError));
   }
 
   get isReady(): boolean {
-    return this.landmarker !== null;
+    return this.landmarker !== null || this.useWorker;
   }
 
-  /** True when the detection loop is actively running (start() called,
-   *  stop() not yet called). Distinct from isReady (model loaded). */
   get isTracking(): boolean {
     return this.running;
   }
 
-  /** Begins the detection loop over a playing video element.
-   *  HEAVY THROTTLE: runs at most 10fps (every 100ms) to leave maximum CPU
-   *  for the render loop. MediaPipe's detectForVideo is SYNCHRONOUS and
-   *  blocks the main thread — with 2 hands it takes 200-300ms. At 10fps
-   *  tracking, there's a 100ms gap between detections for rendering.
-   *  The pointer filter + pinch coast smooth between samples, so 10fps
-   *  tracking feels smooth to the user (no visible stutter).
-   *
-   *  TABLET BOOST: tablets (iPad, Galaxy Tab S, Surface) have faster CPUs
-   *  than low-end exhibition PCs, so the loop runs at 15fps (66ms) on them.
-   *  Hand-tracking feels noticeably snappier — pinch/grab latency drops
-   *  from ~100ms to ~66ms — and the render loop still gets >50ms of
-   *  headroom per frame on a 60fps tablet. Override with `opts.intervalMs`.
-   *
-   *  CRITICAL: this is setTimeout-based (NOT rAF) because detectForVideo
-   *  blocks the main thread. If it ran in rAF, the render loop would freeze
-   *  for the duration of each inference call. setTimeout lets the render
-   *  loop (rAF) run between detections. */
   start(video: HTMLVideoElement, opts?: { intervalMs?: number }): void {
-    if (!this.landmarker) throw new Error('HandTracker.start() called before init().');
+    if (!this.isReady) throw new Error('HandTracker.start() called before init().');
     this.video = video;
     this.running = true;
-    this.lastFrameAt = performance.now();
-    // Pick the throttle: explicit override → tablet interval → PC interval.
-    const TARGET_INTERVAL_MS =
-      opts?.intervalMs ??
-      (isTabletDevice() ? PrismConfig.tracking.tabletIntervalMs : PrismConfig.tracking.intervalMs);
+
+    // Worker inference is asynchronous, so this cadence controls sampling
+    // rather than blocking the WebGL/UI thread. Phones sample more slowly;
+    // landmark interpolation/smoothing keeps interaction usable between hits.
+    const defaultInterval = isTabletDevice() ? 100 : 140;
+    const targetInterval = opts?.intervalMs ?? defaultInterval;
+
     const loop = (): void => {
       if (!this.running) return;
-      const t0 = performance.now();
+      const started = performance.now();
       this.pump();
-      const elapsed = performance.now() - t0;
-      // Wait the remaining time to hit the target rate. If inference took
-      // longer than the interval, run immediately (wait=0) — the render
-      // loop got time during the setTimeout yield between detections.
-      const wait = Math.max(0, TARGET_INTERVAL_MS - elapsed);
-      this.loopHandle = window.setTimeout(loop, wait) as unknown as number;
+      const elapsed = performance.now() - started;
+      this.loopHandle = window.setTimeout(loop, Math.max(8, targetInterval - elapsed)) as unknown as number;
     };
-    this.loopHandle = window.setTimeout(loop, TARGET_INTERVAL_MS) as unknown as number;
+
+    this.loopHandle = window.setTimeout(loop, targetInterval) as unknown as number;
   }
 
   stop(): void {
     this.running = false;
     clearTimeout(this.loopHandle);
-    cancelAnimationFrame(this.loopHandle);
+    this.loopHandle = 0;
+    this.workerBusy = false;
     this.video = null;
   }
 
-  /** Latest frame (or null if tracking never produced one / was lost). */
+  dispose(): void {
+    this.stop();
+    this.worker?.terminate();
+    this.worker = null;
+    this.useWorker = false;
+    this.workerInitPromise = null;
+    this.landmarker?.close();
+    this.landmarker = null;
+  }
+
   getFrame(): HandFrame | null {
     return this.latest;
   }
 
-  /** Detections per second over recent history (0 when idle). */
   get trackingFps(): number {
     if (this.detectionCount < 2 || this.detectionTotalMs <= 0) return 0;
     return (this.detectionCount / this.detectionTotalMs) * 1000;
@@ -189,63 +199,70 @@ export class HandTracker {
 
   private pump(): void {
     const video = this.video;
-    if (!video || !this.landmarker) return;
-    // Accept readyState >= 1 (HAVE_METADATA) — some preview environments
-    // never reach readyState 2 but the stream is live and MediaPipe can
-    // still read frames.
-    if (video.readyState < 1) return;
+    if (!video || video.readyState < 1) return;
     if (video.videoWidth === 0 && video.readyState < 2) return;
 
-    // NOTE: we DO NOT gate on video.currentTime — in many preview/iframe
-    // environments, the video element's currentTime never advances (the
-    // stream is live but the element isn't "playing" in the DOM sense).
-    // The old check `if (video.currentTime === this.lastVideoTime) return`
-    // caused detection to NEVER run (currentTime stayed at 0 forever).
-    // Instead, we run detection every pump cycle. The 10fps throttle on
-    // the loop already prevents wasted inference.
-
     const now = performance.now();
-    const dt = now - this.lastFrameAt;
-    this.lastFrameAt = now;
 
+    if (this.useWorker && this.worker) {
+      // Backpressure: never queue frames faster than the worker can consume.
+      if (this.workerBusy) return;
+      try {
+        if (typeof VideoFrame === 'undefined') throw new Error('VideoFrame API unavailable');
+        const frame = new VideoFrame(video);
+        this.workerBusy = true;
+        this.worker.postMessage({ type: 'frame', frame, timestampMs: now }, [frame]);
+      } catch (err) {
+        this.workerBusy = false;
+        this.pumpErrorCount += 1;
+        this.lastPumpError = err instanceof Error ? err.message : String(err);
+      }
+      return;
+    }
+
+    if (!this.landmarker) return;
     const t0 = performance.now();
-    let result;
     try {
-      result = this.landmarker.detectForVideo(video, now);
+      const result = this.landmarker.detectForVideo(video, now);
+      const elapsed = performance.now() - t0;
+      this.acceptResult(
+        (result.landmarks ?? []).map((landmarks, i) => ({
+          landmarks: landmarks.map((p) => ({ x: p.x, y: p.y, z: p.z ?? 0 })),
+          handedness: result.handedness?.[i]?.[0]?.categoryName ?? 'Unknown',
+          confidence: result.handedness?.[i]?.[0]?.score ?? 0,
+        })),
+        now,
+        elapsed,
+      );
     } catch (err) {
       this.pumpErrorCount += 1;
       this.lastPumpError = err instanceof Error ? err.message : String(err);
-      return;
     }
-    this.pumpErrorCount = 0;
-    const elapsed = performance.now() - t0;
+  }
 
-    // Rolling average over the last ~30 detections.
+  private handleWorkerMessage(message: WorkerMessage): void {
+    if (message.type === 'result') {
+      this.workerBusy = false;
+      this.pumpErrorCount = 0;
+      this.acceptResult(message.hands, message.timestampMs, message.inferenceMs);
+    } else if (message.type === 'pump-error') {
+      this.workerBusy = false;
+      this.pumpErrorCount += 1;
+      this.lastPumpError = message.message;
+    }
+  }
+
+  private acceptResult(hands: TrackedHand[], timestampMs: number, inferenceMs: number): void {
     this.detectionCount += 1;
-    this.detectionTotalMs += elapsed;
+    this.detectionTotalMs += inferenceMs;
     if (this.detectionCount > 30) {
       this.detectionCount = Math.floor(this.detectionCount / 2);
       this.detectionTotalMs /= 2;
     }
-
-    // ADAPTIVE: if inference is consistently > 150ms (slow camera/CPU),
-    // log it. The debug overlay shows this so the user can see WHY the
-    // tracking is at 10fps. Future: could dynamically drop numHands here.
-    if (elapsed > 150 && this.detectionCount % 10 === 0) {
-      this.lastPumpError = `slow inference: ${elapsed.toFixed(0)}ms (2-hand detection)`;
-    }
-
-    const hands: TrackedHand[] = (result.landmarks ?? []).map((landmarks, i) => ({
-      landmarks: landmarks.map((p) => ({ x: p.x, y: p.y, z: p.z ?? 0 })),
-      handedness: result.handedness?.[i]?.[0]?.categoryName ?? 'Unknown',
-      confidence: result.handedness?.[i]?.[0]?.score ?? 0,
-    }));
-    this.latest = { hands, timestampMs: now };
-    void dt;
+    this.latest = { hands, timestampMs };
   }
 }
 
-/** Draws hand skeletons onto a 2D canvas sized to the preview element. */
 const SKELETON: Array<readonly [number, number]> = [
   [0, 1], [1, 2], [2, 3], [3, 4],
   [0, 5], [5, 6], [6, 7], [7, 8],
@@ -255,15 +272,11 @@ const SKELETON: Array<readonly [number, number]> = [
   [5, 9], [9, 13], [13, 17],
 ];
 
-export function drawLandmarkOverlay(
-  ctx: CanvasRenderingContext2D,
-  frame: HandFrame | null,
-): void {
+export function drawLandmarkOverlay(ctx: CanvasRenderingContext2D, frame: HandFrame | null): void {
   const canvas = ctx.canvas;
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   if (!frame) return;
 
-  // Note: the canvas element itself is CSS-mirrored, so raw coords are correct.
   frame.hands.forEach((hand, handIndex) => {
     const color = handIndex === 0 ? '#9adcff' : '#a8ffc9';
     ctx.strokeStyle = color;

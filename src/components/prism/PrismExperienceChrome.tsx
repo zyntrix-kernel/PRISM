@@ -83,6 +83,7 @@ export default function PrismExperienceChrome({ state, app, onCommand }: Props) 
   const fpsTone = fps && fps < 30 ? "warn" : "good";
   const hands = state?.rail.hands?.trim() || "No hands";
   const gesture = state?.rail.gesture?.trim() || "Mouse";
+  const inputMode = state?.inputMode?.toUpperCase() || "POINTER";
   const status = state?.cameraStarting ? "CALIBRATING" : state?.status?.split("—")[0]?.trim() || "READY";
   const focus = state?.coach?.trim() || (state?.cameraOn ? "Point to explore · pinch to interact" : "Move to point · hold to grab");
 
@@ -153,13 +154,15 @@ export default function PrismExperienceChrome({ state, app, onCommand }: Props) 
         <header><span>SYSTEM</span><span>01</span></header>
         <div className="prism-command-stats">
           <Stat label="CAMERA" value={state?.cameraOn ? "LIVE" : "MOUSE"} tone={state?.cameraOn ? "good" : "neutral"} />
-          <Stat label="INPUT" value={state?.cameraOn ? "HAND" : "POINTER"} />
+          <Stat label="INPUT" value={inputMode} tone={state?.inputMode === "hand" ? "good" : "neutral"} />
           <Stat label="HANDS" value={hands.toUpperCase()} tone={state?.cameraOn && hands !== "No hands" ? "good" : "neutral"} />
           <Stat label="GESTURE" value={gesture.toUpperCase()} />
+          <Stat label="PINCH" value={String(state?.pinchPercent ?? 0) + "%"} tone={(state?.pinchPercent ?? 0) > 75 ? "good" : "neutral"} />
         </div>
         <div className="prism-command-divider" />
         <div className="prism-command-mini"><span>MODE</span><strong>{state?.cameraOn ? "OPTICAL" : "DIRECT"}</strong></div>
-        <div className="prism-command-mini"><span>QUALITY</span><strong>{state?.quality?.toUpperCase() || "AUTO"}</strong></div>
+        <div className="prism-command-mini"><span>FOCUS</span><strong>{state?.focusedName?.toUpperCase() || "NONE"}</strong></div>
+        <div className="prism-command-mini"><span>WORLD</span><strong>{state?.twoHandActive ? "TWO-HAND" : "SINGLE"}</strong></div>
       </aside>
 
       {state?.planetInfo && (
@@ -167,6 +170,10 @@ export default function PrismExperienceChrome({ state, app, onCommand }: Props) 
           <header><span>FOCUS OBJECT</span><span>LOCKED</span></header>
           <div className="prism-command-inspection-marker" aria-hidden="true"><span /></div>
           <p>{state.planetInfo}</p>
+          <div className="prism-command-inspection-state">
+            <span>{state.grabbedName ? "HELD" : "HOVER"}</span>
+            <strong>{state.twoHandActive ? "TWO-HAND CONTROL" : String(state.pinchPercent ?? 0) + "% PINCH"}</strong>
+          </div>
         </aside>
       )}
 
@@ -178,10 +185,10 @@ export default function PrismExperienceChrome({ state, app, onCommand }: Props) 
         </div>
         <Sparkline values={state?.fpsHistory ?? []} />
         <div className="prism-command-telemetry-grid">
-          <div><span>TRACK</span><strong>{state?.cameraOn ? "MP" : "POINTER"}</strong></div>
+          <div><span>TRACK</span><strong>{state?.cameraOn ? "MEDIAPIPE" : "POINTER"}</strong></div>
           <div><span>AI</span><strong>{state?.aiEnabled ? "ON" : "OFF"}</strong></div>
+          <div><span>GRAB</span><strong>{state?.grabbedName ? "ACTIVE" : "READY"}</strong></div>
           <div><span>ENGINE</span><strong>THREE.JS</strong></div>
-          <div><span>PIPELINE</span><strong>REALTIME</strong></div>
         </div>
       </aside>
 

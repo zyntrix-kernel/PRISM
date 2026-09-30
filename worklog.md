@@ -3462,3 +3462,14 @@ Task: Fix PRISM intro startup freeze reported after the science showcase rewrite
 - Confirmed the four team members and the 16-second Stage duration remain wired.
 
 A browser run was not available in the isolated environment, so the runtime fix is based on the captured frozen startup state and static inspection rather than a live local console trace.
+
+
+---
+Task ID: 20
+Agent: general-purpose
+Task: Isolate cinematic startup from PRISM engine initialization
+
+- Changed PrismStage so PrismApp is not constructed at all while the cinematic intro is active.
+- Main PRISM Three.js scene creation, MediaPipe/WASM model preload, DOM wiring, and its render loop now begin only after the cinematic completion handoff.
+- This removes startup contention between the cinematic WebGL context and the production PRISM engine.
+- Static audit confirms the startup effect is gated by showIntro and the existing app.start() handoff remains gated by !showIntro.

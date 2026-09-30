@@ -478,14 +478,14 @@ export class InteractionController {
       // Pinch just started — arm the tap, record start time + position.
       this.tapArmed = true;
       this.tapStartTime = nowMs;
-      this.tapStartX = this.pointerNX;
-      this.tapStartY = this.pointerNY;
+      this.tapStartX = this.pointerNdc.x;
+      this.tapStartY = this.pointerNdc.y;
     }
     if (this.actionReleased) {
       if (this.tapArmed) {
         const dur = nowMs - this.tapStartTime;
-        const dx = this.pointerNX - this.tapStartX;
-        const dy = this.pointerNY - this.tapStartY;
+        const dx = this.pointerNdc.x - this.tapStartX;
+        const dy = this.pointerNdc.y - this.tapStartY;
         const drift = Math.hypot(dx, dy);
         const cfg = PrismConfig.interaction;
         const maxMs = cfg.tapMaxMs ?? 350;
@@ -611,7 +611,7 @@ export class InteractionController {
     // the TwoHandGesture.update expects {x, y} not a hand object.
     const primePoint = pinchPoint2D(primaryHand.landmarks);
     if (secondaryHand) {
-      this.cachedSecHand = pinchPoint2D(secondaryHand);
+      this.cachedSecHand = pinchPoint2D(secondaryHand.landmarks);
       this.cachedSecHandAt = now;
     }
     const secCoastAlive = this.cachedSecHand && (now - this.cachedSecHandAt < 500);

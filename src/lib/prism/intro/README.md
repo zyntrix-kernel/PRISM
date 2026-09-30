@@ -1,69 +1,49 @@
-# PRISM Cinematic Science Engine
+# PRISM Cinematic Science Film
 
-PRISM opens with a realtime Three.js science film rather than a static splash screen.
+The PRISM intro is a realtime 3D title sequence for the ZYNASH LABS school robotics project. It is designed around a premium motion language, a directed camera, procedural science visuals, and a deterministic handoff into the main interactive world.
 
-The intro is isolated from the main interaction engine. It uses one lightweight WebGL context, preallocated buffer geometry, a deterministic timeline, and CSS compositor layers. The goal is a rich visual impression without making the expo laptop fight two heavy render pipelines at once.
+## Narrative
 
-## Visual sequence
+1. FIRST PRINCIPLES: the scene wakes from darkness and establishes matter, energy, and information.
+2. PHYSICS: gravity, projectile motion, pendulum oscillation, orbital motion, and dynamic fields.
+3. CHEMISTRY: atomic shells, electrons, molecular structures, lattice geometry, and a DNA-style helix.
+4. MATHEMATICS: sine/cosine curves, a parabola, a phi-inspired spiral, a helix, a Lissajous figure, and a torus knot.
+5. INFORMATION: a live signal curve, matrix-like instancing field, and encoded data stream.
+6. SYNTHESIS: the systems collapse toward one custom triangular prism with orbital rings and refracted light paths.
+7. ZYNASH LABS: identity reveal.
+8. PRISM: project title and full expansion.
+9. TEAM: four sequential credits.
+10. LAUNCH: camera dives into the prism core before the main app appears.
 
-| Time | Scene | Visual language |
-| --- | --- | --- |
-| 0.00–0.85s | boot | star ignition, calibration marks, spatial wake-up |
-| 0.85–3.00s | physics | projectile motion, pendulum, orbital motion, dynamic field |
-| 3.00–5.25s | chemistry | atom shells, electrons, H₂O, CO₂, molecular lattice |
-| 5.25–7.50s | mathematics | phi-inspired spiral, sine, parabola, vectors, matrix field, torus knot |
-| 7.50–9.25s | synthesis | disciplines collapse into a procedural crystalline core |
-| 9.25–10.40s | labs | ZYNASH LABS identity reveal |
-| 10.40–11.80s | prism | PRISM title + full expansion |
-| 11.80–14.80s | team | four-member sequential credit reveal |
-| 14.80–15.80s | launch | camera dive into the PRISM core |
-| 15.80–16.00s | complete | handoff flash |
+## Motion direction
 
-The timeline is normalized, so changing duration preserves the choreography.
+The vendored LottieFiles motion-design skill is the reference for the choreography. PRISM uses one shared motion language with premium easing, deliberate hero staging, anticipatory scene transitions, secondary follow-through, and restrained ambient motion.
 
-## Performance architecture
+The 1/3 distance rule is respected through staged camera travel. The three motion layers are explicit:
 
-The hot path is intentionally simple:
+- Primary: the current science or identity hero.
+- Secondary: supporting curves, rings, signals, or geometry.
+- Ambient: the cosmic field, subtle light sweeps, grain, and instrumentation.
 
-- One Three.js renderer and one scene.
-- No EffectComposer or bloom pass during the intro.
-- Star, electron, molecule, vector, and shard positions use preallocated typed arrays.
-- No per-frame BufferGeometry creation.
-- No per-frame scene graph traversals for visibility management.
-- Adaptive quality can reduce device-pixel ratio and particle density after sustained frame pressure.
-- A subsystem circuit breaker prevents a science or WebGL exception from killing the semantic timeline.
+## Realtime engineering
 
-The main PRISM render loop remains paused until the intro hands control back.
+- One intro WebGL renderer.
+- Preallocated typed arrays for moving point systems and line systems.
+- No per-frame geometry reconstruction.
+- No EffectComposer in the intro hot path.
+- Adaptive pixel ratio and quality downgrade.
+- Reduced-motion support.
+- WebGL and frame-level circuit breakers.
+- Main PrismApp initialization is deferred until the intro completes.
+- Pointer movement gently affects the camera and world.
 
-## Science visualizers
+## Team
 
-### Physics
+- Zyntrix.krnl.sys - Tanay Bhandari · LEAD
+- Ash Collector - Ashwin Nagaranjan Ramnath
+- distortus_rexx - Debroop Mojumder
+- Unknown - Maaz Mozzam
 
-A gravity-based projectile path is paired with a pendulum whose swing uses the small-angle angular-frequency relationship, plus a compact orbit system and moving field particles.
+## Assets
 
-### Chemistry
-
-The visualizer presents an atomic nucleus, three electron shells, moving electrons, stylized H₂O and CO₂ molecular arrangements, and a repeating lattice.
-
-### Mathematics
-
-Parametric curves, a sine graph, a parabola, a phi-inspired spiral, a moving graph point, vectors, and a torus knot turn mathematical structure into visible motion.
-
-### Synthesis
-
-The independent discipline systems fade toward a single rotating crystal, surrounded by procedural shards and orbital rings, before the camera dives toward the core.
-
-These are presentation visualizations for the school expo, not scientific simulation software.
-
-## Team credits
-
-- Zyntrix.krnl.sys — Tanay Bhandari · LEAD
-- Ash Collector — Ashwin Nagaranjan Ramnath
-- distortus_rexx — Debroop Mojumder
-- Unknown — Maaz Mozzam
-
-## Resilience
-
-Pointer movement subtly bends the camera and world. Escape skips the sequence. The engine pauses when the document is hidden, respects prefers-reduced-motion, falls back to the typography layer when WebGL cannot initialize, and keeps advancing when a browser/GPU runtime fault occurs.
-
-The prism:intro-cue custom event exposes scene boundaries for future sound, haptics, and telemetry without coupling those concerns to React state.
+The cinematic hero is generated procedurally in Three.js so the sequence does not depend on a hosted media URL. A Higgsfield hero-image attempt was tested, but the connected account did not expose a compatible unlimited generation route for the chosen visual model, so no paid asset was forced into the build.

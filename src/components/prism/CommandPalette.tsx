@@ -243,11 +243,10 @@ export default function CommandPalette({ onClose, state, app }: Props) {
   }, [activeIndex, filtered, onClose]);
 
   useEffect(() => {
-    const item = listRef.current?.querySelector<HTMLElement>('[data-idx="' + active + '"]');
+    const item = listRef.current?.querySelector<HTMLElement>('[data-idx="' + activeIndex + '"]');
     item?.scrollIntoView({ block: "nearest" });
-  }, [active]);
+  }, [activeIndex]);
 
-  const activeIndex = Math.min(active, Math.max(0, filtered.length - 1));
   let flatIndex = -1;
 
   return (

@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { clamp01, damp, inverseLerp, smoothstep } from "./easing";
+import { clamp01, damp, inverseLerp } from "./easing";
 import { SeededRandom } from "./random";
 import { ScienceShowcase } from "./science";
 import { stagedTravel } from "./motion";

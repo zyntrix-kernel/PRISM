@@ -1,11 +1,6 @@
-export const TOTAL = 18.8;
+export const TOTAL = 24;
 
-export type ShapeId =
-  | "origin"
-  | "ribbon"
-  | "orbit"
-  | "prism"
-  | "implode";
+export type ShapeId = "origin" | "ribbon" | "orbit" | "prism" | "implode";
 
 export type CameraKey = {
   t: number;
@@ -17,31 +12,25 @@ export type CameraKey = {
 };
 
 export const CAMERA_KEYS: readonly CameraKey[] = [
-  { t: 0.0, r: 14.0, az: 2.35, h: 0.25, ly: 0.0, fov: 42 },
-  { t: 2.0, r: 10.5, az: 2.00, h: 0.15, ly: 0.05, fov: 41 },
-  { t: 4.2, r: 8.6, az: 1.30, h: 0.10, ly: 0.0, fov: 40 },
-  { t: 6.8, r: 7.0, az: 0.55, h: 0.28, ly: 0.10, fov: 38 },
-  { t: 9.1, r: 5.3, az: 0.22, h: 0.15, ly: 0.12, fov: 37 },
-  { t: 11.0, r: 4.2, az: -0.12, h: 0.06, ly: 0.10, fov: 36 },
-  { t: 13.0, r: 3.5, az: -0.45, h: 0.0, ly: 0.0, fov: 35 },
-  { t: 16.9, r: 2.7, az: -0.66, h: -0.03, ly: 0.0, fov: 34 },
-  { t: 18.8, r: 1.9, az: -0.72, h: 0.0, ly: 0.0, fov: 33 },
+  { t: 0, r: 16, az: 2.6, h: 1.2, ly: 0, fov: 44 },
+  { t: 3, r: 10, az: 1.7, h: 0.4, ly: 0, fov: 42 },
+  { t: 7, r: 7, az: 0.7, h: 0.1, ly: 0.1, fov: 39 },
+  { t: 11, r: 5.6, az: -0.25, h: 0.2, ly: 0, fov: 37 },
+  { t: 15, r: 4.5, az: -0.7, h: 0, ly: 0, fov: 36 },
+  { t: 19, r: 5.2, az: 0.25, h: 0.1, ly: 0, fov: 39 },
+  { t: 22, r: 3.4, az: -0.15, h: 0, ly: 0, fov: 34 },
+  { t: 24, r: 2.4, az: -0.05, h: 0, ly: 0, fov: 32 },
 ];
 
 export const SHAPE_SCHEDULE: readonly { id: ShapeId; t0: number; t1: number }[] = [
-  { id: "origin", t0: 0.0, t1: 1.2 },
-  { id: "ribbon", t0: 1.2, t1: 4.6 },
-  { id: "orbit", t0: 4.6, t1: 8.1 },
-  { id: "prism", t0: 8.1, t1: 13.0 },
-  { id: "origin", t0: 13.0, t1: 15.2 },
+  { id: "origin", t0: 0, t1: 3 },
+  { id: "ribbon", t0: 3, t1: 7 },
+  { id: "orbit", t0: 7, t1: 11 },
+  { id: "prism", t0: 11, t1: 16 },
+  { id: "implode", t0: 19, t1: 22 },
 ];
 
-export const FINALE = {
-  implode0: 15.2,
-  flash0: 17.95,
-  flash1: 18.45,
-  end: TOTAL,
-} as const;
+export const FINALE = { implode0: 19, flash0: 22.5, flash1: 23.5, end: TOTAL } as const;
 
 export const TEAM = [
   { name: "Tanay Bhandari", handle: "Zyntrix.krnl.sys", role: "LEAD" },
@@ -51,8 +40,7 @@ export const TEAM = [
 ] as const;
 
 export type Member = (typeof TEAM)[number];
-
-export const MEMBER_T0 = 14.15;
+export const MEMBER_T0 = 19.6;
 export const MEMBER_DUR = 0.95;
-export const TEXT_T0 = 11.05;
-export const TEXT_T1 = 13.55;
+export const TEXT_T0 = 15.4;
+export const TEXT_T1 = 19.1;

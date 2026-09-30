@@ -206,3 +206,63 @@
 
 /* Hide the legacy DOM chrome visually, while keeping its engine-owned refs alive. */
 #prism-hud,#prism-sys-rail,#prism-coach,#prism-onboard,#prism-help{display:none!important;}
+
+/* Clean exhibition mode: retain the science scene and world transitions,
+   remove operational chrome so a projector or judging table sees the work. */
+.prism-root.is-presentation .prism-command-chrome,
+.prism-root.is-presentation .prism-command-left,
+.prism-root.is-presentation .prism-command-right,
+.prism-root.is-presentation .prism-command-focus,
+.prism-root.is-presentation .prism-command-footer,
+.prism-root.is-presentation #prism-webcam,
+.prism-root.is-presentation #prism-landmark-overlay,
+.prism-root.is-presentation #prism-webcam-frame,
+.prism-root.is-presentation #prism-debug,
+.prism-root.is-presentation #prism-planet-info,
+.prism-root.is-presentation #prism-voxel-palette,
+.prism-root.is-presentation #prism-coach,
+.prism-root.is-presentation #prism-onboard,
+.prism-root.is-presentation #prism-help,
+.prism-root.is-presentation .prism-input-mode-indicator {
+  display:none!important;
+}
+
+.prism-root.is-presentation .prism-atmosphere {
+  opacity:.78;
+}
+
+.prism-presentation-hint {
+  position:fixed;
+  right:max(16px,env(safe-area-inset-right));
+  bottom:max(14px,env(safe-area-inset-bottom));
+  z-index:90;
+  display:inline-flex;
+  align-items:center;
+  gap:8px;
+  padding:6px 8px;
+  border:1px solid rgba(205,231,248,.06);
+  border-radius:8px;
+  background:rgba(4,9,15,.24);
+  color:rgba(215,236,249,.24);
+  font:700 7px/1 var(--font-mono);
+  letter-spacing:.15em;
+  pointer-events:none;
+  animation:prism-presentation-hint 700ms cubic-bezier(.16,1,.3,1) both;
+}
+.prism-presentation-hint span:first-child {
+  display:grid;
+  place-items:center;
+  min-width:17px;
+  height:17px;
+  padding:0 4px;
+  border:1px solid rgba(205,231,248,.08);
+  border-radius:5px;
+  color:rgba(226,244,255,.42);
+}
+@keyframes prism-presentation-hint {
+  from { opacity:0; transform:translateY(4px); }
+  to { opacity:1; transform:translateY(0); }
+}
+@media (prefers-reduced-motion:reduce) {
+  .prism-presentation-hint { animation:none; }
+}

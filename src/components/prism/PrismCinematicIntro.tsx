@@ -1,12 +1,25 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import {
+  useEffect,
+  useRef,
+  useState,
+} from "react";
+import {
+  PrismCinematicEngine,
+} from "@/lib/prism/intro/engine";
+import type {
+  IntroMemberIndex,
+  IntroQuality,
+  IntroScene,
+} from "@/lib/prism/intro/types";
 import "./PrismCinematicIntro.css";
 
 type IntroProps = {
   onComplete?: () => void;
   showSkip?: boolean;
   duration?: number;
+  quality?: IntroQuality;
 };
 
 const TEAM = [
@@ -25,981 +38,489 @@ const TEAM = [
     name: "Debroop",
     role: "",
   },
-];
+] as const;
 
-const INTRO_DURATION = 13200;
-
-type Particle = {
-  x: number;
-  y: number;
-  z: number;
-  size: number;
-  speed: number;
-  phase: number;
-  alpha: number;
+const SCENE_CLASS: Record<
+  IntroScene,
+  string
+> = {
+  boot: "scene-boot",
+  field: "scene-field",
+  crystallize: "scene-crystallize",
+  labs: "scene-labs",
+  prism: "scene-prism",
+  definition: "scene-definition",
+  team: "scene-team",
+  launch: "scene-launch",
+  complete: "scene-complete",
 };
 
-type Pointer = {
-  x: number;
-  y: number;
-  tx: number;
-  ty: number;
-};
+function SceneCopy({
+  scene,
+  member,
+}: {
+  scene: IntroScene;
+  member: IntroMemberIndex;
+}) {
+  if (scene === "boot") {
+    return (
+      <div
+        className="copy copy-awakening"
+        data-scene-copy="boot"
+      >
+        <span className="micro">
+          INITIALIZING SPATIAL ENVIRONMENT
+        </span>
 
-function clamp(value: number, min: number, max: number) {
-  return Math.min(max, Math.max(min, value));
-}
+        <span className="line" />
 
-function easeOutExpo(t: number) {
-  return t >= 1 ? 1 : 1 - Math.pow(2, -10 * t);
-}
+        <span className="micro faded">
+          ZYNASH LABS
+        </span>
+      </div>
+    );
+  }
 
-function smoothstep(t: number) {
-  return t * t * (3 - 2 * t);
-}
+  if (scene === "field") {
+    return (
+      <div
+        className="copy copy-ignition"
+        data-scene-copy="field"
+      >
+        <span className="micro">
+          REALITY / INTERFACE
+        </span>
 
-function drawGlow(
-  ctx: CanvasRenderingContext2D,
-  x: number,
-  y: number,
-  radius: number,
-  strength: number,
-) {
-  const gradient = ctx.createRadialGradient(
-    x,
-    y,
-    0,
-    x,
-    y,
-    radius,
+        <h1 className="ghost-word">
+          PERCEIVE
+        </h1>
+
+        <span className="micro field-caption">
+          A SPATIAL SYSTEM IS
+          FORMING
+        </span>
+      </div>
+    );
+  }
+
+  if (scene === "crystallize") {
+    return (
+      <div
+        className="copy copy-crystallize"
+        data-scene-copy="crystallize"
+      >
+        <div className="crystal-caption">
+          OPTICAL CORE
+        </div>
+
+        <div className="crystal-caption-large">
+          STRUCTURING
+        </div>
+
+        <div className="crystal-caption">
+          MATTER · LIGHT · SPACE
+        </div>
+      </div>
+    );
+  }
+
+  if (scene === "labs") {
+    return (
+      <div
+        className="copy copy-labs"
+        data-scene-copy="labs"
+      >
+        <div className="labs-small">
+          ZYNASH
+        </div>
+
+        <h1>
+          LABS<sup>®</sup>
+        </h1>
+
+        <div className="labs-rule" />
+
+        <p>
+          ENGINEERING THE UNSEEN
+        </p>
+      </div>
+    );
+  }
+
+  if (scene === "prism") {
+    return (
+      <div
+        className="copy copy-prism"
+        data-scene-copy="prism"
+      >
+        <div className="project-overline">
+          PROJECT ZYNASH · 001
+        </div>
+
+        <div className="prism-word">
+          PRISM
+        </div>
+
+        <div className="prism-subline">
+          PROJECTED REALITY
+        </div>
+
+        <div className="prism-subline">
+          INTERACTION & SPATIAL
+          MANIPULATION
+        </div>
+      </div>
+    );
+  }
+
+  if (scene === "definition") {
+    return (
+      <div
+        className="copy copy-title"
+        data-scene-copy="definition"
+      >
+        <div className="title-kicker">
+          ZYNASH LABS PRESENTS
+        </div>
+
+        <h2>
+          PRISM
+        </h2>
+
+        <p>
+          Projected Reality Interaction
+          <br />
+          &amp; Spatial Manipulation
+        </p>
+
+        <div className="definition-meta">
+          HUMAN · SPACE · OBJECT
+        </div>
+
+        <div className="title-line" />
+      </div>
+    );
+  }
+
+  if (scene === "team") {
+    const safeMember =
+      member >= 0
+        ? member
+        : 0;
+
+    const person =
+      TEAM[safeMember];
+
+    return (
+      <div
+        className="copy copy-team"
+        data-scene-copy="team"
+      >
+        <div className="team-kicker">
+          THE TEAM · PRISM
+        </div>
+
+        <div className="member">
+          <div className="member-number">
+            {String(
+              safeMember + 1,
+            ).padStart(2, "0")}
+          </div>
+
+          <div className="member-main">
+            <div className="member-handle">
+              {person.handle}
+            </div>
+
+            <div className="member-name">
+              {person.name}
+            </div>
+
+            {person.role && (
+              <div className="member-role">
+                {person.role}
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div className="team-dots">
+          {TEAM.map((_, index) => (
+            <span
+              key={index}
+              className={
+                index === safeMember
+                  ? "active"
+                  : ""
+              }
+            />
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div
+      className="copy copy-launch"
+      data-scene-copy="launch"
+    >
+      <div className="launch-small">
+        ZYNASH LABS · PRISM
+      </div>
+
+      <div className="launch-word">
+        EXPERIENCE
+      </div>
+
+      <div className="launch-sub">
+        ENTERING SPATIAL INTERFACE
+      </div>
+    </div>
   );
-
-  gradient.addColorStop(
-    0,
-    `rgba(130, 220, 255, ${strength})`,
-  );
-
-  gradient.addColorStop(
-    0.2,
-    `rgba(55, 155, 255, ${strength * 0.65})`,
-  );
-
-  gradient.addColorStop(
-    0.65,
-    `rgba(20, 90, 255, ${strength * 0.16})`,
-  );
-
-  gradient.addColorStop(1, "rgba(0,0,0,0)");
-
-  ctx.fillStyle = gradient;
-  ctx.beginPath();
-  ctx.arc(x, y, radius, 0, Math.PI * 2);
-  ctx.fill();
-}
-
-function drawLineGlow(
-  ctx: CanvasRenderingContext2D,
-  x1: number,
-  y1: number,
-  x2: number,
-  y2: number,
-  alpha: number,
-  width = 1,
-) {
-  ctx.save();
-
-  ctx.lineWidth = width;
-  ctx.strokeStyle = `rgba(110, 205, 255, ${alpha})`;
-  ctx.shadowColor = `rgba(65, 160, 255, ${alpha})`;
-  ctx.shadowBlur = 14;
-
-  ctx.beginPath();
-  ctx.moveTo(x1, y1);
-  ctx.lineTo(x2, y2);
-  ctx.stroke();
-
-  ctx.restore();
 }
 
 export default function PrismCinematicIntro({
   onComplete,
-  showSkip = true,
-  duration = INTRO_DURATION,
+  showSkip = false,
+  duration = 13200,
+  quality = "auto",
 }: IntroProps) {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const rootRef = useRef<HTMLDivElement>(null);
+  const rootRef =
+    useRef<HTMLDivElement>(null);
 
-  const pointer = useRef<Pointer>({
-    x: 0,
-    y: 0,
-    tx: 0,
-    ty: 0,
-  });
+  const canvasRef =
+    useRef<HTMLCanvasElement>(null);
 
-  const particles = useRef<Particle[]>([]);
-  const completed = useRef(false);
-  const lastScene = useRef(0);
-  const lastMember = useRef(-1);
-  const progressBarRef = useRef<HTMLDivElement>(null);
-  const progressLabelRef = useRef<HTMLDivElement>(null);
-  const lastProgressLabelAt = useRef(0);
+  const progressLabelRef =
+    useRef<HTMLDivElement>(null);
 
-  const [scene, setScene] = useState(0);
-  const [member, setMember] = useState(-1);
-  const [exiting, setExiting] = useState(false);
+  const engineRef =
+    useRef<PrismCinematicEngine | null>(
+      null,
+    );
 
-  const finish = () => {
-    if (completed.current) return;
+  const completionTimerRef =
+    useRef<number | null>(null);
 
-    completed.current = true;
-    setExiting(true);
+  const [
+    scene,
+    setScene,
+  ] = useState<IntroScene>("boot");
 
-    window.setTimeout(() => {
-      onComplete?.();
-    }, 850);
-  };
+  const [
+    member,
+    setMember,
+  ] = useState<IntroMemberIndex>(-1);
+
+  const [
+    exiting,
+    setExiting,
+  ] = useState(false);
 
   useEffect(() => {
-    const canvas = canvasRef.current;
+    const canvas =
+      canvasRef.current;
 
-    if (!canvas) return;
+    const root =
+      rootRef.current;
 
-    const ctx = canvas.getContext("2d", {
-      alpha: false,
-      desynchronized: true,
-    });
+    if (!canvas || !root) {
+      return;
+    }
 
-    if (!ctx) return;
+    let lastProgressInteger =
+      -1;
 
-    let raf = 0;
+    const engine =
+      new PrismCinematicEngine({
+        canvas,
+        durationMs:
+          duration,
+        quality,
+        seed: 0x5a17c0de,
+        reducedMotion:
+          window.matchMedia(
+            "(prefers-reduced-motion: reduce)",
+          ).matches,
 
-    const reducedMotion =
-      window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+        onSceneChange: (
+          nextScene,
+          nextMember,
+        ) => {
+          setScene(
+            nextScene,
+          );
 
-    const resize = () => {
-      const dpr = Math.min(
-        window.devicePixelRatio || 1,
-        1.5,
-      );
+          setMember(
+            nextMember,
+          );
 
-      canvas.width = window.innerWidth * dpr;
-      canvas.height = window.innerHeight * dpr;
+          root.dataset.scene =
+            nextScene;
 
-      canvas.style.width = `${window.innerWidth}px`;
-      canvas.style.height = `${window.innerHeight}px`;
+          root.dataset.member =
+            String(
+              nextMember,
+            );
+        },
 
-      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    };
+        onProgress: (
+          progress,
+          label,
+        ) => {
+          root.style.setProperty(
+            "--intro-progress",
+            String(progress),
+          );
 
-    resize();
-
-    window.addEventListener("resize", resize);
-
-    particles.current = Array.from(
-      { length: reducedMotion ? 80 : 420 },
-      (_, i) => ({
-        x: Math.random(),
-        y: Math.random(),
-        z: Math.random(),
-        size: Math.random() * 1.8 + 0.25,
-        speed: Math.random() * 0.8 + 0.15,
-        phase: Math.random() * Math.PI * 2,
-        alpha: Math.random() * 0.7 + 0.1,
-      }),
-    );
-
-    const handlePointerMove = (event: PointerEvent) => {
-      pointer.current.tx =
-        event.clientX / window.innerWidth - 0.5;
-
-      pointer.current.ty =
-        event.clientY / window.innerHeight - 0.5;
-    };
-
-    window.addEventListener(
-      "pointermove",
-      handlePointerMove,
-      { passive: true },
-    );
-
-    const start = performance.now();
-
-    // Scene timings are PROPORTIONAL to duration — so if duration is 16s,
-    // each scene gets longer too. The final "experience" scene is kept
-    // SHORT (only ~1.5s) so there's no dead air waiting at the end.
-    //   Scene 0 (void):        0.00 - 0.06   (0-0.96s @ 16s)
-    //   Scene 1 (field):       0.06 - 0.14   (0.96-2.24s)
-    //   Scene 2 (crystallize): 0.14 - 0.22   (2.24-3.52s)
-    //   Scene 3 (ZYNASH):      0.22 - 0.34   (3.52-5.44s)
-    //   Scene 4 (PRISM):       0.34 - 0.44   (5.44-7.04s)
-    //   Scene 5 (credits):     0.44 - 0.88   (7.04-14.08s)
-    //   Scene 6 (experience):  0.88 - 1.0    (14.08-16s) — only ~2s
-    const T = duration;
-    const t1 = T * 0.06;
-    const t2 = T * 0.14;
-    const t3 = T * 0.22;
-    const t4 = T * 0.34;
-    const t5 = T * 0.44;
-    const t6 = T * 0.88;
-
-    const render = (now: number) => {
-      const elapsed = now - start;
-      const pct = clamp(elapsed / duration, 0, 1);
-
-      if (rootRef.current) {
-        rootRef.current.style.setProperty(
-          "--intro-progress",
-          String(pct),
-        );
-      }
-
-      if (progressBarRef.current) {
-        progressBarRef.current.style.transform =
-          "scaleX(var(--intro-progress))";
-      }
-
-      if (
-        progressLabelRef.current &&
-        (now - lastProgressLabelAt.current >= 100 ||
-          pct >= 1)
-      ) {
-        lastProgressLabelAt.current = now;
-        progressLabelRef.current.textContent =
-          String(
-            Math.min(
-              100,
-              Math.round(pct * 100),
+          root.style.setProperty(
+            "--intro-progress-pct",
+            String(
+              Math.round(
+                progress *
+                  100,
+              ),
             ),
-          ).padStart(3, "0");
-      }
+          );
 
-      let nextScene = 0;
-      let nextMember = -1;
+          root.dataset.phase =
+            label;
 
-      if (elapsed < t1) {
-        nextScene = 0;
-      } else if (elapsed < t2) {
-        nextScene = 1;
-      } else if (elapsed < t3) {
-        nextScene = 2;
-      } else if (elapsed < t4) {
-        nextScene = 3;
-      } else if (elapsed < t5) {
-        nextScene = 4;
-      } else if (elapsed < t6) {
-        nextScene = 5;
-
-        const creditSpan = t6 - t5;
-        const local = elapsed - t5;
-
-        if (local < creditSpan * 0.30) {
-          nextMember = 0;
-        } else if (local < creditSpan * 0.65) {
-          nextMember = 1;
-        } else {
-          nextMember = 2;
-        }
-      } else {
-        nextScene = 6;
-        nextMember = 2;
-      }
-
-      if (nextScene !== lastScene.current) {
-        lastScene.current = nextScene;
-        setScene(nextScene);
-      }
-
-      if (nextMember !== lastMember.current) {
-        lastMember.current = nextMember;
-        setMember(nextMember);
-      }
-
-      pointer.current.x =
-        reducedMotion
-          ? 0
-          : pointer.current.x +
-            (pointer.current.tx -
-              pointer.current.x) *
-              0.055;
-
-      pointer.current.y =
-        reducedMotion
-          ? 0
-          : pointer.current.y +
-            (pointer.current.ty -
-              pointer.current.y) *
-              0.055;
-
-      const width = window.innerWidth;
-      const height = window.innerHeight;
-
-      ctx.clearRect(0, 0, width, height);
-
-      /*
-       * Deep atmospheric base.
-       */
-      const background = ctx.createRadialGradient(
-        width * 0.5,
-        height * 0.42,
-        0,
-        width * 0.5,
-        height * 0.42,
-        Math.max(width, height) * 0.75,
-      );
-
-      background.addColorStop(
-        0,
-        "rgba(9, 40, 92, 0.35)",
-      );
-
-      background.addColorStop(
-        0.42,
-        "rgba(2, 16, 43, 0.8)",
-      );
-
-      background.addColorStop(
-        1,
-        "rgba(1, 6, 17, 1)",
-      );
-
-      ctx.fillStyle = background;
-      ctx.fillRect(0, 0, width, height);
-
-      /*
-       * Main energy core.
-       */
-      const coreX =
-        width * 0.5 +
-        pointer.current.x * 35;
-
-      const coreY =
-        height * 0.44 +
-        pointer.current.y * 25;
-
-      // sceneEnergy is tied to the cinematic timeline rather than a fixed clock.
-      const sceneEnergy =
-        elapsed < t1
-          ? 0
-          : easeOutExpo(
-              clamp((elapsed - t1) / (t2 - t1), 0, 1),
+          const integer =
+            Math.round(
+              progress *
+                100,
             );
 
-      drawGlow(
-        ctx,
-        coreX,
-        coreY,
-        Math.min(width, height) *
-          (0.12 + sceneEnergy * 0.12),
-        0.18 + sceneEnergy * 0.24,
-      );
+          if (
+            progressLabelRef.current &&
+            integer !==
+              lastProgressInteger
+          ) {
+            lastProgressInteger =
+              integer;
 
-      /*
-       * Particle universe.
-       */
-      particles.current.forEach((particle, index) => {
-        const drift =
-          elapsed * 0.00001 * particle.speed;
+            progressLabelRef.current.textContent =
+              String(
+                integer,
+              ).padStart(
+                3,
+                "0",
+              );
+          }
+        },
 
-        const px =
-          (((particle.x + drift * (0.5 + particle.z)) %
-            1) *
-            width);
+        onComplete: () => {
+          setExiting(true);
 
-        const py =
-          (((particle.y +
-            Math.sin(
-              elapsed * 0.0003 + particle.phase,
-            ) *
-              0.00035) %
-            1) *
-            height);
-
-        const perspective =
-          0.3 + particle.z * 0.9;
-
-        const size =
-          particle.size * perspective;
-
-        const alpha =
-          particle.alpha *
-          (0.2 + sceneEnergy * 0.8);
-
-        ctx.fillStyle = `rgba(168, 225, 255, ${alpha})`;
-
-        ctx.beginPath();
-
-        ctx.arc(
-          px,
-          py,
-          size,
-          0,
-          Math.PI * 2,
-        );
-
-        ctx.fill();
-
-        if (
-          index % 17 === 0 &&
-          sceneEnergy > 0.25
-        ) {
-          drawLineGlow(
-            ctx,
-            px,
-            py,
-            coreX,
-            coreY,
-            alpha * 0.05,
-            0.35,
-          );
-        }
+          completionTimerRef.current =
+            window.setTimeout(
+              () => {
+                onComplete?.();
+              },
+              820,
+            );
+        },
       });
 
-      /*
-       * Horizon / spatial plane.
-       */
-      const gridStart =
-        height * 0.62;
+    engineRef.current =
+      engine;
 
-      const gridIntensity =
-        smoothstep(
-          clamp(
-            (elapsed - 1500) / 1700,
-            0,
-            1,
-          ),
-        );
-
-      ctx.save();
-
-      ctx.globalAlpha =
-        gridIntensity * 0.32;
-
-      ctx.strokeStyle =
-        "rgba(82, 170, 255, 0.42)";
-
-      ctx.lineWidth = 1;
-
-      for (
-        let y = gridStart;
-        y < height + 200;
-        y += 34
-      ) {
-        const perspective =
-          (y - gridStart) /
-          (height - gridStart + 1);
-
-        const offset =
-          perspective * perspective * 80;
-
-        ctx.beginPath();
-        ctx.moveTo(-offset, y);
-        ctx.lineTo(width + offset, y);
-        ctx.stroke();
-      }
-
-      for (
-        let x = -width;
-        x < width * 2;
-        x += 70
-      ) {
-        ctx.beginPath();
-        ctx.moveTo(width * 0.5, gridStart);
-        ctx.lineTo(x, height + 200);
-        ctx.stroke();
-      }
-
-      ctx.restore();
-
-      /*
-       * Orbit system.
-       */
-      const orbitPower =
-        smoothstep(
-          clamp(
-            (elapsed - 2200) / 1300,
-            0,
-            1,
-          ),
-        );
-
-      ctx.save();
-
-      ctx.translate(
-        coreX,
-        coreY,
-      );
-
-      ctx.rotate(
-        elapsed * 0.0001,
-      );
-
-      [1, 1.35, 1.72].forEach(
-        (scale, index) => {
-          ctx.save();
-
-          ctx.rotate(index * 0.82);
-
-          ctx.scale(
-            1,
-            0.32 + index * 0.07,
-          );
-
-          ctx.strokeStyle =
-            `rgba(91, 190, 255, ${
-              0.12 * orbitPower
-            })`;
-
-          ctx.shadowColor =
-            "rgba(45, 155, 255, 0.6)";
-
-          ctx.shadowBlur = 12;
-
-          ctx.lineWidth = 1.1;
-
-          ctx.beginPath();
-
-          ctx.arc(
-            0,
-            0,
-            Math.min(width, height) *
-              0.14 *
-              scale,
-            0,
-            Math.PI * 2,
-          );
-
-          ctx.stroke();
-
-          ctx.restore();
-        },
-      );
-
-      ctx.restore();
-
-      /*
-       * Radial rays.
-       */
-      const rayPower =
-        smoothstep(
-          clamp(
-            (elapsed - 2500) / 1600,
-            0,
-            1,
-          ),
-        );
-
-      if (rayPower > 0) {
-        ctx.save();
-
-        ctx.translate(coreX, coreY);
-
-        for (let i = 0; i < 28; i++) {
-          const angle =
-            (Math.PI * 2 * i) / 28 +
-            elapsed * 0.00005;
-
-          const radius =
-            Math.min(width, height) *
-            (0.14 + ((i * 37) % 100) / 150);
-
-          const x =
-            Math.cos(angle) * radius;
-
-          const y =
-            Math.sin(angle) * radius;
-
-          const startRadius =
-            Math.min(width, height) * 0.13;
-
-          const sx =
-            Math.cos(angle) * startRadius;
-
-          const sy =
-            Math.sin(angle) * startRadius;
-
-          drawLineGlow(
-            ctx,
-            sx,
-            sy,
-            x,
-            y,
-            rayPower * 0.035,
-            0.6,
-          );
-        }
-
-        ctx.restore();
-      }
-
-      /*
-       * Rotating angular HUD.
-       */
-      if (elapsed > 2900) {
-        const hudPower = smoothstep(
-          clamp(
-            (elapsed - 2900) / 900,
-            0,
-            1,
-          ),
-        );
-
-        ctx.save();
-
-        ctx.translate(coreX, coreY);
-
-        ctx.rotate(
-          -elapsed * 0.00012,
-        );
-
-        const hudRadius =
-          Math.min(width, height) * 0.235;
-
-        ctx.strokeStyle =
-          `rgba(122, 206, 255, ${
-            hudPower * 0.2
-          })`;
-
-        ctx.lineWidth = 1;
-
-        for (let i = 0; i < 36; i++) {
-          const angle =
-            (Math.PI * 2 * i) / 36;
-
-          const r1 = hudRadius;
-          const r2 =
-            i % 3 === 0
-              ? hudRadius + 13
-              : hudRadius + 6;
-
-          ctx.beginPath();
-
-          ctx.moveTo(
-            Math.cos(angle) * r1,
-            Math.sin(angle) * r1,
-          );
-
-          ctx.lineTo(
-            Math.cos(angle) * r2,
-            Math.sin(angle) * r2,
-          );
-
-          ctx.stroke();
-        }
-
-        ctx.restore();
-      }
-
-      /*
-       * Main light pulse.
-       */
-      if (
-        elapsed > 3900 &&
-        elapsed < 6600
-      ) {
-        const pulse =
-          0.5 +
-          Math.sin(elapsed * 0.004) * 0.5;
-
-        drawGlow(
-          ctx,
-          coreX,
-          coreY,
-          Math.min(width, height) *
-            0.08,
-          0.25 + pulse * 0.1,
-        );
-      }
-
-      /*
-       * Final convergence.
-       */
-      if (elapsed > 9700) {
-        const converge = smoothstep(
-          clamp(
-            (elapsed - 9700) / 1000,
-            0,
-            1,
-          ),
-        );
-
-        ctx.fillStyle = `rgba(225, 247, 255, ${
-          converge * 0.07
-        })`;
-
-        ctx.fillRect(
-          0,
-          0,
-          width,
-          height,
-        );
-      }
-
-      if (elapsed >= duration) {
-        finish();
-      }
-
-      raf = requestAnimationFrame(render);
-    };
-
-    raf = requestAnimationFrame(render);
+    engine.start();
 
     return () => {
-      cancelAnimationFrame(raf);
+      if (
+        completionTimerRef.current !==
+        null
+      ) {
+        window.clearTimeout(
+          completionTimerRef.current,
+        );
+      }
 
-      window.removeEventListener(
-        "resize",
-        resize,
-      );
-
-      window.removeEventListener(
-        "pointermove",
-        handlePointerMove,
-      );
+      engine.dispose();
+      engineRef.current = null;
     };
-  }, [duration]);
+  }, [
+    duration,
+    quality,
+    onComplete,
+  ]);
 
   useEffect(() => {
-    const handleKeyboard = (event: KeyboardEvent) => {
+    if (!showSkip) {
+      return;
+    }
+
+    const onKey = (
+      event: KeyboardEvent,
+    ) => {
       if (
-        event.key === "Escape" &&
-        showSkip
+        event.key === "Escape"
       ) {
-        finish();
+        engineRef.current?.skip();
       }
     };
 
     window.addEventListener(
       "keydown",
-      handleKeyboard,
+      onKey,
     );
 
     return () =>
       window.removeEventListener(
         "keydown",
-        handleKeyboard,
+        onKey,
       );
   }, [showSkip]);
 
-  const sceneClass = `scene-${scene}`;
+  const sceneClass =
+    SCENE_CLASS[scene];
 
   return (
     <div
       ref={rootRef}
-      className={`prism-cinematic ${sceneClass} ${
-        exiting ? "is-exiting" : ""
-      }`}
+      className={[
+        "prism-cinematic",
+        sceneClass,
+        exiting
+          ? "is-exiting"
+          : "",
+      ].join(" ")}
+      data-scene={scene}
+      data-member={member}
     >
       <canvas
         ref={canvasRef}
         className="prism-canvas"
+        aria-hidden="true"
       />
 
       <div className="prism-vignette" />
       <div className="prism-noise" />
       <div className="prism-scanlines" />
 
-      {/* Ambient glass silhouettes */}
-      <div className="glass-orb glass-orb-a" />
-      <div className="glass-orb glass-orb-b" />
+      <div className="cinematic-depth-plane depth-plane-a" />
+      <div className="cinematic-depth-plane depth-plane-b" />
+      <div className="cinematic-depth-plane depth-plane-c" />
 
-      {/* Central 3D crystal */}
-      <div className="prism-hero">
-        <div className="crystal-shadow" />
-
-        <div className="crystal">
-          <div className="crystal-edge crystal-edge-a" />
-          <div className="crystal-edge crystal-edge-b" />
-          <div className="crystal-edge crystal-edge-c" />
-
-          <div className="crystal-face crystal-face-1">
-            <span />
-          </div>
-
-          <div className="crystal-face crystal-face-2">
-            <span />
-          </div>
-
-          <div className="crystal-face crystal-face-3">
-            <span />
-          </div>
-
-          <div className="crystal-core">
-            <div className="core-ring" />
-            <div className="core-ring ring-2" />
-            <div className="core-light" />
-          </div>
-        </div>
-
-        <div className="floating-glyph glyph-1">
-          01
-        </div>
-
-        <div className="floating-glyph glyph-2">
-          XR
-        </div>
-
-        <div className="floating-glyph glyph-3">
-          ∆
-        </div>
-
-        <div className="spatial-label">
-          SPATIAL FIELD
-        </div>
-      </div>
-
-      {/* Cinematic copy */}
       <div className="cinematic-content">
-        {scene === 0 && (
-          <div className="copy copy-awakening">
-            <span className="micro">
-              INITIALIZING SPATIAL ENVIRONMENT
-            </span>
-
-            <span className="line" />
-
-            <span className="micro faded">
-              ZYNASH LABS
-            </span>
-          </div>
-        )}
-
-        {scene === 1 && (
-          <div className="copy copy-ignition">
-            <span className="micro">
-              REALITY / INTERFACE
-            </span>
-
-            <h1 className="ghost-word">
-              PERCEIVE
-            </h1>
-          </div>
-        )}
-
-        {scene === 2 && (
-          <div className="copy copy-labs">
-            <div className="labs-small">
-              ZYNASH
-            </div>
-
-            <h1>
-              LABS<sup>®</sup>
-            </h1>
-
-            <div className="labs-rule" />
-
-            <p>
-              ENGINEERING THE UNSEEN
-            </p>
-          </div>
-        )}
-
-        {scene === 3 && (
-          <div className="copy copy-prism">
-            <div className="project-overline">
-              PROJECT ZYNASH · 001
-            </div>
-
-            <div className="prism-word">
-              PRISM
-            </div>
-
-            <div className="prism-subline">
-              PROJECTED REALITY
-            </div>
-
-            <div className="prism-subline">
-              INTERACTION & SPATIAL
-              MANIPULATION
-            </div>
-          </div>
-        )}
-
-        {scene === 4 && (
-          <div className="copy copy-title">
-            <div className="title-kicker">
-              ZYNASH LABS PRESENTS
-            </div>
-
-            <h2>
-              PRISM
-            </h2>
-
-            <p>
-              Projected Reality Interaction
-              <br />
-              &amp; Spatial Manipulation
-            </p>
-
-            <div className="title-line" />
-          </div>
-        )}
-
-        {scene === 5 && member >= 0 && (
-          <div className="copy copy-team">
-            <div className="team-kicker">
-              THE TEAM · PRISM
-            </div>
-
-            <div
-              key={member}
-              className="member"
-            >
-              <div className="member-number">
-                {String(member + 1).padStart(
-                  2,
-                  "0",
-                )}
-              </div>
-
-              <div>
-                <div className="member-handle">
-                  {TEAM[member].handle}
-                </div>
-
-                <div className="member-name">
-                  {TEAM[member].name}
-                </div>
-
-                {TEAM[member].role && (
-                  <div className="member-role">
-                    {TEAM[member].role}
-                  </div>
-                )}
-              </div>
-            </div>
-
-            <div className="team-dots">
-              {TEAM.map((_, index) => (
-                <span
-                  key={index}
-                  className={
-                    index === member
-                      ? "active"
-                      : ""
-                  }
-                />
-              ))}
-            </div>
-          </div>
-        )}
-
-        {scene === 6 && (
-          <div className="copy copy-launch">
-            <div className="launch-small">
-              ZYNASH LABS · PRISM
-            </div>
-
-            <div className="launch-word">
-              EXPERIENCE
-            </div>
-          </div>
-        )}
+        <SceneCopy
+          scene={scene}
+          member={member}
+        />
       </div>
 
-      {/* Top chrome */}
-      <div className="intro-topbar">
-        <div className="brand-mark">
-          Z
+      <header className="intro-topbar">
+        <div className="intro-brand">
+          <span className="brand-mark">
+            Z
+          </span>
+
+          <span className="brand-name">
+            ZYNASH LABS
+          </span>
         </div>
 
         <div className="top-center">
@@ -1010,38 +531,67 @@ export default function PrismCinematicIntro({
           <span className="status-dot" />
           ONLINE
         </div>
-      </div>
+      </header>
 
-      {/* Bottom chrome */}
-      <div className="intro-bottombar">
+      <aside
+        className="intro-side-left"
+        aria-hidden="true"
+      >
+        <span>P</span>
+        <i />
+        <span>R</span>
+        <i />
+        <span>I</span>
+        <i />
+        <span>S</span>
+        <i />
+        <span>M</span>
+      </aside>
+
+      <aside
+        className="intro-side-right"
+        aria-hidden="true"
+      >
+        <span>001</span>
+        <span>•</span>
+        <span>2026</span>
+      </aside>
+
+      <footer className="intro-bottombar">
         <div>
           PRISM / 001
         </div>
 
         <div className="progress-track">
-          <div
-            ref={progressBarRef}
-            className="progress-bar"
-          />
+          <div className="progress-bar" />
         </div>
 
-        <div ref={progressLabelRef}>
+        <div
+          ref={progressLabelRef}
+        >
           000
         </div>
-      </div>
+      </footer>
 
-      {showSkip && !exiting && (
-        <button
-          type="button"
-          className="skip-button"
-          onClick={finish}
-        >
-          <span>SKIP INTRO</span>
-          <kbd>ESC</kbd>
-        </button>
-      )}
+      {showSkip &&
+        !exiting && (
+          <button
+            type="button"
+            className="skip-button"
+            onClick={() =>
+              engineRef.current?.skip()
+            }
+          >
+            <span>
+              SKIP INTRO
+            </span>
 
-      {/* White-blue cinematic transition */}
+            <kbd>
+              ESC
+            </kbd>
+          </button>
+        )}
+
       <div className="final-flare" />
     </div>
   );

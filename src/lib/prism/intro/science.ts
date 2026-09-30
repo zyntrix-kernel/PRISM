@@ -360,7 +360,7 @@ class PhysicsLaboratory {
     );
     this.field=new THREE.Points(
       fieldGeometry,
-      basic("#5caeff",0) as unknown as THREE.PointsMaterial,
+      pointShaderMaterial("#5caeff",0.8),
     );
 
     this.group.add(

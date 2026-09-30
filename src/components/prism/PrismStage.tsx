@@ -643,17 +643,21 @@ export default function PrismStage() {
           </p>
           <div className="prism-credits-team">
             <div className="prism-credit-row">
-              <span className="prism-credit-name">Tanay Bhandari</span>
-              <span className="prism-credit-handle" style={{ color: "var(--accent)" }}>Zyntrix.krnl.sys · LEAD</span>
-            </div>
-            <div className="prism-credit-row">
-              <span className="prism-credit-name">Ashwin Nagaranjan Ramnath</span>
-              <span className="prism-credit-handle">Ash Collector</span>
-            </div>
-            <div className="prism-credit-row">
-              <span className="prism-credit-name">Debroop</span>
-              <span className="prism-credit-handle">distortus_rexx</span>
-            </div>
+            <span className="prism-credit-name">Tanay Bhandari</span>
+            <span className="prism-credit-handle" style={{ color: "var(--accent)" }}>Zyntrix.krnl.sys · LEAD</span>
+          </div>
+          <div className="prism-credit-row">
+            <span className="prism-credit-name">Ashwin Nagaranjan Ramnath</span>
+            <span className="prism-credit-handle">Ash Collector</span>
+          </div>
+          <div className="prism-credit-row">
+            <span className="prism-credit-name">Debroop Mojumder</span>
+            <span className="prism-credit-handle">distortus_rexx</span>
+          </div>
+          <div className="prism-credit-row">
+            <span className="prism-credit-name">Maaz Mozzam</span>
+            <span className="prism-credit-handle">Unknown</span>
+          </div>
           </div>
         </div>
         <button id="prism-btn-help-close" type="button" ref={setEl("helpClose") as React.RefObject<HTMLButtonElement>}>

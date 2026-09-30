@@ -552,6 +552,9 @@ export class PrismScene {
     this.quality = tier;
     this.applyPixelRatio();
     this.applyTextureMaps();
+    // Quality changes are live. Reduce point count via drawRange instead of
+    // rebuilding the starfield, preserving its deterministic spatial layout.
+    this.updateStarDensity(tier);
   }
 
   // ---- frame ------------------------------------------------------------
@@ -576,7 +579,7 @@ export class PrismScene {
     // point sprite with an additive blend, and 600 additive points on a
     // medium-tier integrated GPU was a measurable fill-rate tax. Tablets
     // run at `high` (1000 stars) where their GPUs eat it for breakfast.
-    const count = tier === 'ultra' ? 1500 : tier === 'high' ? 1000 : tier === 'medium' ? 400 : 300;
+    const count = this.starBudget.ultra;
     const positions = new Float32Array(count * 3);
     const brightness = new Float32Array(count);
     const phase = new Float32Array(count);
@@ -649,7 +652,13 @@ export class PrismScene {
       blending: THREE.AdditiveBlending,
     });
     this.stars = new THREE.Points(geo, this.starMat);
+    this.updateStarDensity(tier);
     this.scene.add(this.stars);
+  }
+
+  private updateStarDensity(tier: QualityTier): void {
+    const visible = this.starBudget[tier];
+    this.stars.geometry.setDrawRange(0, visible);
   }
 
   /** Highlight the hovered body; previous hover is always restored. */

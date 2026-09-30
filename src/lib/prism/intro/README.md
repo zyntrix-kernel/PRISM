@@ -1,51 +1,59 @@
 # PRISM Cinematic Science Engine
 
-The PRISM startup sequence is a realtime Three.js showcase designed as a tiny science film.
+PRISM opens with a realtime Three.js science film rather than a static splash screen.
 
-It is deliberately separate from the main PRISM interaction engine. The intro owns its own render loop, camera, quality governor, post-processing, deterministic scene systems, and timeline. When the intro finishes, PrismStage hands control back to the actual PRISM world.
+The intro is isolated from the main interaction engine. It uses one lightweight WebGL context, preallocated buffer geometry, a deterministic timeline, and CSS compositor layers. The goal is a rich visual impression without making the expo laptop fight two heavy render pipelines at once.
 
 ## Visual sequence
 
 | Time | Scene | Visual language |
 | --- | --- | --- |
 | 0.00–0.85s | boot | star ignition, calibration marks, spatial wake-up |
-| 0.85–3.00s | physics | projectile trajectory, pendulum, orbital motion, moving field particles |
-| 3.00–5.25s | chemistry | atomic shells, electrons, H₂O, CO₂, molecular lattice |
-| 5.25–7.50s | mathematics | golden-ratio spiral, sine graph, parabola, vectors, matrix blocks, torus knot |
-| 7.50–9.25s | synthesis | the disciplines converge into a procedural crystalline core |
+| 0.85–3.00s | physics | projectile motion, pendulum, orbital motion, dynamic field |
+| 3.00–5.25s | chemistry | atom shells, electrons, H₂O, CO₂, molecular lattice |
+| 5.25–7.50s | mathematics | phi-inspired spiral, sine, parabola, vectors, matrix field, torus knot |
+| 7.50–9.25s | synthesis | disciplines collapse into a procedural crystalline core |
 | 9.25–10.40s | labs | ZYNASH LABS identity reveal |
 | 10.40–11.80s | prism | PRISM title + full expansion |
 | 11.80–14.80s | team | four-member sequential credit reveal |
 | 14.80–15.80s | launch | camera dive into the PRISM core |
 | 15.80–16.00s | complete | handoff flash |
 
-The timeline is normalized, so custom duration still preserves the choreography.
+The timeline is normalized, so changing duration preserves the choreography.
 
-## Architecture
+## Performance architecture
 
-- engine.ts owns lifecycle, renderer, camera choreography, cues, post-processing, adaptive quality, and the frame loop.
-- science.ts contains the independent realtime systems for physics, chemistry, mathematics, synthesis, and procedural stars.
-- timeline.ts is the canonical source of scene boundaries and cue events.
-- quality.ts selects an initial tier and can downgrade GPU pressure during playback.
-- PrismCinematicIntro.tsx is intentionally thin. React only owns semantic scene/member labels and the accessible skip control.
-- PrismCinematicIntro.css handles the cinematic typography, glass instrumentation, scene choreography, grain, scan, vignette, and exit transition.
+The hot path is intentionally simple:
+
+- One Three.js renderer and one scene.
+- No EffectComposer or bloom pass during the intro.
+- Star, electron, molecule, vector, and shard positions use preallocated typed arrays.
+- No per-frame BufferGeometry creation.
+- No per-frame scene graph traversals for visibility management.
+- Adaptive quality can reduce device-pixel ratio and particle density after sustained frame pressure.
+- A subsystem circuit breaker prevents a science or WebGL exception from killing the semantic timeline.
+
+The main PRISM render loop remains paused until the intro hands control back.
 
 ## Science visualizers
 
-The science content is procedural rather than a pre-rendered video:
+### Physics
 
-- Physics uses a gravity-based projectile path, a harmonic pendulum, orbital bodies, and a moving field.
-- Chemistry uses electron-shell motion plus stylized molecular structures for water and carbon dioxide.
-- Mathematics uses parametric curves, vectors, a phi-inspired spiral, a graph point, and a matrix-like lattice.
-- Synthesis turns the three disciplines into one animated crystalline object.
+A gravity-based projectile path is paired with a pendulum whose swing uses the small-angle angular-frequency relationship, plus a compact orbit system and moving field particles.
 
-These are presentation visualizations for the expo intro, not a scientific simulator.
+### Chemistry
 
-## Interaction and resilience
+The visualizer presents an atomic nucleus, three electron shells, moving electrons, stylized H₂O and CO₂ molecular arrangements, and a repeating lattice.
 
-Pointer movement subtly bends the camera and scene composition. Escape skips. prism:intro-cue custom events expose scene boundaries for future sound, haptics, or telemetry without putting those concerns into React state.
+### Mathematics
 
-The engine pauses when the document is hidden, respects prefers-reduced-motion, uses a dedicated adaptive quality path, and falls back to the typography timeline when WebGL initialization fails.
+Parametric curves, a sine graph, a parabola, a phi-inspired spiral, a moving graph point, vectors, and a torus knot turn mathematical structure into visible motion.
+
+### Synthesis
+
+The independent discipline systems fade toward a single rotating crystal, surrounded by procedural shards and orbital rings, before the camera dives toward the core.
+
+These are presentation visualizations for the school expo, not scientific simulation software.
 
 ## Team credits
 
@@ -53,3 +61,9 @@ The engine pauses when the document is hidden, respects prefers-reduced-motion, 
 - Ash Collector — Ashwin Nagaranjan Ramnath
 - distortus_rexx — Debroop Mojumder
 - Unknown — Maaz Mozzam
+
+## Resilience
+
+Pointer movement subtly bends the camera and world. Escape skips the sequence. The engine pauses when the document is hidden, respects prefers-reduced-motion, falls back to the typography layer when WebGL cannot initialize, and keeps advancing when a browser/GPU runtime fault occurs.
+
+The prism:intro-cue custom event exposes scene boundaries for future sound, haptics, and telemetry without coupling those concerns to React state.

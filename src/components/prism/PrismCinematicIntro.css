@@ -125,8 +125,7 @@
   pointer-events: none;
   opacity: var(--title-opacity);
   transform: translate(-50%, var(--title-y));
-  filter: blur(calc((1 - var(--title-opacity)) * 7px));
-  will-change: transform, opacity, filter;
+  will-change: transform, opacity;
 }
 
 .prism-cinematic__eyebrow {

@@ -187,7 +187,8 @@ export class InteractionController {
         return;
       }
       const rect = el.getBoundingClientRect();
-      this.mouseNdc = new THREE.Vector2(
+      if (!this.mouseNdc) this.mouseNdc = new THREE.Vector2();
+      this.mouseNdc.set(
         ((e.clientX - rect.left) / rect.width) * 2 - 1,
         -((e.clientY - rect.top) / rect.height) * 2 + 1,
       );

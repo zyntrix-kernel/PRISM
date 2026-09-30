@@ -310,6 +310,12 @@ export class PrismScene {
   private readonly nebula: THREE.Mesh;
   private stars!: THREE.Points; // built by buildStarfield() in the constructor
   private starMat!: THREE.ShaderMaterial;
+  private readonly starBudget = {
+    low: 300,
+    medium: 400,
+    high: 1000,
+    ultra: 1500,
+  } as const;
   private readonly composer: EffectComposer;
   private readonly caPass: ShaderPass;
   // grainPass removed (animated hash noise read as TV static over the scene).

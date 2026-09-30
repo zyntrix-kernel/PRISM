@@ -68,6 +68,7 @@ export default function InputModeIndicator({
 
   return (
     <div
+      className="prism-input-mode-indicator"
       style={{
         position: "absolute",
         left: "50%",

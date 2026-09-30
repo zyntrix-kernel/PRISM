@@ -27,12 +27,13 @@ const PRESET_ICONS: Record<PresetId, LucideIcon> = {
   nebula: Cloud,
 };
 
-const PRESETS: Record<PresetId, PresetMeta> = Object.fromEntries(
-  (Object.keys(PRESET_CATALOG) as PresetId[]).map((id) => [
-    id,
-    { ...PRESET_CATALOG[id], icon: PRESET_ICONS[id] },
-  ]),
-) as Record<PresetId, PresetMeta>;
+const PRESETS: Record<PresetId, PresetMeta> = (Object.keys(PRESET_CATALOG) as PresetId[]).reduce(
+  (acc, id) => {
+    acc[id] = { ...PRESET_CATALOG[id], icon: PRESET_ICONS[id] };
+    return acc;
+  },
+  {} as Record<PresetId, PresetMeta>,
+);
 
 const PRESET_ORDER = Object.keys(PRESETS) as PresetId[];
 

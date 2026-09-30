@@ -3437,3 +3437,28 @@ Task: Replace the intro with a science-first cinematic showcase and harden start
 
 - Static GitHub audit confirms the four team members, science scenes, 16s stage duration, adaptive quality, WebGL fallback, pointer-driven camera, and absence of the removed intro modules in engine imports.
 - Browser console/build verification remains pending because no local development server/dependency install is available in the isolated runtime.
+
+
+---
+Task ID: 19
+Agent: general-purpose
+Task: Fix PRISM intro startup freeze reported after the science showcase rewrite
+
+## Diagnosis and hardening
+
+- Replaced the heavier science implementation with a buffer-driven realtime showcase.
+- Capped the cinematic star field to a practical 700–1800 points and moved electrons, molecule nodes, vector points, and crystal shards into preallocated typed arrays.
+- Removed per-frame BufferGeometry creation from the pendulum path.
+- Removed per-frame scene graph traversal used for molecular/lattice visibility updates.
+- Removed EffectComposer, Unreal Bloom, and screen-space post-processing from the intro hot path. The cinematic keeps its visual polish through additive materials and the CSS optical layer.
+- Kept the dedicated intro renderer, deterministic timeline, pointer-reactive camera choreography, adaptive quality, reduced-motion support, WebGL fallback, subsystem circuit breakers, and final frame-level recovery.
+- Synced the documentation with the lightweight architecture.
+
+## Static verification
+
+- Confirmed the engine no longer imports EffectComposer, RenderPass, ShaderPass, UnrealBloomPass, or OutputPass.
+- Confirmed the engine no longer references the deleted systems/director modules.
+- Confirmed the science file uses typed-array updates rather than per-frame geometry replacement.
+- Confirmed the four team members and the 16-second Stage duration remain wired.
+
+A browser run was not available in the isolated environment, so the runtime fix is based on the captured frozen startup state and static inspection rather than a live local console trace.

@@ -9,6 +9,7 @@ import PresetTransitionOverlay from "./PresetTransitionOverlay";
 import InputModeIndicator from "./InputModeIndicator";
 import PrismToast from "./PrismToast";
 import SettingsPanel from "./SettingsPanel";
+import PrismExperienceChrome from "./PrismExperienceChrome";
 import PrismCinematicIntro from "./PrismCinematicIntro";
 import {
   Camera,

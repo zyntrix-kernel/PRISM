@@ -50,6 +50,11 @@ export interface PrismState {
   easyMode: boolean;
   debugVisible: boolean;
   aiEnabled: boolean;
+  inputMode: 'hand' | 'mouse' | 'none';
+  focusedName: string | null;
+  grabbedName: string | null;
+  pinchPercent: number;
+  twoHandActive: boolean;
   rail: { cam: string; hands: string; gesture: string; fps: string };
   fpsHistory: number[];
   coach: string | null;
@@ -224,5 +229,27 @@ export class PrismApp {
   private setStepDone(name:string,done:boolean):void{const el=this.el.onboard.querySelector(`[data-step="${name}"]`);if(el&&el.classList.contains('done')!==done)el.classList.toggle('done',done);}
   private updateOnboard(_now:number,hands:number,grabbed:string|null):void{if(!this.onboardVisible)return;if(this.cameraHandle)this.setStepDone('camera',true);if(hands>0){this.seenHand=true;this.setStepDone('hand',true);}if(grabbed){this.didGrab=true;this.setStepDone('grab',true);}if(this.seenHand&&this.didGrab&&!this.onboardCompleteAt)this.onboardCompleteAt=performance.now();if(this.onboardCompleteAt&&performance.now()-this.onboardCompleteAt>900)this.dismissOnboard();}
   private emit():void{const s=this.snapshot();const str=JSON.stringify(s);if(str===this.lastStateStr)return;this.lastStateStr=str;for(const fn of this.listeners)fn(s);}
-  private snapshot():PrismState{return{status:this.el.status.textContent??'',cameraOn:!!this.cameraHandle,cameraStarting:this.cameraStarting,preset:this.scene.currentPreset,quality:this.governor.tier,easyMode:!!this.scene.currentWorld?.isEasyMode?.(),debugVisible:this.debug.isVisible,aiEnabled:this.observer.isEnabled,rail:{cam:this.el.rail.cam?.textContent??'',hands:this.el.rail.hands?.textContent??'',gesture:this.el.rail.gesture?.textContent??'',fps:this.el.rail.fps?.textContent??''},fpsHistory:[...this.fpsHistory],coach:this.el.coach.textContent||null,planetInfo:this.el.planetInfo.textContent||null,palette:this.scene.currentWorld?.blockPalette?.()?.map((b,i)=>({name:b.name,color:b.color,active:i===(this.scene.currentWorld?.selectedBlock?.().index??-1)}))??null,onboardVisible:this.onboardVisible,onboardSteps:{camera:this.cameraHandle!==null,hand:this.seenHand,grab:this.didGrab},onboardComplete:!!this.onboardCompleteAt};}
+  private snapshot():PrismState{return{
+status:this.el.status.textContent??'',
+cameraOn:!!this.cameraHandle,
+cameraStarting:this.cameraStarting,
+preset:this.scene.currentPreset,
+quality:this.governor.tier,
+easyMode:!!this.scene.currentWorld?.isEasyMode?.(),
+debugVisible:this.debug.isVisible,
+aiEnabled:this.observer.isEnabled,
+inputMode:this.interaction.mode,
+focusedName:this.interaction.grabbedName??this.interaction.hoveredName,
+grabbedName:this.interaction.grabbedName,
+pinchPercent:Math.round(this.interaction.pinchCloseness*100),
+twoHandActive:this.interaction.twoHandActive,
+rail:{cam:this.el.rail.cam?.textContent??'',hands:this.el.rail.hands?.textContent??'',gesture:this.el.rail.gesture?.textContent??'',fps:this.el.rail.fps?.textContent??''},
+fpsHistory:[...this.fpsHistory],
+coach:this.el.coach.textContent||null,
+planetInfo:this.el.planetInfo.textContent||null,
+palette:this.scene.currentWorld?.blockPalette?.()?.map((b,i)=>({name:b.name,color:b.color,active:i===(this.scene.currentWorld?.selectedBlock?.().index??-1)}))??null,
+onboardVisible:this.onboardVisible,
+onboardSteps:{camera:this.cameraHandle!==null,hand:this.seenHand,grab:this.didGrab},
+onboardComplete:!!this.onboardCompleteAt
+};}
 }

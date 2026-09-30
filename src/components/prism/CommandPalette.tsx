@@ -51,7 +51,7 @@ interface Props {
     toggleAi: () => void;
     toggleHelp: () => void;
     togglePresentation: () => boolean;
-    enableCamera: () => void;
+    toggleCamera: () => void;
   } | null;
 }
 
@@ -132,12 +132,12 @@ export default function CommandPalette({ onClose, state, app }: Props) {
       },
       {
         id: "camera",
-        label: "Enable camera",
-        hint: "Hand tracking input",
+        label: state?.cameraOn ? "Disable camera" : "Enable camera",
+        hint: state?.cameraOn ? "Return to pointer input" : "Hand tracking input",
         group: "Vision",
         icon: (size) => <Camera size={size ?? 15} />,
         keywords: "camera enable vision hand tracking",
-        run: () => app?.enableCamera(),
+        run: () => app?.toggleCamera(),
         isActive: (s) => !!s?.cameraOn,
       },
       {

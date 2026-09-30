@@ -88,7 +88,7 @@ export default function PrismExperienceChrome({ state, app, onCommand }: Props) 
 
   return (
     <>
-      <section className="prism-command-chrome" aria-label="PRISM control surface">
+      <section className="prism-command-chrome" aria-label="PRISM control surface" data-preset={preset} style={{ "--world-color": `rgb(${meta.hue})` } as CSSProperties}>
         <div className="prism-command-top">
           <div className="prism-command-brand">
             <div className="prism-command-mark" aria-hidden="true"><span /></div>
@@ -162,6 +162,14 @@ export default function PrismExperienceChrome({ state, app, onCommand }: Props) 
         <div className="prism-command-mini"><span>QUALITY</span><strong>{state?.quality?.toUpperCase() || "AUTO"}</strong></div>
       </aside>
 
+      {state?.planetInfo && (
+        <aside className="prism-command-inspection" aria-live="polite" aria-label="Focused object">
+          <header><span>FOCUS OBJECT</span><span>LOCKED</span></header>
+          <div className="prism-command-inspection-marker" aria-hidden="true"><span /></div>
+          <p>{state.planetInfo}</p>
+        </aside>
+      )}
+
       <aside className="prism-command-right" aria-label="Performance telemetry">
         <header><span>TELEMETRY</span><span>02</span></header>
         <div className="prism-command-fps">
@@ -184,7 +192,7 @@ export default function PrismExperienceChrome({ state, app, onCommand }: Props) 
       </div>
 
       <footer className="prism-command-footer">
-        <span className="prism-command-footer-brand">ZYNASH LABS</span><i /><span>PROJECTED REALITY / SPATIAL MANIPULATION</span><b>PRISM / 001</b>
+        <span className="prism-command-footer-brand">ZYNASH LABS</span><i /><span>PROJECTED REALITY / SPATIAL MANIPULATION</span><b>R RESET · X REBUILD · O ORBIT · ⌘K COMMAND</b>
         <button type="button" onClick={() => setHelpOpen(true)}><Info size={12} /><span>INTERACTION MAP</span></button>
       </footer>
 

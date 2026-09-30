@@ -363,9 +363,6 @@ export class PrismCinematicEngine
       this.portal.mesh,
     );
 
-    this.atmosphere.plane &&
-      void this.atmosphere.plane;
-
     try {
       this.renderer =
         new THREE.WebGLRenderer({
@@ -1153,18 +1150,11 @@ export class PrismCinematicEngine
     scene: IntroScene,
     member: IntroMemberIndex,
   ): void {
-    if (
-      scene ===
-        this.lastScene &&
-      member ===
-        this.lastMember
-    ) {
-      return;
-    }
+    const changed =
+      scene !== this.lastScene ||
+      member !== this.lastMember;
 
-    const changedScene =
-      scene !==
-      this.lastScene;
+    if (!changed) return;
 
     this.lastScene =
       scene;
@@ -1172,23 +1162,10 @@ export class PrismCinematicEngine
     this.lastMember =
       member;
 
-    if (
-      changedScene ||
-      member !==
-        this.lastMember
-    ) {
-      this.options
-        .onSceneChange?.(
-          scene,
-          member,
-        );
-    }
-
-    this.options
-      .onSceneChange?.(
-        scene,
-        member,
-      );
+    this.options.onSceneChange?.(
+      scene,
+      member,
+    );
   }
 
   private emitCues(

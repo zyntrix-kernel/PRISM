@@ -116,7 +116,7 @@ export class PrismApp {
 
   constructor(elements: PrismElements) {
     this.el = elements;
-    const { container, video, overlay, statusEl: _s, presetSel, qualitySel, debugEl } = elements;
+    const { container, video, overlay, status: _s, presetSel, qualitySel, debugEl } = elements;
     void _s;
     this.overlayCtx = overlay.getContext('2d');
     overlay.width = 400;

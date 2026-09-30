@@ -142,6 +142,7 @@ void main() {
     mvPosition;
 
   vScale = aScale;
+}
 `;
 
 export const DUST_FRAGMENT = `

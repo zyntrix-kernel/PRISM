@@ -3323,3 +3323,85 @@ Task: Push the overengineered PRISM startup cinematic and optimize its runtime i
 - Confirmed reduced-motion handling and cinematic optical layers are present.
 - Full local lint/build was not rerun in this environment because outbound
   network access is unavailable for cloning/installing dependencies.
+
+
+---
+Task ID: 17
+Agent: general-purpose
+Task: Replace the PRISM startup animation with a modular realtime cinematic framework
+
+## 1. Cinematic architecture
+
+Added `src/lib/prism/intro/` as a dedicated subsystem:
+
+- `types.ts` — public contracts for scenes, cues, team members, quality and
+  engine lifecycle.
+- `easing.ts` — reusable motion curves, damping, pulses and remapping.
+- `random.ts` — deterministic seeded procedural generation.
+- `timeline.ts` — canonical 13.2s cinematic director timeline and cue events.
+- `quality.ts` — adaptive cinematic quality profiles and frame-rate
+  downgrade logic.
+- `director.ts` — spring-smoothed cinematic camera path, parallax, FOV and
+  controlled roll.
+- `shaders.ts` — procedural star, dust, atmosphere, crystal-core, portal,
+  crystal-shell and screen-space cinematic shaders.
+- `systems.ts` — reusable Atmosphere, StarField, Dust, SpatialGrid,
+  EnergyRibbon, Crystal, Burst, Portal and SignalOrbit systems.
+- `engine.ts` — realtime engine lifecycle, deterministic timeline playback,
+  adaptive quality, post-processing, cue dispatch, resize handling, visibility
+  pause/resume, WebGL fallback and cleanup.
+- `README.md` — architecture and expo behavior documentation.
+
+## 2. Visual stack
+
+The intro now runs a dedicated Three.js cinematic scene containing:
+
+- Thousands of procedural, twinkling depth-sorted stars.
+- Procedural micro-dust with shader displacement.
+- Perspective spatial grid.
+- Multiple energy ribbons.
+- Orbiting signal nodes.
+- A procedural 3D crystal with refractive/fresnel shader treatment.
+- Internal core pulse.
+- Five precision orbital rings.
+- Thirty-four animated crystal shards.
+- A radial particle-burst system.
+- A full-screen portal shader for the final handoff.
+- Unreal Bloom + custom chromatic/vignette post pass on capable tiers.
+- Pointer-reactive parallax and camera motion.
+
+## 3. Runtime engineering
+
+- React no longer performs animation-frame state updates.
+- Scene/member React state changes only when a cinematic state actually changes.
+- Canvas progress is compositor-friendly and updated outside React.
+- Deterministic seeded randomness makes the cinematic reproducible.
+- Reduced-motion fallback lowers simulation complexity.
+- Adaptive quality can downgrade pixel ratio and bypass post-processing when
+  sustained frame rate is poor.
+- WebGL initialization failure falls back to the typography timeline instead of
+  blocking the intro.
+- Visibility changes pause/resume the cinematic cleanly.
+- Main PRISM rendering remains paused until the intro completes.
+- Removed the obsolete DOM parallax starfield and unused quality-menu state.
+
+## 4. Files changed
+
+- `src/components/prism/PrismCinematicIntro.tsx`
+- `src/components/prism/PrismCinematicIntro.css`
+- `src/components/prism/PrismStage.tsx`
+- `src/lib/prism/intro/*`
+- deleted `src/components/prism/ParallaxDepthLayer.tsx`
+
+## 5. Verification
+
+Verified through GitHub against the pushed `main` branch:
+
+- New intro subsystem files exist and are non-truncated.
+- Correct Three.js post-processing module imports are present.
+- React frame-level progress setters are absent.
+- Intro engine has the expected lifecycle, timeline and cleanup paths.
+- Stage starts the real PRISM render loop only after cinematic completion.
+- Legacy unused QualityMenu and ParallaxDepthLayer were removed.
+- Full local build/lint execution remains unavailable in the isolated runtime
+  because external package/network access is unavailable.

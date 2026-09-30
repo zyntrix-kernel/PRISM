@@ -164,7 +164,7 @@ export default function PrismStage() {
   const quality = state?.quality ?? "auto";
 
   return (
-    <div className="prism-root" ref={rootRef}>
+    <div className={`prism-root${state?.presentationMode ? " is-presentation" : ""}`} ref={rootRef}>
       {/* Cinematic ZYNASH LABS startup intro — plays once on first load */}
       {showIntro && (
         <PrismCinematicIntro
@@ -687,6 +687,13 @@ export default function PrismStage() {
           flex: none;
         }
       `}</style>
+
+      {!showIntro && state?.presentationMode && (
+        <div className="prism-presentation-hint" aria-live="polite">
+          <span>P</span>
+          <span>EXIT PRESENTATION</span>
+        </div>
+      )}
 
       {!showIntro && <PrismExperienceChrome state={state} app={app} onCommand={() => setCmdOpen(true)} />}
 

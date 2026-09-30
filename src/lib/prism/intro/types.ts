@@ -4,16 +4,17 @@ export type IntroQuality = "auto" | "ultra" | "high" | "medium" | "low";
 
 export type IntroScene =
   | "boot"
-  | "field"
-  | "crystallize"
+  | "physics"
+  | "chemistry"
+  | "mathematics"
+  | "synthesis"
   | "labs"
   | "prism"
-  | "definition"
   | "team"
   | "launch"
   | "complete";
 
-export type IntroMemberIndex = -1 | 0 | 1 | 2;
+export type IntroMemberIndex = -1 | 0 | 1 | 2 | 3;
 
 export interface IntroTeamMember {
   readonly handle: string;
@@ -87,3 +88,6 @@ export interface IntroEngine {
   skip(): void;
   dispose(): void;
 }
+
+/** Kept as a shared compile-time vocabulary for future showcase plugins. */
+export type IntroMesh = THREE.Object3D;

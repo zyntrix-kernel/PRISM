@@ -1,0 +1,25 @@
+/* Mobile performance guardrails. Keep the premium visual language without
+   turning every small control into a compositor-backed blur surface. */
+@media (hover: none) and (pointer: coarse) {
+  .prism-pressable,
+  #prism-hud .prism-pressable {
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+    box-shadow: 0 8px 28px rgba(0,0,0,.24), inset 0 1px 0 rgba(255,255,255,.06);
+  }
+
+  .prism-glass-hover:hover,
+  .prism-pressable:hover {
+    box-shadow: 0 8px 28px rgba(0,0,0,.24), inset 0 1px 0 rgba(255,255,255,.06);
+  }
+}
+
+@media (max-width: 760px) {
+  .prism-atmosphere {
+    contain: strict;
+  }
+
+  .prism-orb {
+    filter: blur(44px);
+  }
+}

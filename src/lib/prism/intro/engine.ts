@@ -10,12 +10,10 @@ import {
   clamp01,
   damp,
   easeInExpo,
-  easeOutExpo,
   easeOutQuint,
   inverseLerp,
   lerp,
   smoothstep,
-  smootherstep,
 } from "./easing";
 import { SeededRandom } from "./random";
 import {
@@ -32,7 +30,6 @@ import {
 import { CINEMATIC_POST_FRAGMENT } from "./shaders";
 import {
   getPhase,
-  phaseProgress,
   resolveScene,
   INTRO_CUES,
 } from "./timeline";

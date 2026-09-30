@@ -295,7 +295,7 @@ class PhysicsSystem {
   private readonly field:THREE.Points;
   private readonly pendulumPositions=new Float32Array(6);
 
-  constructor(){
+  constructor(random:SeededRandom){
     const v0=7.6;
     const launch=THREE.MathUtils.degToRad(54);
     const g=9.81;

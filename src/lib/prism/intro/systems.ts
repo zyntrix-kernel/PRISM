@@ -105,6 +105,8 @@ export class AtmosphereSystem {
     );
 
     this.plane.frustumCulled = false;
+    this.group.renderOrder = -1000;
+    this.plane.renderOrder = -1000;
     this.group.add(this.plane);
   }
 
@@ -1407,6 +1409,9 @@ export class PortalSystem {
 
     this.mesh.frustumCulled =
       false;
+
+    this.mesh.renderOrder =
+      1000;
 
     this.mesh.visible =
       false;

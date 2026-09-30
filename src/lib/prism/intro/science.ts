@@ -341,7 +341,7 @@ export class PhysicsSystem {
     setOpacity(this.projectile.material, visibility);
     setOpacity(this.pendulumArm.material, visibility * 0.72);
     setOpacity(this.pendulumBob.material, visibility);
-    setOpacity(this.orbit.children[3].material as THREE.Material, visibility * 0.6);
+    setOpacity((this.orbit.children[3] as THREE.Mesh).material, visibility * 0.6);
     this.orbit.children[0].visible = visibility > 0.01;
     this.orbit.children[1].visible = visibility > 0.01;
     this.orbit.children[2].visible = visibility > 0.01;

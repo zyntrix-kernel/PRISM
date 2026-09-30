@@ -82,13 +82,13 @@ export function chooseIntroTier(
       window.innerWidth *
       window.innerHeight;
 
-    if (
-      touch &&
-      area >= 1800 * 1000 &&
-      cores >= 8 &&
-      memory >= 8
-    ) {
-      return "high";
+    // Touch devices share GPU memory and compositor budget with the browser UI.
+    // Keep the cinematic surface elegant without promoting every modern phone/tablet
+    // into the high-tier particle + post-FX profile.
+    if (touch) {
+      if (cores >= 12 && memory >= 12 && area >= 2200 * 1200) return "high";
+      if (cores >= 6 && memory >= 4) return "medium";
+      return "low";
     }
 
     if (

@@ -135,7 +135,7 @@ export default function PrismCinematicIntro({
     "--title-y": ((1 - titleIn) * 18 - titleOut * 14) + "px",
     "--credits-opacity": creditsOpacity,
     "--credits-y": ((1 - creditsIn) * 20 - creditsOut * 12) + "px",
-    "--credits-focus": Math.round(creditsIn * 100) + "%",
+    "--credits-focus": creditsIn,
   } as CSSProperties;
 
   return (

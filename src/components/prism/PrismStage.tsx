@@ -155,6 +155,10 @@ export default function PrismStage() {
   }, [showIntro]);
 
   useEffect(() => {
+    if (state?.presentationMode) setCmdOpen(false);
+  }, [state?.presentationMode]);
+
+  useEffect(() => {
     if (!showIntro && appRef.current) {
       appRef.current.start();
     }

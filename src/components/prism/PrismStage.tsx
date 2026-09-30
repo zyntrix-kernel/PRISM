@@ -10,6 +10,8 @@ import PrismToast from "./PrismToast";
 import SettingsPanel from "./SettingsPanel";
 import PrismExperienceChrome from "./PrismExperienceChrome";
 import PrismCinematicIntro from "./PrismCinematicIntro";
+import { PRESET_CATALOG } from "@/lib/prism/presets/catalog";
+import { PRESET_ORDER, type PresetId } from "@/lib/prism/presets/types";
 import {
   Camera,
   Hand,
@@ -37,21 +39,29 @@ import {
   type LucideIcon,
 } from "lucide-react";
 
-const PRESET_VISUALS: Record<
-  string,
-  { icon: LucideIcon; hue: string; blurb: string }
-> = {
-  space: { icon: Orbit, hue: "154, 220, 255", blurb: "Keplerian solar system" },
-  blocks: { icon: Boxes, hue: "255, 179, 217", blurb: "Voxel stacking rig" },
-  test: { icon: CircleIcon, hue: "201, 184, 255", blurb: "3-orb calibration" },
-  singularity: { icon: Disc, hue: "255, 214, 170", blurb: "Accretion disk + jets" },
-  drive: { icon: Car, hue: "143, 245, 180", blurb: "Neon circuit arcade" },
-  atom: { icon: Atom, hue: "154, 220, 255", blurb: "Bohr model photon lab" },
-  voxel: { icon: Grid3x3, hue: "255, 207, 92", blurb: "Place & break blocks" },
-  gun: { icon: Crosshair, hue: "125, 211, 252", blurb: "Target shooting range" },
-  supernova: { icon: Sun, hue: "255, 170, 68", blurb: "Stellar explosion" },
-  nebula: { icon: Cloud, hue: "165, 180, 252", blurb: "Living gas cloud" },
+const PRESET_ICONS: Record<PresetId, LucideIcon> = {
+  space: Orbit,
+  blocks: Boxes,
+  test: CircleIcon,
+  singularity: Disc,
+  drive: Car,
+  atom: Atom,
+  voxel: Grid3x3,
+  gun: Crosshair,
+  supernova: Sun,
+  nebula: Cloud,
 };
+
+const PRESET_VISUALS: Record<string, { icon: LucideIcon; hue: string; blurb: string }> = Object.fromEntries(
+  PRESET_ORDER.map((id) => [
+    id,
+    {
+      icon: PRESET_ICONS[id],
+      hue: PRESET_CATALOG[id].hue.replaceAll(" ", ""),
+      blurb: PRESET_CATALOG[id].description,
+    },
+  ]),
+);
 
 export default function PrismStage() {
   const rootRef = useRef<HTMLDivElement>(null);

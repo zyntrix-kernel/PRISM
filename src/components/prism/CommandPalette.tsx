@@ -208,6 +208,8 @@ export default function CommandPalette({ onClose, state, app }: Props) {
     });
   }, [actions, query]);
 
+  const activeIndex = Math.min(active, Math.max(0, filtered.length - 1));
+
   useEffect(() => {
     inputRef.current?.focus();
   }, []);

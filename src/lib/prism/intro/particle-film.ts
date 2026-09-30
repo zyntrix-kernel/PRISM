@@ -80,9 +80,9 @@ void main() {
   float alpha = 1.0 - smoothstep(0.18, 0.50, d);
   alpha *= alpha;
   float inner = 1.0 - smoothstep(0.0, 0.28, d);
-  vec3 color = mix(vec3(0.67, 0.84, 1.0), vec3(0.98, 0.99, 1.0), inner);
-  color *= 0.93 + 0.07 * sin(vPhase * 14.0);
-  gl_FragColor = vec4(color, alpha * uOpacity);
+  vec3 particleColor = mix(vColor * 0.90, vec3(0.985, 0.995, 1.0), inner * 0.72);
+  particleColor *= 0.92 + 0.08 * sin(vPhase * 14.0);
+  gl_FragColor = vec4(particleColor, alpha * uOpacity);
 }
 \`;
 
@@ -246,12 +246,13 @@ export class PrismParticleFilm {
   }
 
   private buildParticles() {
-    const n = this.reducedMotion || window.innerWidth < 760 ? 5400 : 9000;
+    const n = this.reducedMotion || window.innerWidth < 760 ? 5000 : 9000;
     const rng = mulberry32(0x5a17);
+    const originRng = mulberry32(0x6511);
     const ids: ShapeId[] = ["origin", "ribbon", "orbit", "prism", "implode"];
 
     for (const [index, id] of ids.entries()) {
-      this.shapes.set(id, genShape(id, n, index === 0 ? mulberry32(101) : rng));
+      this.shapes.set(id, genShape(id, n, index === 0 ? originRng : rng));
     }
 
     const shape = this.shapes.get("origin")!;
@@ -297,11 +298,12 @@ export class PrismParticleFilm {
 
   private buildTitle() {
     const rng = mulberry32(0x9812);
-    const titleShape = genText(12500, "PRISM", rng);
+    const titleShape = genText(7600, "PRISM", rng);
     if (!titleShape) return;
 
     const geometry = new THREE.BufferGeometry();
     geometry.setAttribute("position", new THREE.BufferAttribute(titleShape.pos, 3));
+    geometry.setAttribute("color", new THREE.BufferAttribute(titleShape.col, 3));
 
     const material = new THREE.ShaderMaterial({
       uniforms: {
@@ -517,8 +519,10 @@ export class PrismParticleFilm {
     const settle = t >= 10.9 ? 0.002 : amount;
 
     for (let i = 0; i < pos.length; i += 3) {
-      const phase = i * 0.00071;
-      pos[i] += Math.sin(this.elapsed * 0.72 + phase) * settle * dt;
+      const particle = i / 3;
+      const phase = particle * 0.00071;
+      const tangent = Math.sin(this.elapsed * 0.72 + phase) * settle * dt;
+      pos[i] += tangent;
       pos[i + 1] += Math.cos(this.elapsed * 0.56 + phase * 1.7) * settle * dt;
       pos[i + 2] += Math.sin(this.elapsed * 0.41 + phase * 0.8) * settle * dt;
     }

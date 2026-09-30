@@ -203,6 +203,7 @@ export class CameraRig {
   autoRotate = false;
   private readonly home = { yaw: 0, pitch: 0.4, distance: 13, target: new THREE.Vector3() };
   private readonly tmpOffset = new THREE.Vector3();
+  private readonly tmpUp = new THREE.Vector3();
 
   setHome(view: WorldView): void {
     this.home.yaw = view.yaw;
@@ -233,7 +234,7 @@ export class CameraRig {
   panBy(dxPixels: number, dyPixels: number, camera: THREE.Camera): void {
     const scale = (this.distance * PrismConfig.cameraRig.panSpeed) / 10;
     const right = this.tmpOffset.setFromMatrixColumn(camera.matrix, 0);
-    const up = new THREE.Vector3().setFromMatrixColumn(camera.matrix, 1);
+    const up = this.tmpUp.setFromMatrixColumn(camera.matrix, 1);
     this.target.addScaledVector(right, -dxPixels * scale).addScaledVector(up, dyPixels * scale);
     this.target.y = THREE.MathUtils.clamp(this.target.y, -6, 6);
   }

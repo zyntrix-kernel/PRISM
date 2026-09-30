@@ -2,6 +2,7 @@ import * as THREE from "three";
 import { clamp01, damp, inverseLerp, smoothstep } from "./easing";
 import { SeededRandom } from "./random";
 import { ScienceShowcase } from "./science";
+import { stagedTravel } from "./motion";
 import {
   INTRO_CUES,
   TOTAL_TIMELINE_MS,
@@ -352,7 +353,7 @@ export class PrismCinematicEngine implements IntroEngine {
     scene:IntroScene,
     energy:number,
   ):void{
-    const launchProgress=smoothstep(
+    const launchProgress=stagedTravel(
       clamp01((timelineTime-14800)/1200),
     );
 

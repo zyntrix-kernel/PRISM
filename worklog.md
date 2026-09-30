@@ -3274,3 +3274,52 @@ is acceptable — the tier correctly shows `auto→high`).
   should be `pointerNdc.y` or a new getter) is a pre-existing tsc error
   that should be fixed in a separate task — it's used by the drive
   preset's steering axis and may silently break vertical steering.
+
+
+---
+Task ID: 16
+Agent: general-purpose (cinematic intro + performance optimization)
+Task: Push the overengineered PRISM startup cinematic and optimize its runtime integration
+
+## 1. Changes
+
+- Upgraded `PrismCinematicIntro` without adding a new animation dependency.
+- Removed per-frame React progress state updates; the intro now drives its
+  progress bar through a CSS custom property and updates the numeric readout
+  directly in the DOM at a throttled cadence.
+- Scene/member state changes are committed only when their values actually
+  change, eliminating redundant state-setter calls from the animation loop.
+- Added pointer target smoothing so mouse parallax does not jump directly
+  between input samples.
+- Added a 1.5x device-pixel-ratio cap and reduced-motion particle fallback
+  to keep the cinematic visually rich without unnecessarily taxing the GPU.
+- Added layered optical effects: rotating atmospheric light field, crystal
+  refraction sweeps, precision hero ring, and scene-specific optical grading.
+- Kept the existing team sequence and cinematic exit intact.
+
+## 2. PRISM startup lifecycle optimization
+
+- `PrismApp` still constructs immediately so scene/model initialization can
+  begin during the intro, but its continuous render loop no longer starts
+  until the cinematic completes.
+- This prevents the intro canvas and the main Three.js render loop from
+  competing for the same frame budget during startup.
+- Removed obsolete 200ms modal-state polling from `PrismStage`, since the
+  visual backdrop is no longer rendered and the state had become dead work.
+
+## 3. Repository hygiene
+
+- Removed six committed `.tmp_exp_*.png` experiment artifacts.
+- Removed the committed `.zscripts/dev.pid` runtime artifact.
+- Added both patterns to `.gitignore`.
+- Intentionally retained `PRISM.apk` because it is an expo deliverable.
+
+## 4. Verification
+
+- Confirmed the updated files are present on `main`.
+- Confirmed the intro contains no frame-level `setProgress` calls and only
+  one scene/member state setter site each.
+- Confirmed the deferred PRISM render loop wiring is present.
+- Confirmed reduced-motion handling and cinematic optical layers are present.
+- Full local lint/build was not rerun in this environment because outbound
+  network access is unavailable for cloning/installing dependencies.

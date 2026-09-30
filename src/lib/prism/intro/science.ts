@@ -1,5 +1,9 @@
 import * as THREE from "three";
-import type { IntroPointerState, IntroQualityProfile, IntroScene } from "./types";
+import type {
+  IntroPointerState,
+  IntroQualityProfile,
+  IntroScene,
+} from "./types";
 import { SeededRandom, randomSphere } from "./random";
 
 export interface ScienceUpdateContext {
@@ -11,874 +15,630 @@ export interface ScienceUpdateContext {
   readonly pointer: IntroPointerState;
 }
 
-function clamp(value: number, min = 0, max = 1): number {
-  return Math.min(max, Math.max(min, value));
+function clamp01(v:number):number {
+  return Math.min(1, Math.max(0, v));
 }
 
-function smooth(value: number): number {
-  const x = clamp(value);
-  return x * x * (3 - 2 * x);
+function smooth(v:number):number {
+  const x=clamp01(v);
+  return x*x*(3-2*x);
 }
 
-function pulse(time: number, speed: number, offset = 0): number {
-  return 0.5 + 0.5 * Math.sin(time * speed + offset);
+function pulse(t:number,s:number,o=0):number {
+  return 0.5+0.5*Math.sin(t*s+o);
 }
 
-function setOpacity(
-  material: THREE.Material | THREE.Material[],
-  opacity: number,
-): void {
-  if (Array.isArray(material)) {
-    for (const item of material) {
-      if ("opacity" in item) {
-        item.opacity = opacity;
-        item.transparent = opacity < 0.999;
-      }
-    }
-    return;
-  }
-
-  if ("opacity" in material) {
-    material.opacity = opacity;
-    material.transparent = opacity < 0.999;
+function setOpacity(material:THREE.Material, value:number):void {
+  const m=material as THREE.Material & { opacity?:number };
+  if (typeof m.opacity==="number") {
+    m.opacity=value;
+    m.transparent=value<0.999;
   }
 }
 
-function disposeObject(root: THREE.Object3D): void {
-  root.traverse((object) => {
-    const mesh = object as THREE.Mesh;
-    mesh.geometry?.dispose?.();
-
-    if (mesh.material) {
-      const materials = Array.isArray(mesh.material)
-        ? mesh.material
-        : [mesh.material];
-
-      for (const material of materials) {
-        for (const key of Object.keys(material)) {
-          const value = (material as unknown as Record<string, unknown>)[key];
-          if (value && value instanceof THREE.Texture) {
-            value.dispose();
-          }
-        }
-        material.dispose();
-      }
-    }
+function makeBasic(color:string, opacity=1):THREE.MeshBasicMaterial {
+  return new THREE.MeshBasicMaterial({
+    color,
+    transparent:opacity<0.999,
+    opacity,
+    depthWrite:false,
+    blending:THREE.AdditiveBlending,
   });
 }
 
-function cylinderBetween(
-  a: THREE.Vector3,
-  b: THREE.Vector3,
-  radius: number,
-  material: THREE.Material,
-): THREE.Mesh {
-  const direction = new THREE.Vector3().subVectors(b, a);
-  const length = direction.length();
-  const mesh = new THREE.Mesh(
-    new THREE.CylinderGeometry(radius, radius, Math.max(0.01, length), 12, 1),
-    material,
-  );
-
-  mesh.position.copy(a).add(b).multiplyScalar(0.5);
-  mesh.quaternion.setFromUnitVectors(
-    new THREE.Vector3(0, 1, 0),
-    direction.normalize(),
-  );
-  return mesh;
-}
-
-function lineFromPoints(
-  points: THREE.Vector3[],
-  material: THREE.Material,
-): THREE.Line {
-  const geometry = new THREE.BufferGeometry().setFromPoints(points);
-  return new THREE.Line(geometry, material);
-}
-
-function glowMaterial(
-  color: string,
-  opacity = 1,
-  size = 0.08,
-): THREE.PointsMaterial {
+function makePointMaterial(color:string,size:number,opacity=1):THREE.PointsMaterial {
   return new THREE.PointsMaterial({
     color,
     size,
-    transparent: opacity < 1,
+    transparent:opacity<0.999,
     opacity,
-    depthWrite: false,
-    blending: THREE.AdditiveBlending,
-    sizeAttenuation: true,
+    depthWrite:false,
+    blending:THREE.AdditiveBlending,
+    sizeAttenuation:true,
   });
 }
 
-function makeAtom(
-  radius: number,
-  color: string,
-  metallic = 0.18,
-): THREE.Mesh {
-  return new THREE.Mesh(
-    new THREE.SphereGeometry(radius, 18, 18),
-    new THREE.MeshStandardMaterial({
+function makeLine(points:THREE.Vector3[],color:string,opacity=1):THREE.Line {
+  const geometry=new THREE.BufferGeometry().setFromPoints(points);
+  return new THREE.Line(
+    geometry,
+    new THREE.LineBasicMaterial({
       color,
-      emissive: color,
-      emissiveIntensity: 0.75,
-      metalness: metallic,
-      roughness: 0.22,
-      transparent: true,
+      transparent:opacity<0.999,
+      opacity,
+      depthWrite:false,
+      blending:THREE.AdditiveBlending,
     }),
   );
 }
 
-function makeRing(radius: number, thickness: number, color: string): THREE.Mesh {
-  return new THREE.Mesh(
-    new THREE.TorusGeometry(radius, thickness, 10, 96),
-    new THREE.MeshBasicMaterial({
-      color,
-      transparent: true,
-      opacity: 0.36,
-      blending: THREE.AdditiveBlending,
-      depthWrite: false,
-    }),
-  );
+function disposeRoot(root:THREE.Object3D):void {
+  root.traverse((object)=>{
+    const mesh=object as THREE.Mesh;
+    if (mesh.geometry) mesh.geometry.dispose();
+    if (mesh.material) {
+      const materials=Array.isArray(mesh.material)?mesh.material:[mesh.material];
+      for (const material of materials) material.dispose();
+    }
+  });
 }
 
 export class StarFieldSystem {
-  readonly group = new THREE.Group();
+  readonly group=new THREE.Group();
 
-  private readonly stars: THREE.Points;
-  private readonly dust: THREE.Points;
-  private readonly starPositions: Float32Array;
-  private readonly dustPositions: Float32Array;
-  private readonly starVelocities: Float32Array;
+  private readonly points:THREE.Points;
+  private readonly positions:Float32Array;
+  private readonly baseY:Float32Array;
+  private readonly velocity:Float32Array;
 
-  constructor(profile: IntroQualityProfile, random: SeededRandom) {
-    const starCount = Math.max(520, Math.min(3300, profile.starCount));
-    this.starPositions = new Float32Array(starCount * 3);
-    this.starVelocities = new Float32Array(starCount);
+  constructor(profile:IntroQualityProfile,random:SeededRandom) {
+    const count=Math.min(1800,Math.max(700,profile.starCount));
+    this.positions=new Float32Array(count*3);
+    this.baseY=new Float32Array(count);
+    this.velocity=new Float32Array(count);
 
-    for (let i = 0; i < starCount; i++) {
-      const radius = random.range(12, 48);
-      const dir = randomSphere(random);
-      const i3 = i * 3;
-      this.starPositions[i3] = dir.x * radius;
-      this.starPositions[i3 + 1] = dir.y * radius * 0.72;
-      this.starPositions[i3 + 2] = dir.z * radius;
-      this.starVelocities[i] = random.range(0.15, 0.85);
+    for(let i=0;i<count;i++){
+      const radius=random.range(9,44);
+      const direction=randomSphere(random);
+      const i3=i*3;
+      this.positions[i3]=direction.x*radius;
+      this.positions[i3+1]=direction.y*radius*0.75;
+      this.positions[i3+2]=direction.z*radius;
+      this.baseY[i]=this.positions[i3+1];
+      this.velocity[i]=random.range(0.08,0.42);
     }
 
-    const starGeometry = new THREE.BufferGeometry();
-    starGeometry.setAttribute(
-      "position",
-      new THREE.BufferAttribute(this.starPositions, 3),
+    const geometry=new THREE.BufferGeometry();
+    geometry.setAttribute("position",new THREE.BufferAttribute(this.positions,3));
+
+    this.points=new THREE.Points(
+      geometry,
+      makePointMaterial("#bfeaff",0.05,0.72),
     );
+    this.points.frustumCulled=false;
+    this.group.add(this.points);
+  }
 
-    this.stars = new THREE.Points(
-      starGeometry,
-      glowMaterial("#c9ecff", 0.82, 0.045),
-    );
-    this.stars.frustumCulled = false;
+  update(context:ScienceUpdateContext):void {
+    const active =
+      context.scene==="physics" ||
+      context.scene==="chemistry" ||
+      context.scene==="mathematics" ||
+      context.scene==="synthesis";
 
-    const dustCount = Math.max(120, Math.min(1100, profile.dustCount));
-    this.dustPositions = new Float32Array(dustCount * 3);
-
-    for (let i = 0; i < dustCount; i++) {
-      const radius = random.range(4, 24);
-      const dir = randomSphere(random);
-      const i3 = i * 3;
-      this.dustPositions[i3] = dir.x * radius;
-      this.dustPositions[i3 + 1] = dir.y * radius;
-      this.dustPositions[i3 + 2] = dir.z * radius;
+    const intensity=active?0.62:context.scene==="boot"?0.14:0.4;
+    for(let i=0;i<this.velocity.length;i++){
+      const i3=i*3;
+      this.positions[i3+2]+=context.delta*this.velocity[i]*(0.6+context.energy);
+      if(this.positions[i3+2]>44) this.positions[i3+2]=-44;
+      this.positions[i3+1]=this.baseY[i]+Math.sin(context.time*0.3+i*0.013)*0.04;
     }
 
-    const dustGeometry = new THREE.BufferGeometry();
-    dustGeometry.setAttribute(
-      "position",
-      new THREE.BufferAttribute(this.dustPositions, 3),
-    );
-
-    this.dust = new THREE.Points(
-      dustGeometry,
-      glowMaterial("#579bff", 0.18, 0.032),
-    );
-    this.dust.frustumCulled = false;
-
-    this.group.add(this.stars, this.dust);
+    (this.points.geometry.getAttribute("position") as THREE.BufferAttribute).needsUpdate=true;
+    setOpacity(this.points.material,intensity);
+    this.group.rotation.y+=context.delta*(0.006+context.energy*0.006);
+    this.group.rotation.x=context.pointer.y*0.025;
   }
 
-  update({ time, delta, scene, energy, pointer }: ScienceUpdateContext): void {
-    const fieldBoost =
-      scene === "physics" ||
-      scene === "chemistry" ||
-      scene === "mathematics" ||
-      scene === "synthesis"
-        ? 1
-        : scene === "boot"
-          ? 0.2
-          : 0.48;
-
-    this.group.rotation.y += delta * 0.007 * (1 + energy);
-    this.group.rotation.x =
-      Math.sin(time * 0.07) * 0.035 + pointer.y * 0.035;
-
-    const attribute = this.stars.geometry.getAttribute("position") as THREE.BufferAttribute;
-    for (let i = 0; i < this.starVelocities.length; i += 1) {
-      const i3 = i * 3;
-      const z = this.starPositions[i3 + 2];
-      const speed = this.starVelocities[i] * delta * (0.8 + fieldBoost * 0.8);
-      this.starPositions[i3 + 2] = z + speed;
-      if (this.starPositions[i3 + 2] > 48) this.starPositions[i3 + 2] = -48;
-    }
-    attribute.needsUpdate = true;
-
-    setOpacity(this.stars.material, 0.2 + energy * 0.55);
-    setOpacity(this.dust.material, 0.04 + energy * 0.14);
-
-    this.stars.rotation.z += delta * 0.012;
-    this.dust.rotation.z -= delta * 0.006;
-  }
-
-  dispose(): void {
-    disposeObject(this.group);
-  }
+  dispose():void { disposeRoot(this.group); }
 }
 
 export class PhysicsSystem {
-  readonly group = new THREE.Group();
+  readonly group=new THREE.Group();
 
-  private readonly projectile: THREE.Mesh;
-  private readonly projectileTrail: THREE.Line;
-  private readonly pendulumArm: THREE.Line;
-  private readonly pendulumBob: THREE.Mesh;
-  private readonly orbit: THREE.Group;
-  private readonly fieldParticles: THREE.Points;
-  private readonly fieldPositions: Float32Array;
-  private readonly origin = new THREE.Vector3(-6.5, -1.7, 0);
+  private readonly trail:THREE.Line;
+  private readonly projectile:THREE.Mesh;
+  private readonly pendulum:THREE.Line;
+  private readonly pendulumBob:THREE.Mesh;
+  private readonly orbit:THREE.Group;
+  private readonly field:THREE.Points;
 
-  constructor(random: SeededRandom) {
-    const arcPoints: THREE.Vector3[] = [];
-    const v0 = 9;
-    const angle = THREE.MathUtils.degToRad(54);
-    const g = 9.8;
-    const tMax = (2 * v0 * Math.sin(angle)) / g;
+  private readonly pendulumPositions:Float32Array;
 
-    for (let i = 0; i < 96; i++) {
-      const t = (i / 95) * tMax;
-      const x = this.origin.x + v0 * Math.cos(angle) * t;
-      const y = this.origin.y + v0 * Math.sin(angle) * t - 0.5 * g * t * t;
-      arcPoints.push(new THREE.Vector3(x, y, 0));
+  constructor(random:SeededRandom) {
+    const points:THREE.Vector3[]=[];
+    const v0=7.8;
+    const launch=THREE.MathUtils.degToRad(53);
+    const g=9.81;
+    const tMax=(2*v0*Math.sin(launch))/g;
+
+    for(let i=0;i<96;i++){
+      const t=(i/95)*tMax;
+      points.push(new THREE.Vector3(
+        -4.8+v0*Math.cos(launch)*t,
+        -1.7+v0*Math.sin(launch)*t-0.5*g*t*t,
+        0,
+      ));
     }
 
-    this.projectileTrail = lineFromPoints(
-      arcPoints,
+    this.trail=makeLine(points,"#73d6ff",0.72);
+    this.projectile=new THREE.Mesh(
+      new THREE.SphereGeometry(0.12,10,10),
+      makeBasic("#effcff",0.95),
+    );
+    this.group.add(this.trail,this.projectile);
+
+    this.pendulumPositions=new Float32Array(6);
+    const pendulumGeometry=new THREE.BufferGeometry();
+    pendulumGeometry.setAttribute(
+      "position",
+      new THREE.BufferAttribute(this.pendulumPositions,3),
+    );
+    this.pendulum=new THREE.Line(
+      pendulumGeometry,
       new THREE.LineBasicMaterial({
-        color: "#7ed7ff",
-        transparent: true,
-        opacity: 0.75,
-        blending: THREE.AdditiveBlending,
+        color:"#4d9eff",
+        transparent:true,
+        opacity:0.62,
+        depthWrite:false,
       }),
     );
-    this.group.add(this.projectileTrail);
-
-    this.projectile = makeAtom(0.12, "#e6fbff");
-    this.group.add(this.projectile);
-
-    const pivot = new THREE.Vector3(2.8, 1.9, 0);
-    this.pendulumArm = lineFromPoints(
-      [pivot, pivot.clone().add(new THREE.Vector3(0, -2.8, 0))],
-      new THREE.LineBasicMaterial({
-        color: "#5b9cff",
-        transparent: true,
-        opacity: 0.65,
-      }),
+    this.pendulumBob=new THREE.Mesh(
+      new THREE.SphereGeometry(0.22,10,10),
+      makeBasic("#9be3ff",0.9),
     );
-    this.pendulumBob = makeAtom(0.23, "#8fe0ff");
-    this.group.add(this.pendulumArm, this.pendulumBob);
+    this.group.add(this.pendulum,this.pendulumBob);
 
-    this.orbit = new THREE.Group();
-    const sun = makeAtom(0.42, "#fff0a0");
-    sun.material.emissiveIntensity = 2;
-    const earth = makeAtom(0.22, "#65bfff");
-    const moon = makeAtom(0.085, "#d7ecff");
-    earth.position.x = 1.55;
-    moon.position.x = 2.05;
-    this.orbit.add(sun, earth, moon, makeRing(1.55, 0.012, "#6bb7ff"));
-    this.orbit.position.set(-1.6, 2.1, -0.9);
+    this.orbit=new THREE.Group();
+    const sun=new THREE.Mesh(new THREE.SphereGeometry(0.38,10,10),makeBasic("#fff0a5",0.95));
+    const earth=new THREE.Mesh(new THREE.SphereGeometry(0.18,10,10),makeBasic("#6dbfff",0.95));
+    const moon=new THREE.Mesh(new THREE.SphereGeometry(0.07,8,8),makeBasic("#d9f4ff",0.9));
+    earth.position.x=1.45;
+    moon.position.x=1.88;
+    this.orbit.add(
+      sun,
+      earth,
+      moon,
+      new THREE.Mesh(
+        new THREE.TorusGeometry(1.45,0.012,6,72),
+        makeBasic("#65b9ff",0.35),
+      ),
+    );
+    this.orbit.position.set(-1.25,2.05,-0.8);
     this.group.add(this.orbit);
 
-    const count = 34;
-    this.fieldPositions = new Float32Array(count * 3);
-    for (let i = 0; i < count; i++) {
-      const i3 = i * 3;
-      this.fieldPositions[i3] = random.range(-8, 8);
-      this.fieldPositions[i3 + 1] = random.range(-4, 4);
-      this.fieldPositions[i3 + 2] = random.range(-2.4, 2.4);
+    const count=28;
+    const positions=new Float32Array(count*3);
+    for(let i=0;i<count;i++){
+      const i3=i*3;
+      positions[i3]=random.range(-8,8);
+      positions[i3+1]=random.range(-4,4);
+      positions[i3+2]=random.range(-2,2);
     }
-
-    const geometry = new THREE.BufferGeometry();
-    geometry.setAttribute(
-      "position",
-      new THREE.BufferAttribute(this.fieldPositions, 3),
-    );
-    this.fieldParticles = new THREE.Points(
-      geometry,
-      glowMaterial("#4fa8ff", 0.45, 0.06),
-    );
-    this.group.add(this.fieldParticles);
+    const geometry=new THREE.BufferGeometry();
+    geometry.setAttribute("position",new THREE.BufferAttribute(positions,3));
+    this.field=new THREE.Points(geometry,makePointMaterial("#5aafff",0.045,0.34));
+    this.group.add(this.field);
   }
 
-  update({ time, scene, energy, phase }: ScienceUpdateContext): void {
-    const visibility =
-      scene === "physics"
-        ? smooth(Math.min(1, phase * 2.7))
-        : scene === "chemistry"
-          ? 1 - smooth(Math.min(1, phase * 1.4))
-          : scene === "synthesis"
-            ? 0.08
-            : 0;
+  update(context:ScienceUpdateContext):void {
+    const visible =
+      context.scene==="physics"
+        ? smooth(Math.min(1,context.phase*2.6))
+        : context.scene==="chemistry"
+          ? 1-smooth(Math.min(1,context.phase*1.6))
+          : context.scene==="synthesis" ? 0.07 : 0;
 
-    setOpacity(this.projectileTrail.material, visibility * 0.82);
-    setOpacity(this.projectile.material, visibility);
-    setOpacity(this.pendulumArm.material, visibility * 0.72);
-    setOpacity(this.pendulumBob.material, visibility);
-    setOpacity((this.orbit.children[3] as THREE.Mesh).material, visibility * 0.6);
-    this.orbit.children[0].visible = visibility > 0.01;
-    this.orbit.children[1].visible = visibility > 0.01;
-    this.orbit.children[2].visible = visibility > 0.01;
+    setOpacity(this.trail.material,visible*0.76);
+    setOpacity(this.projectile.material,visible);
+    setOpacity(this.pendulum.material,visible*0.72);
+    setOpacity(this.pendulumBob.material,visible);
+    for(const child of this.orbit.children){
+      if(child instanceof THREE.Mesh) setOpacity(child.material,visible*(child===this.orbit.children[0]?0.94:0.55));
+    }
+    setOpacity(this.field.material,visible*0.5);
 
-    const v0 = 9;
-    const angle = THREE.MathUtils.degToRad(54);
-    const g = 9.8;
-    const tMax = (2 * v0 * Math.sin(angle)) / g;
-    const local = (phase * tMax * 0.96) % tMax;
-    const x = this.origin.x + v0 * Math.cos(angle) * local;
-    const y = this.origin.y + v0 * Math.sin(angle) * local - 0.5 * g * local * local;
+    const v0=7.8;
+    const launch=THREE.MathUtils.degToRad(53);
+    const g=9.81;
+    const tMax=(2*v0*Math.sin(launch))/g;
+    const t=(context.phase*tMax*0.96)%tMax;
     this.projectile.position.set(
-      x,
-      y,
-      Math.sin(time * 5) * 0.08,
+      -4.8+v0*Math.cos(launch)*t,
+      -1.7+v0*Math.sin(launch)*t-0.5*g*t*t,
+      Math.sin(context.time*5)*0.08,
     );
 
-    const pivotY = 1.9;
-    const pivotX = 2.8;
-    const omega = Math.sqrt(g / 2.8);
-    const swing = THREE.MathUtils.degToRad(26) * Math.cos(omega * time * 1.2);
-    const bobX = pivotX + Math.sin(swing) * 2.8;
-    const bobY = pivotY - Math.cos(swing) * 2.8;
-    const pivot = new THREE.Vector3(pivotX, pivotY, 0);
-    const bob = new THREE.Vector3(bobX, bobY, 0.12 * Math.sin(time * 2));
-    this.pendulumArm.geometry.dispose();
-    this.pendulumArm.geometry = new THREE.BufferGeometry().setFromPoints([pivot, bob]);
-    this.pendulumBob.position.copy(bob);
+    const pivotX=2.7;
+    const pivotY=1.45;
+    const length=2.65;
+    const omega=Math.sqrt(g/length);
+    const angle=THREE.MathUtils.degToRad(26)*Math.cos(omega*context.time*0.9);
+    const bobX=pivotX+Math.sin(angle)*length;
+    const bobY=pivotY-Math.cos(angle)*length;
 
-    this.orbit.rotation.y = time * 0.45;
-    this.orbit.rotation.x = Math.sin(time * 0.2) * 0.08;
+    this.pendulumPositions[0]=pivotX;
+    this.pendulumPositions[1]=pivotY;
+    this.pendulumPositions[2]=0.1;
+    this.pendulumPositions[3]=bobX;
+    this.pendulumPositions[4]=bobY;
+    this.pendulumPositions[5]=0.1;
+    (this.pendulum.geometry.getAttribute("position") as THREE.BufferAttribute).needsUpdate=true;
+    this.pendulumBob.position.set(bobX,bobY,0.1);
 
-    const positions = this.fieldParticles.geometry.getAttribute("position") as THREE.BufferAttribute;
-    for (let i = 0; i < this.fieldPositions.length / 3; i++) {
-      const i3 = i * 3;
-      const x0 = this.fieldPositions[i3];
-      const y0 = this.fieldPositions[i3 + 1];
-      const r = Math.sqrt(x0 * x0 + y0 * y0) + 0.4;
-      const swirl = time * 0.18 + r * 0.25;
-      this.fieldPositions[i3] = x0 + Math.cos(swirl + y0) * 0.018 * energy;
-      this.fieldPositions[i3 + 1] = y0 + Math.sin(swirl + x0) * 0.018 * energy;
-    }
-    positions.needsUpdate = true;
-    setOpacity(this.fieldParticles.material, visibility * 0.52);
+    this.orbit.rotation.y=context.time*0.44;
+    this.orbit.rotation.x=Math.sin(context.time*0.2)*0.08;
+    this.field.rotation.z=context.time*0.11;
   }
 
-  dispose(): void {
-    this.pendulumArm.geometry.dispose();
-    disposeObject(this.group);
-  }
+  dispose():void { disposeRoot(this.group); }
 }
 
 export class ChemistrySystem {
-  readonly group = new THREE.Group();
+  readonly group=new THREE.Group();
 
-  private readonly shells: THREE.Mesh[] = [];
-  private readonly electrons: Array<{ mesh: THREE.Mesh; radius: number; phase: number; speed: number }> = [];
-  private readonly moleculeGroups: THREE.Group[] = [];
-  private readonly lattice: THREE.Group;
-  private readonly bonds: THREE.Mesh[] = [];
+  private readonly atomGroup=new THREE.Group();
+  private readonly shellMeshes:THREE.Mesh[]=[];
+  private readonly electrons:THREE.Points;
+  private readonly electronPositions:Float32Array;
+  private readonly moleculePoints:THREE.Points;
+  private readonly moleculePositions:Float32Array;
+  private readonly moleculeBonds:THREE.LineSegments;
+  private readonly lattice:THREE.Points;
 
-  constructor(random: SeededRandom) {
-    const atom = new THREE.Group();
-    atom.position.set(0, 0.1, 0);
-    const nucleus = makeAtom(0.52, "#6aa8ff");
-    atom.add(nucleus);
-    atom.add(makeAtom(0.27, "#e8f8ff"));
-    atom.children[1].position.set(0.2, 0.13, 0.16);
-
-    for (let i = 0; i < 3; i++) {
-      const shell = makeRing(1.0 + i * 0.56, 0.012, i % 2 === 0 ? "#72c9ff" : "#4b7bff");
-      shell.rotation.x = Math.PI / 2 + i * 0.42;
-      shell.rotation.z = i * 0.8;
-      atom.add(shell);
-      this.shells.push(shell);
-
-      for (let e = 0; e < (i === 0 ? 2 : i === 1 ? 4 : 2); e++) {
-        const electron = makeAtom(0.055, "#dff9ff");
-        atom.add(electron);
-        this.electrons.push({
-          mesh: electron,
-          radius: 1.0 + i * 0.56,
-          phase: (e / Math.max(1, i === 0 ? 2 : i === 1 ? 4 : 2)) * Math.PI * 2 + i,
-          speed: 0.9 + random.range(0.1, 0.55),
-        });
-      }
-    }
-
-    this.group.add(atom);
-
-    const water = this.makeWaterMolecule();
-    water.position.set(-3.7, -1.35, 0.2);
-    this.moleculeGroups.push(water);
-
-    const co2 = this.makeCo2Molecule();
-    co2.position.set(3.8, -1.1, -0.4);
-    this.moleculeGroups.push(co2);
-
-    this.lattice = new THREE.Group();
-    const spacing = 1.02;
-    const material = new THREE.MeshStandardMaterial({
-      color: "#4e9dff",
-      emissive: "#4e9dff",
-      emissiveIntensity: 0.55,
-      metalness: 0.25,
-      roughness: 0.25,
-      transparent: true,
-    });
-    for (let x = -2; x <= 2; x++) {
-      for (let y = -1; y <= 1; y++) {
-        const node = new THREE.Mesh(
-          new THREE.SphereGeometry(0.105, 10, 10),
-          material.clone(),
-        );
-        node.position.set(x * spacing, y * spacing, Math.sin(x * 0.8 + y) * 0.35);
-        this.lattice.add(node);
-      }
-    }
-
-    const latticeNodes = this.lattice.children as THREE.Mesh[];
-    for (let i = 0; i < latticeNodes.length; i++) {
-      for (let j = i + 1; j < latticeNodes.length; j++) {
-        if (latticeNodes[i].position.distanceTo(latticeNodes[j].position) < 1.12) {
-          const bond = cylinderBetween(
-            latticeNodes[i].position,
-            latticeNodes[j].position,
-            0.012,
-            new THREE.MeshBasicMaterial({
-              color: "#4f9bff",
-              transparent: true,
-              opacity: 0.3,
-              blending: THREE.AdditiveBlending,
-            }),
-          );
-          this.lattice.add(bond);
-          this.bonds.push(bond);
-        }
-      }
-    }
-    this.lattice.position.set(0, 2.7, -1.7);
-    this.group.add(this.lattice, ...this.moleculeGroups);
-  }
-
-  private makeWaterMolecule(): THREE.Group {
-    const group = new THREE.Group();
-    const oxygen = makeAtom(0.31, "#65bfff");
-    const hydrogenA = makeAtom(0.16, "#f1fbff");
-    const hydrogenB = makeAtom(0.16, "#f1fbff");
-    hydrogenA.position.set(-0.62, -0.08, 0);
-    hydrogenB.position.set(0.62, -0.08, 0);
-    const bondMaterial = new THREE.MeshBasicMaterial({
-      color: "#96ddff",
-      transparent: true,
-      opacity: 0.68,
-      blending: THREE.AdditiveBlending,
-    });
-
-    group.add(oxygen, hydrogenA, hydrogenB);
-    group.add(
-      cylinderBetween(oxygen.position, hydrogenA.position, 0.045, bondMaterial),
-      cylinderBetween(oxygen.position, hydrogenB.position, 0.045, bondMaterial.clone()),
+  constructor() {
+    const nucleus=new THREE.Mesh(
+      new THREE.IcosahedronGeometry(0.55,1),
+      makeBasic("#6caeff",0.95),
     );
-    group.rotation.z = -0.36;
-    return group;
-  }
+    this.atomGroup.add(nucleus);
 
-  private makeCo2Molecule(): THREE.Group {
-    const group = new THREE.Group();
-    const carbon = makeAtom(0.27, "#c7e5ff");
-    const oxygenA = makeAtom(0.22, "#ff9e9e");
-    const oxygenB = makeAtom(0.22, "#ff9e9e");
-    oxygenA.position.x = -0.78;
-    oxygenB.position.x = 0.78;
-    const bondMaterial = new THREE.MeshBasicMaterial({
-      color: "#a9ddff",
-      transparent: true,
-      opacity: 0.68,
-      blending: THREE.AdditiveBlending,
-    });
-    group.add(
-      carbon,
-      oxygenA,
-      oxygenB,
-      cylinderBetween(carbon.position, oxygenA.position, 0.04, bondMaterial),
-      cylinderBetween(carbon.position, oxygenB.position, 0.04, bondMaterial.clone()),
-    );
-    group.rotation.z = 0.22;
-    return group;
-  }
-
-  update({ time, scene, energy, phase, pointer }: ScienceUpdateContext): void {
-    const visibility =
-      scene === "chemistry"
-        ? smooth(Math.min(1, phase * 2.5))
-        : scene === "mathematics"
-          ? 1 - smooth(Math.min(1, phase * 1.25))
-          : scene === "synthesis"
-            ? 0.12
-            : 0;
-
-    for (let i = 0; i < this.shells.length; i++) {
-      const shell = this.shells[i];
-      shell.rotation.y += 0.0018 * (i + 1);
-      setOpacity(shell.material, visibility * (0.26 + energy * 0.15));
-    }
-
-    for (let i = 0; i < this.electrons.length; i++) {
-      const e = this.electrons[i];
-      const angle = time * e.speed + e.phase;
-      e.mesh.position.set(
-        Math.cos(angle) * e.radius,
-        Math.sin(angle * 1.63) * (0.72 + e.radius * 0.08),
-        Math.sin(angle) * e.radius,
+    for(let i=0;i<3;i++){
+      const ring=new THREE.Mesh(
+        new THREE.TorusGeometry(0.95+i*0.56,0.012,6,72),
+        makeBasic(i%2===0?"#73cfff":"#477dff",0.4),
       );
-      setOpacity(e.mesh.material, visibility * 0.95);
+      ring.rotation.x=Math.PI/2+i*0.42;
+      ring.rotation.z=i*0.8;
+      this.shellMeshes.push(ring);
+      this.atomGroup.add(ring);
     }
 
-    for (let i = 0; i < this.moleculeGroups.length; i++) {
-      const molecule = this.moleculeGroups[i];
-      molecule.rotation.y = Math.sin(time * 0.55 + i) * 0.16 + pointer.x * 0.08;
-      molecule.rotation.x = Math.cos(time * 0.34 + i) * 0.1;
-      molecule.scale.setScalar(0.84 + visibility * 0.26);
-      molecule.traverse((object) => {
-        if (object instanceof THREE.Mesh && object.material) {
-          setOpacity(object.material, visibility * 0.9);
-        }
-      });
+    this.electronPositions=new Float32Array(8*3);
+    const electronGeometry=new THREE.BufferGeometry();
+    electronGeometry.setAttribute("position",new THREE.BufferAttribute(this.electronPositions,3));
+    this.electrons=new THREE.Points(electronGeometry,makePointMaterial("#e6fbff",0.10,0.9));
+    this.atomGroup.add(this.electrons);
+    this.group.add(this.atomGroup);
+
+    this.moleculePositions=new Float32Array(7*3);
+    const moleculeGeometry=new THREE.BufferGeometry();
+    moleculeGeometry.setAttribute("position",new THREE.BufferAttribute(this.moleculePositions,3));
+    this.moleculePoints=new THREE.Points(moleculeGeometry,makePointMaterial("#d9f6ff",0.12,0.82));
+
+    const bondPositions=new Float32Array(8*3);
+    const bondGeometry=new THREE.BufferGeometry();
+    bondGeometry.setAttribute("position",new THREE.BufferAttribute(bondPositions,3));
+    this.moleculeBonds=new THREE.LineSegments(
+      bondGeometry,
+      new THREE.LineBasicMaterial({
+        color:"#78cfff",
+        transparent:true,
+        opacity:0.62,
+        depthWrite:false,
+        blending:THREE.AdditiveBlending,
+      }),
+    );
+    this.group.add(this.moleculePoints,this.moleculeBonds);
+
+    const latticePositions=new Float32Array(35*3);
+    for(let i=0;i<35;i++){
+      const x=(i%7)-3;
+      const y=Math.floor(i/7)-2;
+      const i3=i*3;
+      latticePositions[i3]=x*0.82;
+      latticePositions[i3+1]=y*0.68;
+      latticePositions[i3+2]=Math.sin(x*0.8+y)*0.22;
+    }
+    const latticeGeometry=new THREE.BufferGeometry();
+    latticeGeometry.setAttribute("position",new THREE.BufferAttribute(latticePositions,3));
+    this.lattice=new THREE.Points(latticeGeometry,makePointMaterial("#569dff",0.06,0.42));
+    this.group.add(this.lattice);
+  }
+
+  update(context:ScienceUpdateContext):void {
+    const visible =
+      context.scene==="chemistry"
+        ? smooth(Math.min(1,context.phase*2.4))
+        : context.scene==="mathematics"
+          ? 1-smooth(Math.min(1,context.phase*1.35))
+          : context.scene==="synthesis" ? 0.08 : 0;
+
+    for(let i=0;i<3;i++){
+      const ring=this.shellMeshes[i];
+      ring.rotation.y+=context.delta*(0.22+i*0.08);
+      setOpacity(ring.material,visible*(0.26+context.energy*0.12));
     }
 
-    this.lattice.rotation.y = time * 0.18;
-    this.lattice.rotation.x = Math.sin(time * 0.23) * 0.08;
-    this.lattice.scale.setScalar(0.82 + visibility * 0.22);
-    this.lattice.traverse((object) => {
-      if (object instanceof THREE.Mesh && object.material) {
-        setOpacity(object.material, visibility * 0.7);
-      }
-    });
+    for(let i=0;i<8;i++){
+      const shell=i<2?0:i<6?1:2;
+      const n=shell===0?2:shell===1?4:2;
+      const r=0.95+shell*0.56;
+      const angle=context.time*(0.8+shell*0.22)+(i%n)*(Math.PI*2/n)+shell;
+      const i3=i*3;
+      this.electronPositions[i3]=Math.cos(angle)*r;
+      this.electronPositions[i3+1]=Math.sin(angle*1.5)*(0.45+r*0.08);
+      this.electronPositions[i3+2]=Math.sin(angle)*r;
+    }
+    (this.electrons.geometry.getAttribute("position") as THREE.BufferAttribute).needsUpdate=true;
+    setOpacity(this.electrons.material,visible*0.92);
+    setOpacity(this.atomGroup.children[0].material,visible);
+
+    const water=[
+      new THREE.Vector3(-3.3,-1.35,0),
+      new THREE.Vector3(-3.92,-1.48,0),
+      new THREE.Vector3(-2.68,-1.48,0),
+      new THREE.Vector3(3.15,-1.25,-0.2),
+      new THREE.Vector3(2.37,-1.25,-0.2),
+      new THREE.Vector3(3.93,-1.25,-0.2),
+      new THREE.Vector3(0,1.0,0),
+    ];
+
+    const bondPairs=[
+      [0,1],[0,2],[3,4],[3,5],
+    ];
+
+    for(let i=0;i<water.length;i++){
+      const i3=i*3;
+      this.moleculePositions[i3]=water[i].x;
+      this.moleculePositions[i3+1]=water[i].y+Math.sin(context.time*0.55+i)*0.035;
+      this.moleculePositions[i3+2]=water[i].z;
+    }
+    const bp=this.moleculeBonds.geometry.getAttribute("position") as THREE.BufferAttribute;
+    for(let i=0;i<bondPairs.length;i++){
+      const [a,b]=bondPairs[i];
+      bp.setXYZ(i*2,water[a].x,water[a].y,water[a].z);
+      bp.setXYZ(i*2+1,water[b].x,water[b].y,water[b].z);
+    }
+    (this.moleculePoints.geometry.getAttribute("position") as THREE.BufferAttribute).needsUpdate=true;
+    bp.needsUpdate=true;
+    setOpacity(this.moleculePoints.material,visible*0.86);
+    setOpacity(this.moleculeBonds.material,visible*0.64);
+    setOpacity(this.lattice.material,visible*0.55);
+    this.lattice.rotation.y=context.time*0.14;
+    this.atomGroup.rotation.y=Math.sin(context.time*0.35)*0.1+context.pointer.x*0.08;
   }
 
-  dispose(): void {
-    disposeObject(this.group);
-  }
+  dispose():void { disposeRoot(this.group); }
 }
 
 export class MathematicsSystem {
-  readonly group = new THREE.Group();
+  readonly group=new THREE.Group();
 
-  private readonly spiral: THREE.Line;
-  private readonly sine: THREE.Line;
-  private readonly parabola: THREE.Line;
-  private readonly point: THREE.Mesh;
-  private readonly torusKnot: THREE.Mesh;
-  private readonly vectors: THREE.ArrowHelper[] = [];
-  private readonly matrixBlocks: THREE.Mesh[] = [];
+  private readonly spiral:THREE.Line;
+  private readonly sine:THREE.Line;
+  private readonly parabola:THREE.Line;
+  private readonly movingPoint:THREE.Mesh;
+  private readonly torus:THREE.Mesh;
+  private readonly vectors:THREE.Points;
+  private readonly vectorPositions:Float32Array;
 
   constructor() {
-    const lineMaterial = new THREE.LineBasicMaterial({
-      color: "#8fdcff",
-      transparent: true,
-      opacity: 0.78,
-      blending: THREE.AdditiveBlending,
+    const material=()=>new THREE.LineBasicMaterial({
+      color:"#8bdfff",
+      transparent:true,
+      opacity:0.72,
+      depthWrite:false,
+      blending:THREE.AdditiveBlending,
     });
 
-    const goldenPoints: THREE.Vector3[] = [];
-    for (let i = 0; i < 180; i++) {
-      const theta = i / 15;
-      const r = 0.08 * Math.pow(1.085, i * 0.6);
-      goldenPoints.push(
-        new THREE.Vector3(
-          Math.cos(theta) * r * 0.42 - 4.7,
-          Math.sin(theta) * r * 0.42 - 0.15,
-          Math.sin(theta * 1.6) * 0.15,
-        ),
-      );
+    const spiralPoints:THREE.Vector3[]=[];
+    for(let i=0;i<160;i++){
+      const theta=i*0.24;
+      const radius=0.045*Math.pow(1.055,i*0.64);
+      spiralPoints.push(new THREE.Vector3(
+        Math.cos(theta)*radius-4.15,
+        Math.sin(theta)*radius-0.2,
+        Math.sin(theta*1.4)*0.1,
+      ));
     }
-    this.spiral = lineFromPoints(goldenPoints, lineMaterial.clone());
+    this.spiral=makeLine(spiralPoints,"#72cfff",0.72);
+    this.spiral.material=material();
     this.group.add(this.spiral);
 
-    const sinePoints: THREE.Vector3[] = [];
-    const parabolaPoints: THREE.Vector3[] = [];
-    for (let i = 0; i < 140; i++) {
-      const x = -3.1 + (i / 139) * 6.2;
-      sinePoints.push(new THREE.Vector3(x, Math.sin(x * 1.85) * 1.05, 0));
-      parabolaPoints.push(
-        new THREE.Vector3(x, 0.16 * x * x - 2.15, -0.9),
-      );
+    const sinePoints:THREE.Vector3[]=[];
+    const parabolaPoints:THREE.Vector3[]=[];
+    for(let i=0;i<130;i++){
+      const x=-3+(i/129)*6;
+      sinePoints.push(new THREE.Vector3(x,Math.sin(x*1.8)*0.95,0.1));
+      parabolaPoints.push(new THREE.Vector3(x,0.17*x*x-2.15,-0.85));
     }
-    this.sine = lineFromPoints(sinePoints, lineMaterial.clone());
-    this.parabola = lineFromPoints(parabolaPoints, lineMaterial.clone());
-    this.group.add(this.sine, this.parabola);
+    this.sine=makeLine(sinePoints,"#7fd8ff",0.72);
+    this.parabola=makeLine(parabolaPoints,"#568dff",0.54);
+    this.group.add(this.sine,this.parabola);
 
-    this.point = makeAtom(0.11, "#f4fdff");
-    this.group.add(this.point);
+    this.movingPoint=new THREE.Mesh(new THREE.SphereGeometry(0.11,10,10),makeBasic("#f2fdff",0.95));
+    this.group.add(this.movingPoint);
 
-    this.torusKnot = new THREE.Mesh(
-      new THREE.TorusKnotGeometry(1.05, 0.19, 128, 16),
+    this.torus=new THREE.Mesh(
+      new THREE.TorusKnotGeometry(1.0,0.17,96,12),
       new THREE.MeshBasicMaterial({
-        color: "#5ca8ff",
-        transparent: true,
-        opacity: 0.66,
-        wireframe: true,
-        blending: THREE.AdditiveBlending,
+        color:"#5ba9ff",
+        transparent:true,
+        opacity:0.58,
+        wireframe:true,
+        depthWrite:false,
+        blending:THREE.AdditiveBlending,
       }),
     );
-    this.torusKnot.position.set(3.7, 1.15, -0.5);
-    this.group.add(this.torusKnot);
+    this.torus.position.set(3.7,1.0,-0.5);
+    this.group.add(this.torus);
 
-    for (let i = 0; i < 5; i++) {
-      const arrow = new THREE.ArrowHelper(
-        new THREE.Vector3(0.8, 0.25 * (i - 2), 0.35).normalize(),
-        new THREE.Vector3(-2.4 + i * 1.2, 2.25 + Math.sin(i) * 0.18, 0.2),
-        0.8 + i * 0.08,
-        i % 2 === 0 ? "#77d6ff" : "#587fff",
-        0.16,
-        0.1,
-      );
-      this.vectors.push(arrow);
-      this.group.add(arrow);
+    this.vectorPositions=new Float32Array(25*3);
+    for(let i=0;i<25;i++){
+      const i3=i*3;
+      this.vectorPositions[i3]=-2.0+(i%5)*1.0;
+      this.vectorPositions[i3+1]=1.8+Math.floor(i/5)*0.42;
+      this.vectorPositions[i3+2]=0;
     }
-
-    const blockGeometry = new THREE.BoxGeometry(0.28, 0.28, 0.28);
-    for (let i = 0; i < 25; i++) {
-      const x = i % 5;
-      const y = Math.floor(i / 5);
-      const block = new THREE.Mesh(
-        blockGeometry,
-        new THREE.MeshBasicMaterial({
-          color: "#4d95ff",
-          transparent: true,
-          opacity: 0.36,
-          blending: THREE.AdditiveBlending,
-        }),
-      );
-      block.position.set(
-        1.1 + x * 0.42,
-        -2.6 + y * 0.42,
-        Math.sin(x * 0.8 + y) * 0.24,
-      );
-      this.matrixBlocks.push(block);
-      this.group.add(block);
-    }
+    const vectorGeometry=new THREE.BufferGeometry();
+    vectorGeometry.setAttribute("position",new THREE.BufferAttribute(this.vectorPositions,3));
+    this.vectors=new THREE.Points(vectorGeometry,makePointMaterial("#7ad5ff",0.07,0.5));
+    this.group.add(this.vectors);
   }
 
-  update({ time, scene, energy, phase, pointer }: ScienceUpdateContext): void {
-    const visibility =
-      scene === "mathematics"
-        ? smooth(Math.min(1, phase * 2.6))
-        : scene === "synthesis"
-          ? 1 - smooth(Math.min(1, phase * 1.15))
-          : scene === "prism"
-            ? 0.06
-            : 0;
+  update(context:ScienceUpdateContext):void {
+    const visible =
+      context.scene==="mathematics"
+        ? smooth(Math.min(1,context.phase*2.5))
+        : context.scene==="synthesis"
+          ? 1-smooth(Math.min(1,context.phase*1.15))
+          : context.scene==="prism" ? 0.045 : 0;
 
-    for (const line of [this.spiral, this.sine, this.parabola]) {
-      setOpacity(line.material, visibility * 0.76);
+    setOpacity(this.spiral.material,visible*0.85);
+    setOpacity(this.sine.material,visible*0.78);
+    setOpacity(this.parabola.material,visible*0.66);
+    setOpacity(this.movingPoint.material,visible);
+    setOpacity(this.torus.material,visible*0.72);
+    setOpacity(this.vectors.material,visible*0.62);
+
+    const x=-3.0+((context.time*0.85)%6);
+    this.movingPoint.position.set(x,Math.sin(x*1.8)*0.95,0.18);
+
+    this.spiral.rotation.z=-context.time*0.065;
+    this.torus.rotation.x=context.time*0.28;
+    this.torus.rotation.y=context.time*0.47;
+    this.vectors.rotation.z=context.time*0.08;
+
+    for(let i=0;i<25;i++){
+      const i3=i*3;
+      this.vectorPositions[i3+2]=Math.sin(context.time*1.1+i*0.45)*0.22;
     }
-
-    this.spiral.rotation.z = -time * 0.08;
-    this.sine.position.z = Math.sin(time * 0.4) * 0.18;
-    this.parabola.position.z = -0.82 + pointer.x * 0.14;
-
-    const x = -3.1 + ((time * 0.85) % 6.2);
-    const y = Math.sin(x * 1.85) * 1.05;
-    this.point.position.set(x, y, 0.1);
-    setOpacity(this.point.material, visibility);
-
-    this.torusKnot.rotation.x = time * 0.34;
-    this.torusKnot.rotation.y = time * 0.5;
-    setOpacity(this.torusKnot.material, visibility * 0.7);
-
-    for (let i = 0; i < this.vectors.length; i++) {
-      const arrow = this.vectors[i];
-      const direction = new THREE.Vector3(
-        Math.cos(time * 0.4 + i) * 0.65,
-        Math.sin(time * 0.65 + i * 0.6) * 0.32,
-        0.35,
-      ).normalize();
-      arrow.setDirection(direction);
-      arrow.setLength(0.65 + visibility * (0.45 + i * 0.08), 0.16, 0.1);
-      arrow.visible = visibility > 0.01;
-    }
-
-    for (let i = 0; i < this.matrixBlocks.length; i++) {
-      const block = this.matrixBlocks[i];
-      const pulseValue = pulse(time, 1.6, i * 0.3);
-      block.position.z = Math.sin(time * 0.8 + i * 0.22) * 0.22;
-      block.scale.setScalar(0.72 + pulseValue * 0.42 + energy * 0.18);
-      setOpacity(block.material, visibility * (0.2 + pulseValue * 0.25));
-    }
-
-    this.group.rotation.y = pointer.x * 0.05;
+    (this.vectors.geometry.getAttribute("position") as THREE.BufferAttribute).needsUpdate=true;
   }
 
-  dispose(): void {
-    disposeObject(this.group);
-  }
+  dispose():void { disposeRoot(this.group); }
 }
 
 export class SynthesisSystem {
-  readonly group = new THREE.Group();
+  readonly group=new THREE.Group();
 
-  private readonly crystal: THREE.Mesh;
-  private readonly wire: THREE.LineSegments;
-  private readonly core: THREE.Mesh;
-  private readonly rings: THREE.Mesh[] = [];
-  private readonly shards: THREE.Mesh[] = [];
+  private readonly shell:THREE.Mesh;
+  private readonly core:THREE.Mesh;
+  private readonly rings:THREE.Mesh[]=[];
+  private readonly shards:THREE.Points;
+  private readonly shardPositions:Float32Array;
 
-  constructor(random: SeededRandom) {
-    this.crystal = new THREE.Mesh(
-      new THREE.IcosahedronGeometry(2.35, 3),
-      new THREE.MeshPhysicalMaterial({
-        color: "#66b7ff",
-        emissive: "#2678d5",
-        emissiveIntensity: 0.68,
-        metalness: 0.38,
-        roughness: 0.1,
-        transmission: 0.36,
-        thickness: 0.8,
-        transparent: true,
-        opacity: 0.7,
-        wireframe: true,
-      }),
-    );
-
-    this.wire = new THREE.LineSegments(
-      new THREE.EdgesGeometry(new THREE.IcosahedronGeometry(3.0, 2)),
-      new THREE.LineBasicMaterial({
-        color: "#d9f7ff",
-        transparent: true,
-        opacity: 0.62,
-        blending: THREE.AdditiveBlending,
-      }),
-    );
-
-    this.core = new THREE.Mesh(
-      new THREE.SphereGeometry(0.66, 32, 32),
+  constructor(random:SeededRandom) {
+    this.shell=new THREE.Mesh(
+      new THREE.IcosahedronGeometry(2.25,2),
       new THREE.MeshBasicMaterial({
-        color: "#f3fdff",
-        transparent: true,
-        opacity: 0.92,
-        blending: THREE.AdditiveBlending,
+        color:"#4eafff",
+        transparent:true,
+        opacity:0.34,
+        wireframe:true,
+        depthWrite:false,
+        blending:THREE.AdditiveBlending,
       }),
     );
+    this.core=new THREE.Mesh(
+      new THREE.SphereGeometry(0.58,18,18),
+      makeBasic("#eefcff",0.92),
+    );
+    this.group.add(this.shell,this.core);
 
-    this.group.add(this.crystal, this.wire, this.core);
-
-    for (let i = 0; i < 6; i++) {
-      const ring = makeRing(3.25 + i * 0.48, 0.013 + i * 0.0015, i % 2 ? "#5f8dff" : "#8be0ff");
-      ring.rotation.x = Math.PI / 2 + i * 0.22;
-      ring.rotation.z = i * 0.9;
+    for(let i=0;i<5;i++){
+      const ring=new THREE.Mesh(
+        new THREE.TorusGeometry(2.8+i*0.42,0.012,6,72),
+        makeBasic(i%2===0?"#8ce5ff":"#538eff",0.18),
+      );
+      ring.rotation.x=Math.PI/2+i*0.2;
+      ring.rotation.z=i*0.82;
       this.rings.push(ring);
       this.group.add(ring);
     }
 
-    for (let i = 0; i < 64; i++) {
-      const shard = new THREE.Mesh(
-        new THREE.TetrahedronGeometry(random.range(0.04, 0.13)),
-        new THREE.MeshBasicMaterial({
-          color: i % 3 === 0 ? "#e6fbff" : "#4c9cff",
-          transparent: true,
-          opacity: 0,
-          blending: THREE.AdditiveBlending,
-        }),
-      );
-      const dir = randomSphere(random);
-      const radius = random.range(3.2, 7.5);
-      shard.position.copy(dir).multiplyScalar(radius);
-      this.shards.push(shard);
-      this.group.add(shard);
+    this.shardPositions=new Float32Array(90*3);
+    for(let i=0;i<90;i++){
+      const dir=randomSphere(random);
+      const radius=random.range(3.0,7.5);
+      const i3=i*3;
+      this.shardPositions[i3]=dir.x*radius;
+      this.shardPositions[i3+1]=dir.y*radius*0.72;
+      this.shardPositions[i3+2]=dir.z*radius;
     }
+    const shardGeometry=new THREE.BufferGeometry();
+    shardGeometry.setAttribute("position",new THREE.BufferAttribute(this.shardPositions,3));
+    this.shards=new THREE.Points(shardGeometry,makePointMaterial("#7fd7ff",0.055,0.48));
+    this.group.add(this.shards);
   }
 
-  update({ time, scene, energy, phase, pointer }: ScienceUpdateContext): void {
-    const visibility =
-      scene === "synthesis"
-        ? smooth(Math.min(1, phase * 2.4))
-        : scene === "labs"
-          ? 1 - smooth(Math.min(1, phase * 1.7))
-          : scene === "prism"
-            ? 0.38
-            : scene === "team"
-              ? 0.05
-              : 0;
+  update(context:ScienceUpdateContext):void {
+    const visible =
+      context.scene==="synthesis"
+        ? smooth(Math.min(1,context.phase*2.2))
+        : context.scene==="labs" ? 1-smooth(Math.min(1,context.phase*1.5))
+        : context.scene==="prism" ? 0.36
+        : context.scene==="team" ? 0.055
+        : context.scene==="launch" ? 0.18
+        : 0;
 
-    this.crystal.rotation.x = -0.24 + Math.sin(time * 0.22) * 0.08;
-    this.crystal.rotation.y = time * 0.45;
-    this.crystal.rotation.z = Math.sin(time * 0.16) * 0.08;
-    this.crystal.scale.setScalar(0.58 + visibility * 0.56 + pointer.y * 0.03);
-    setOpacity(this.crystal.material, visibility * 0.75);
+    this.group.scale.setScalar(0.24+visible*0.78+context.energy*0.05);
+    this.group.rotation.y=context.time*0.34;
+    this.group.rotation.x=-0.2+Math.sin(context.time*0.2)*0.08;
 
-    this.wire.rotation.y = -time * 0.18;
-    this.wire.rotation.x = time * 0.11;
-    setOpacity(this.wire.material, visibility * 0.82);
+    setOpacity(this.shell.material,visible*0.42);
+    setOpacity(this.core.material,visible*0.92);
 
-    const corePulse = 0.86 + pulse(time, 2.6) * 0.22 + energy * 0.16;
-    this.core.scale.setScalar(corePulse);
-    setOpacity(this.core.material, visibility * 0.96);
+    const p=0.88+pulse(context.time,2.5)*0.18+context.energy*0.12;
+    this.core.scale.setScalar(p);
 
-    for (let i = 0; i < this.rings.length; i++) {
-      const ring = this.rings[i];
-      ring.rotation.y += 0.0015 + i * 0.0005;
-      setOpacity(ring.material, visibility * (0.08 + pulse(time, 1.1, i) * 0.16));
+    for(let i=0;i<this.rings.length;i++){
+      const ring=this.rings[i];
+      ring.rotation.y+=context.delta*(0.18+i*0.03);
+      setOpacity(ring.material,visible*(0.05+pulse(context.time,0.9,i)*0.14));
     }
 
-    for (let i = 0; i < this.shards.length; i++) {
-      const shard = this.shards[i];
-      const angle = time * (0.12 + i * 0.002) + i;
-      const radius = 3.4 + (i % 11) * 0.26 + energy * 2.0;
-      shard.position.x = Math.cos(angle) * radius;
-      shard.position.y = Math.sin(time * 0.34 + i * 0.17) * (1.6 + energy * 2.2);
-      shard.position.z = Math.sin(angle) * radius;
-      shard.rotation.x += 0.009;
-      shard.rotation.y += 0.012;
-      setOpacity(shard.material, visibility * (0.08 + pulse(time, 1.9, i) * 0.24));
+    for(let i=0;i<90;i++){
+      const i3=i*3;
+      const radius=3.1+(i%13)*0.28+context.energy*1.2;
+      const angle=context.time*(0.11+i*0.001)+i*0.47;
+      this.shardPositions[i3]=Math.cos(angle)*radius;
+      this.shardPositions[i3+1]=Math.sin(context.time*0.32+i*0.15)*(1.4+context.energy*1.6);
+      this.shardPositions[i3+2]=Math.sin(angle)*radius;
     }
+    (this.shards.geometry.getAttribute("position") as THREE.BufferAttribute).needsUpdate=true;
+    setOpacity(this.shards.material,visible*(0.12+pulse(context.time,1.6)*0.23));
   }
 
-  dispose(): void {
-    disposeObject(this.group);
-  }
+  dispose():void { disposeRoot(this.group); }
 }
 
 export class ScienceShowcase {
-  readonly group = new THREE.Group();
+  readonly group=new THREE.Group();
 
-  private readonly stars: StarFieldSystem;
-  private readonly physics: PhysicsSystem;
-  private readonly chemistry: ChemistrySystem;
-  private readonly mathematics: MathematicsSystem;
-  private readonly synthesis: SynthesisSystem;
+  private readonly stars:StarFieldSystem;
+  private readonly physics:PhysicsSystem;
+  private readonly chemistry:ChemistrySystem;
+  private readonly mathematics:MathematicsSystem;
+  private readonly synthesis:SynthesisSystem;
 
-  constructor(profile: IntroQualityProfile, random: SeededRandom) {
-    this.stars = new StarFieldSystem(profile, random);
-    this.physics = new PhysicsSystem(random);
-    this.chemistry = new ChemistrySystem(random);
-    this.mathematics = new MathematicsSystem();
-    this.synthesis = new SynthesisSystem(random);
+  constructor(profile:IntroQualityProfile,random:SeededRandom){
+    this.stars=new StarFieldSystem(profile,random);
+    this.physics=new PhysicsSystem(random);
+    this.chemistry=new ChemistrySystem();
+    this.mathematics=new MathematicsSystem();
+    this.synthesis=new SynthesisSystem(random);
 
     this.group.add(
       this.stars.group,
@@ -889,18 +649,16 @@ export class ScienceShowcase {
     );
   }
 
-  update(context: ScienceUpdateContext): void {
+  update(context:ScienceUpdateContext):void {
     this.stars.update(context);
     this.physics.update(context);
     this.chemistry.update(context);
     this.mathematics.update(context);
     this.synthesis.update(context);
 
-    this.group.rotation.y = context.pointer.x * 0.025;
-    this.group.rotation.x = context.pointer.y * 0.02;
+    this.group.rotation.y=context.pointer.x*0.025;
+    this.group.rotation.x=context.pointer.y*0.018;
   }
 
-  dispose(): void {
-    disposeObject(this.group);
-  }
+  dispose():void { disposeRoot(this.group); }
 }

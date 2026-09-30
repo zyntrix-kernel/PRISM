@@ -129,7 +129,6 @@ export default function PrismStage() {
     appRef.current = app;
     setApp(app);
     const unsub = app.subscribe(setState);
-    app.start();
 
     return () => {
       unsub();
@@ -139,22 +138,17 @@ export default function PrismStage() {
     };
   }, []);
 
+  // The cinematic intro is intentionally allowed to own the GPU/CPU budget
+  // during startup. PrismApp still constructs and preloads MediaPipe, but its
+  // 60fps render loop starts only after the intro hands control back.
+  useEffect(() => {
+    if (!showIntro && appRef.current) {
+      appRef.current.start();
+    }
+  }, [showIntro]);
+
   const preset = state?.preset ?? "space";
   const quality = state?.quality ?? "auto";
-
-  // Track whether any modal is open → dim the 3D scene for focus.
-  // cmdOpen is local state; settings/help are checked via DOM query.
-  const [modalOpen, setModalOpen] = useState(false);
-  useEffect(() => {
-    const check = () => {
-      const helpOpen = !document.querySelector("#prism-help")?.classList.contains("hidden");
-      const settingsOpen = !!document.querySelector('[aria-label="Settings"]')?.getAttribute("aria-expanded") === "true";
-      setModalOpen(cmdOpen || helpOpen || settingsOpen);
-    };
-    check();
-    const interval = setInterval(check, 200);
-    return () => clearInterval(interval);
-  }, [cmdOpen]);
 
   return (
     <div className="prism-root" ref={rootRef}>
@@ -163,7 +157,7 @@ export default function PrismStage() {
         <PrismCinematicIntro
           onComplete={dismissIntro}
           showSkip={true}
-          duration={16000}
+          duration={13200}
         />
       )}
 

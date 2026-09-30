@@ -3,7 +3,8 @@
 
 import { useEffect, useRef, useState } from "react";
 import type { CSSProperties } from "react";
-import { PrismOpeningFilm } from "@/lib/prism/intro/opening-film";
+import { MEMBER_DUR, MEMBER_T0, TEAM, TEXT_T0, TEXT_T1, TOTAL } from "@/lib/prism/intro/config";
+import { PrismParticleFilm } from "@/lib/prism/intro/particle-film";
 import "./PrismCinematicIntro.css";
 
 type Props = {
@@ -12,29 +13,20 @@ type Props = {
   duration?: number;
 };
 
-const FILM_MS = 14500;
-
-const TEAM = [
-  { name: "Tanay Bhandari", handle: "Zyntrix.krnl.sys", role: "Lead" },
-  { name: "Ashwin Nagaranjan Ramnath", handle: "Ash Collector", role: "" },
-  { name: "Debroop Mojumder", handle: "distortus_rexx", role: "" },
-  { name: "Maaz Mozzam", handle: "Unknown", role: "" },
-] as const;
-
-const clamp01 = (value: number) => Math.min(1, Math.max(0, value));
-
 export default function PrismCinematicIntro({
   onComplete,
   showSkip = true,
-  duration = FILM_MS,
+  duration = TOTAL * 1000,
 }: Props) {
   const rootRef = useRef<HTMLElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const filmRef = useRef<PrismOpeningFilm | null>(null);
+  const filmRef = useRef<PrismParticleFilm | null>(null);
   const onCompleteRef = useRef(onComplete);
-  const completingRef = useRef(false);
-  const [progress, setProgress] = useState(0);
+  const finishRef = useRef<(() => void) | null>(null);
+
+  const [time, setTime] = useState(0);
   const [exiting, setExiting] = useState(false);
+  const [memberIndex, setMemberIndex] = useState(-1);
 
   useEffect(() => {
     onCompleteRef.current = onComplete;
@@ -46,37 +38,43 @@ export default function PrismCinematicIntro({
     if (!root || !canvas) return;
 
     const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    const film = new PrismOpeningFilm(canvas, reducedMotion, duration);
+    const film = new PrismParticleFilm(canvas, reducedMotion, duration / 1000);
     filmRef.current = film;
-    film.start();
 
     let uiFrame = 0;
-    let lastUiAt = 0;
+    let lastUi = 0;
+    let finishing = false;
 
-    const finish = () => {
-      if (completingRef.current) return;
-      completingRef.current = true;
+    const finish = (delay = reducedMotion ? 40 : 620) => {
+      if (finishing) return;
+      finishing = true;
       film.dispose();
       filmRef.current = null;
       setExiting(true);
-
-      window.setTimeout(() => {
-        onCompleteRef.current?.();
-      }, reducedMotion ? 40 : 560);
+      window.setTimeout(() => onCompleteRef.current?.(), delay);
     };
+
+    finishRef.current = () => finish(80);
 
     const updateUi = (now: number) => {
       if (!filmRef.current) return;
 
-      const current = filmRef.current.progress;
-      root.style.setProperty("--film-progress", String(current));
+      const current = filmRef.current.time;
+      root.style.setProperty("--film-time", String(current));
+      root.style.setProperty("--film-progress", String(Math.min(1, current / (duration / 1000))));
 
-      if (now - lastUiAt >= 48 || current >= 1) {
-        lastUiAt = now;
-        setProgress(current);
+      if (now - lastUi >= 60) {
+        lastUi = now;
+        setTime(current);
+
+        const visibleMember =
+          current >= MEMBER_T0 && current < MEMBER_T0 + MEMBER_DUR * TEAM.length
+            ? Math.min(TEAM.length - 1, Math.floor((current - MEMBER_T0) / MEMBER_DUR))
+            : -1;
+        setMemberIndex(visibleMember);
       }
 
-      if (current >= 1) {
+      if (film.progress >= 1) {
         finish();
         return;
       }
@@ -84,27 +82,21 @@ export default function PrismCinematicIntro({
       uiFrame = requestAnimationFrame(updateUi);
     };
 
+    film.start();
     uiFrame = requestAnimationFrame(updateUi);
 
     return () => {
       cancelAnimationFrame(uiFrame);
       film.dispose();
       filmRef.current = null;
+      finishRef.current = null;
     };
   }, [duration]);
 
   useEffect(() => {
     if (!showSkip) return;
 
-    const skip = () => {
-      if (completingRef.current) return;
-      completingRef.current = true;
-      filmRef.current?.dispose();
-      filmRef.current = null;
-      setExiting(true);
-      window.setTimeout(() => onCompleteRef.current?.(), 80);
-    };
-
+    const skip = () => finishRef.current?.();
     const onKey = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         event.preventDefault();
@@ -116,41 +108,37 @@ export default function PrismCinematicIntro({
     return () => window.removeEventListener("keydown", onKey);
   }, [showSkip]);
 
-  const titleStart = 0.50;
-  const titleEnd = 0.69;
-  const titleFadeStart = 0.72;
-  const titleFadeEnd = 0.83;
-  const titleIn = clamp01((progress - titleStart) / (titleEnd - titleStart));
-  const titleOut = clamp01((progress - titleFadeStart) / (titleFadeEnd - titleFadeStart));
+  const titleIn = Math.min(1, Math.max(0, (time - TEXT_T0) / 0.82));
+  const titleOut = Math.min(1, Math.max(0, (time - (TEXT_T1 - 0.52)) / 0.52));
   const titleOpacity = titleIn * (1 - titleOut);
 
-  const creditsStart = 0.735;
-  const creditsEnd = 0.915;
-  const creditsIn = clamp01((progress - creditsStart) / (creditsEnd - creditsStart));
-  const creditsOut = clamp01((progress - 0.925) / 0.075);
+  const creditsIn = Math.min(1, Math.max(0, (time - (MEMBER_T0 - 0.22)) / 0.48));
+  const creditsOut = Math.min(1, Math.max(0, (time - 14.20) / 0.60));
   const creditsOpacity = creditsIn * (1 - creditsOut);
 
-  const vars = {
+  const style = {
     "--title-opacity": titleOpacity,
-    "--title-y": ((1 - titleIn) * 18 - titleOut * 14) + "px",
+    "--title-y": String((1 - titleIn) * 20 - titleOut * 16) + "px",
     "--credits-opacity": creditsOpacity,
-    "--credits-y": ((1 - creditsIn) * 20 - creditsOut * 12) + "px",
+    "--credits-y": String((1 - creditsIn) * 18 - creditsOut * 12) + "px",
   } as CSSProperties;
+
+  const active = memberIndex >= 0 ? TEAM[memberIndex] : null;
+  const progress = Math.min(1, Math.max(0, time / (duration / 1000)));
 
   return (
     <main
       ref={rootRef}
       className={"prism-cinematic" + (exiting ? " is-exiting" : "")}
-      style={vars}
+      style={style}
       aria-label="PRISM opening film"
     >
       <canvas ref={canvasRef} className="prism-cinematic__canvas" aria-hidden="true" />
-
-      <div className="prism-cinematic__grain" aria-hidden="true" />
       <div className="prism-cinematic__vignette" aria-hidden="true" />
+      <div className="prism-cinematic__grain" aria-hidden="true" />
 
       <header className="prism-cinematic__header">
-        <div className="prism-cinematic__brand" aria-label="ZYNASH LABS">
+        <div className="prism-cinematic__brand">
           <span className="prism-cinematic__mark">Z</span>
           <span>ZYNASH LABS</span>
         </div>
@@ -159,16 +147,7 @@ export default function PrismCinematicIntro({
           <button
             type="button"
             className="prism-cinematic__skip"
-            onClick={() => {
-              filmRef.current?.dispose();
-              filmRef.current = null;
-              setExiting(true);
-              if (!completingRef.current) {
-                completingRef.current = true;
-                window.setTimeout(() => onCompleteRef.current?.(), 80);
-              }
-            }}
-            aria-label="Skip introduction"
+            onClick={() => finishRef.current?.()}
           >
             Skip
           </button>
@@ -176,38 +155,39 @@ export default function PrismCinematicIntro({
       </header>
 
       <section className="prism-cinematic__title" aria-live="polite">
-        <span className="prism-cinematic__eyebrow">ZYNASH LABS</span>
+        <span className="prism-cinematic__title-kicker">ZYNASH LABS</span>
         <h1>PRISM</h1>
         <p>Projected Reality Interaction &amp; Spatial Manipulation</p>
       </section>
 
       <section
-        className="prism-cinematic__credits"
+        className="prism-cinematic__credit"
+        style={
+          active
+            ? {
+                opacity: "var(--credits-opacity)",
+                transform: "translate3d(0,var(--credits-y),0)",
+              }
+            : { opacity: 0, transform: "translate3d(0,18px,0)" }
+        }
         aria-label="PRISM team"
-        aria-live="polite"
       >
-        <div className="prism-cinematic__credits-rule" />
-        <div className="prism-cinematic__credits-label">A project by</div>
-
-        <div className="prism-cinematic__credits-grid">
-          {TEAM.map((person, index) => (
-            <div
-              className="prism-cinematic__credit"
-              key={person.handle}
-              style={{ "--credit-index": index } as CSSProperties}
-            >
-              <span className="prism-cinematic__credit-name">{person.name}</span>
-              <span className="prism-cinematic__credit-meta">
-                {person.handle}
-                {person.role ? \` · \${person.role}\` : ""}
-              </span>
-            </div>
-          ))}
+        <div className="prism-cinematic__credit-index">
+          {active ? String(memberIndex + 1).padStart(2, "0") : "00"} / {String(TEAM.length).padStart(2, "0")}
+        </div>
+        <div className="prism-cinematic__credit-copy">
+          <span className="prism-cinematic__credit-overline">A project by</span>
+          <strong>{active?.name ?? ""}</strong>
+          <span>
+            {active?.handle ?? ""}
+            {active?.role ? \` · \${active.role}\` : ""}
+          </span>
         </div>
       </section>
 
-      <div className="prism-cinematic__microcopy" aria-hidden="true">
-        PRISM / ZYNASH LABS
+      <div className="prism-cinematic__footer" aria-hidden="true">
+        <span>PRISM / ZYNASH LABS</span>
+        <i style={{ transform: \`scaleX(\${progress})\` }} />
       </div>
     </main>
   );

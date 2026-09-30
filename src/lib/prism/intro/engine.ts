@@ -484,8 +484,14 @@ export class PrismCinematicEngine implements IntroEngine {
 
   private commitScene(scene:IntroScene,member:IntroMemberIndex):void{
     if(scene===this.lastScene&&member===this.lastMember)return;
+    const sceneChanged=scene!==this.lastScene;
     this.lastScene=scene;
     this.lastMember=member;
+
+    if(sceneChanged && scene!=="boot"){
+      this.science.triggerCoreFlash();
+    }
+
     this.options.onSceneChange?.(scene,member);
   }
 

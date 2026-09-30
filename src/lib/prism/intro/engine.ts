@@ -1249,7 +1249,8 @@ export class PrismCinematicEngine
     if (!this.renderer) return;
 
     if (
-      this.composer
+      this.composer &&
+      this.qualityState.profile.postFx
     ) {
       this.composer.render();
       return;

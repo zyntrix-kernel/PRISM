@@ -42,7 +42,11 @@ function pulse(t:number,s:number,offset=0):number {
   return 0.5+0.5*Math.sin(t*s+offset);
 }
 
-function setOpacity(material:THREE.Material,opacity:number):void {
+function setOpacity(material:THREE.Material | THREE.Material[],opacity:number):void {
+  if(Array.isArray(material)){
+    for(const item of material)setOpacity(item,opacity);
+    return;
+  }
   const m=material as THREE.Material & { opacity?:number };
   if(typeof m.opacity==="number")m.opacity=opacity;
 }

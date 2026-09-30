@@ -80,6 +80,29 @@ function ChapterRail({scene}:{scene:IntroScene}){
   );
 }
 
+function MetricStack({scene}:{scene:IntroScene}){
+  const metrics:Record<IntroScene,Array<[string,string]>>={
+    boot:[["OPTICS","REFRACTION"],["SIGNAL","ACQUIRE"],["STATE","READY"]],
+    physics:[["g","9.81 m·s⁻²"],["p","mv"],["Δt","MEASURED"]],
+    chemistry:[["H₂O","104.5°"],["CO₂","LINEAR"],["e⁻","LEVELS"]],
+    mathematics:[["φ","1.618033…"],["y","sin x"],["Σ","SERIES"]],
+    information:[["DATA","8 BIT"],["SIGNAL","ENCODE"],["STATE","CONTROL"]],
+    synthesis:[["MODEL","COHERENT"],["SYSTEM","UNIFIED"],["STATE","SYNTHESIS"]],
+    labs:[["ZL","PROJECT 001"],["MODE","REALTIME"],["BUILD","ACTIVE"]],
+    prism:[["ID","PRISM / 001"],["MODE","SPATIAL"],["STATE","READY"]],
+    team:[["PROJECT","001"],["TEAM","04"],["BUILD","COLLABORATIVE"]],
+    launch:[["INPUT","HAND + POINTER"],["ENGINE","THREE.JS"],["STATE","LIVE"]],
+    complete:[["SYSTEM","PRISM"],["STATE","ONLINE"],["SESSION","READY"]],
+  };
+  return (
+    <aside className="intro-metric-stack" aria-label="Scientific chapter telemetry">
+      {metrics[scene].map(([label,value])=>(
+        <span key={label}><small>{label}</small><b>{value}</b></span>
+      ))}
+    </aside>
+  );
+}
+
 function SceneCopy({
   scene,
   member,
@@ -139,7 +162,7 @@ function SceneCopy({
         </div>
         <div className="discipline-title">
           <span>MATTER</span>
-          <span>FINDS <em>FORM.</em></span>
+          <span>IS <em>STRUCTURED.</em></span>
         </div>
         <div className="molecule-strip">
           <div><b>H₂O</b><small>BOND ANGLE / 104.5°</small></div>
@@ -160,7 +183,7 @@ function SceneCopy({
         </div>
         <div className="discipline-title">
           <span>PATTERN</span>
-          <span>BECOMES <em>FORM.</em></span>
+          <span>BECOMES <em>GEOMETRY.</em></span>
         </div>
         <div className="formula-line">
           <span>φ = 1.618033988…</span>
@@ -248,7 +271,7 @@ function SceneCopy({
     const person=TEAM[safe];
     return (
       <section className="intro-scene-copy copy-team">
-        <div className="team-overline">THE PEOPLE BEHIND THE PROJECTION</div>
+        <div className="team-overline">CORE TEAM / PROJECT 001</div>
         <div className="team-count">{String(safe+1).padStart(2,"0")} / 04</div>
         <div className="team-handle">{person.handle}</div>
         <div className="team-name">{person.name}</div>
@@ -407,11 +430,7 @@ export default function PrismCinematicIntro({
         <SceneCopy scene={scene} member={member} />
       </main>
 
-      <aside className="intro-metric-stack" aria-hidden="true">
-        <span>PHI <b>1.618</b></span>
-        <span>GRAVITY <b>9.81</b></span>
-        <span>STATE <b>ONLINE</b></span>
-      </aside>
+      <MetricStack scene={scene} />
 
       <footer className="intro-bottombar">
         <div className="bottom-left">

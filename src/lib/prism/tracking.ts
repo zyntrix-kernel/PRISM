@@ -160,7 +160,7 @@ export class HandTracker {
 
     // Vision is input sampling, not display rendering. Phones sample more
     // slowly than the renderer; worker backpressure keeps stale frames out.
-    const defaultInterval = isTabletDevice() ? 100 : 180;
+    const defaultInterval = isTabletDevice() ? PrismConfig.tracking.tabletIntervalMs : PrismConfig.tracking.intervalMs;
     this.baseIntervalMs = Math.max(80, defaultInterval);
     this.requestedIntervalMs = opts?.intervalMs != null ? Math.max(80, opts.intervalMs) : null;
     const videoWithCallback = this.video;

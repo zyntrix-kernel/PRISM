@@ -110,6 +110,8 @@
   -webkit-backdrop-filter:blur(16px) saturate(125%); backdrop-filter:blur(16px) saturate(125%); animation:prism-command-side-in .8s .08s cubic-bezier(.16,.9,.16,1) both;
 }
 .prism-command-left { left:16px; } .prism-command-right { right:16px; animation-delay:.13s; }
+.prism-command-left,.prism-command-right{opacity:.72;transition:opacity 220ms cubic-bezier(.2,0,0,1),transform 220ms cubic-bezier(.2,0,0,1)}
+.prism-command-left:hover,.prism-command-right:hover{opacity:1}
 .prism-command-left>header,.prism-command-right>header { display:flex; justify-content:space-between; margin-bottom:13px; font:700 7px/1 var(--font-mono); letter-spacing:.16em; color:rgba(220,239,252,.33); }
 .prism-command-stats { display:grid; gap:9px; }
 .prism-command-stat,.prism-command-mini { display:flex; justify-content:space-between; gap:8px; align-items:baseline; }

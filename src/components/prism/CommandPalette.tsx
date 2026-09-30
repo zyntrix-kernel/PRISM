@@ -198,7 +198,7 @@ export default function CommandPalette({ onClose, state, app }: Props) {
     );
 
     return out;
-  }, [app, state?.presentationMode]);
+  }, [app, state?.cameraOn, state?.presentationMode]);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -207,10 +207,6 @@ export default function CommandPalette({ onClose, state, app }: Props) {
       return action.keywords.toLowerCase().includes(q) || action.label.toLowerCase().includes(q);
     });
   }, [actions, query]);
-
-  useEffect(() => {
-    setActive((current) => Math.min(current, Math.max(0, filtered.length - 1)));
-  }, [filtered.length]);
 
   useEffect(() => {
     inputRef.current?.focus();
@@ -235,7 +231,7 @@ export default function CommandPalette({ onClose, state, app }: Props) {
       }
       if (event.key === "Enter") {
         event.preventDefault();
-        const action = filtered[active];
+        const action = filtered[activeIndex];
         if (!action) return;
         action.run();
         onClose();
@@ -244,13 +240,14 @@ export default function CommandPalette({ onClose, state, app }: Props) {
 
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [active, filtered, onClose]);
+  }, [activeIndex, filtered, onClose]);
 
   useEffect(() => {
     const item = listRef.current?.querySelector<HTMLElement>('[data-idx="' + active + '"]');
     item?.scrollIntoView({ block: "nearest" });
   }, [active]);
 
+  const activeIndex = Math.min(active, Math.max(0, filtered.length - 1));
   let flatIndex = -1;
 
   return (
@@ -310,7 +307,7 @@ export default function CommandPalette({ onClose, state, app }: Props) {
                 <div className="prism-command-group-title">{group}</div>
                 {items.map((action) => {
                   flatIndex += 1;
-                  const selected = flatIndex === active;
+                  const selected = flatIndex === activeIndex;
                   const activeState = action.isActive?.(state) ?? false;
                   const Icon = action.icon;
 

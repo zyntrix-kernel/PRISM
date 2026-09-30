@@ -183,7 +183,7 @@ export class HandTracker {
       this.pump(performance.now());
       this.loopHandle = window.setTimeout(loop, this.getTargetIntervalMs()) as unknown as number;
     };
-    this.loopHandle = window.setTimeout(loop, targetInterval) as unknown as number;
+    this.loopHandle = window.setTimeout(loop, this.getTargetIntervalMs()) as unknown as number;
   }
 
   stop(): void {

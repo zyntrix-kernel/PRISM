@@ -169,6 +169,8 @@ export class PrismApp {
   togglePresentation(): boolean { this.presentationMode = !this.presentationMode; this.toast(this.presentationMode ? 'Presentation mode' : 'Instrument controls restored', 'info'); this.emit(); return this.presentationMode; }
   toggleEasy(): void { const w = this.scene.currentWorld; if (this.scene.currentPreset !== 'drive' || !w?.setEasyMode || !w?.isEasyMode) return; w.setEasyMode(!w.isEasyMode()); this.syncEasyLabel(); this.emit(); }
   enableCamera(): void { void this.bootVision(); }
+  disableCamera(): void { this.stopVision(); }
+  toggleCamera(): void { if (this.cameraHandle) this.stopVision(); else void this.bootVision(); }
   toggleHelp(): void { this.el.helpCard.classList.toggle('hidden'); }
   dismissOnboard(): void { this.el.onboard.classList.add('hidden'); this.onboardVisible=false; try { window.localStorage.setItem(this.ONBOARD_KEY,'1'); } catch {} this.emit(); }
   start(): void { if (this.rafHandle) return; this.last=performance.now(); this.rafHandle=requestAnimationFrame(this.tick); }

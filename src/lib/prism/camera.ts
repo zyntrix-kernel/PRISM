@@ -1,5 +1,7 @@
 // Webcam acquisition with performance-aware constraints and graceful errors.
 
+import { PrismConfig } from './config';
+
 export interface CameraHandle {
   stream: MediaStream;
   width: number;
@@ -43,9 +45,9 @@ export async function startCamera(video: HTMLVideoElement): Promise<CameraHandle
     stream = await navigator.mediaDevices.getUserMedia({
       video: {
         facingMode: { ideal: 'user' },
-        width: { ideal: 640, max: 640 },
-        height: { ideal: 480, max: 480 },
-        frameRate: { ideal: 24, max: 30 },
+        width: { ideal: PrismConfig.camera.idealWidth, max: PrismConfig.camera.maxWidth },
+        height: { ideal: PrismConfig.camera.idealHeight, max: PrismConfig.camera.maxHeight },
+        frameRate: { ideal: Math.min(24, PrismConfig.camera.maxFrameRate), max: PrismConfig.camera.maxFrameRate },
       },
       audio: false,
     });

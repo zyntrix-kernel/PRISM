@@ -211,6 +211,7 @@ void main() {
   color = pow(max(color, 0.0), vec3(0.92));
 
   gl_FragColor = vec4(color, 1.0);
+  #include <colorspace_fragment>
 }
 \`;
 
@@ -238,6 +239,7 @@ export class PrismOpeningFilm {
   private keyLight: THREE.PointLight | null = null;
   private rimLight: THREE.PointLight | null = null;
   private quad: THREE.Mesh | null = null;
+  private environment: THREE.Texture | null = null;
 
   private raf = 0;
   private startAt = 0;
@@ -292,6 +294,10 @@ export class PrismOpeningFilm {
 
     this.renderer?.dispose();
     this.renderer = null;
+
+    this.environment?.dispose();
+    this.environment = null;
+    this.scene.environment = null;
   }
 
   private setup() {
@@ -327,13 +333,16 @@ export class PrismOpeningFilm {
       color: "#dff8ff",
       transmission: 0.96,
       thickness: 1.45,
-      roughness: 0.08,
+      roughness: 0.075,
       metalness: 0,
       ior: 1.52,
-      transparent: true,
-      opacity: 0.30,
-      clearcoat: 0.9,
-      clearcoatRoughness: 0.08,
+      transmission: 0.96,
+      transparent: false,
+      opacity: 1,
+      dispersion: 0.06,
+      clearcoat: 0.92,
+      clearcoatRoughness: 0.07,
+      envMapIntensity: 1.05,
       attenuationColor: new THREE.Color("#4fb8ee"),
       attenuationDistance: 3.6,
       depthWrite: false,
@@ -361,6 +370,9 @@ export class PrismOpeningFilm {
 
     this.scene.add(this.prismGroup, this.keyLight, this.rimLight);
 
+    this.environment = this.buildEnvironment();
+    this.scene.environment = this.environment;
+
     try {
       this.renderer = new THREE.WebGLRenderer({
         canvas: this.canvas,
@@ -375,7 +387,8 @@ export class PrismOpeningFilm {
       this.renderer.setClearColor(0x000000, 1);
       this.renderer.outputColorSpace = THREE.SRGBColorSpace;
       this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-      this.renderer.toneMappingExposure = 1.0;
+      this.renderer.toneMappingExposure = 0.96;
+      this.renderer.transmissionResolutionScale = 0.72;
 
       this.resize();
     } catch {
@@ -387,6 +400,51 @@ export class PrismOpeningFilm {
     document.addEventListener("visibilitychange", this.onVisibility);
 
     this.resize();
+  }
+
+  private buildEnvironment() {
+    const canvas = document.createElement("canvas");
+    canvas.width = 512;
+    canvas.height = 256;
+
+    const context = canvas.getContext("2d");
+    if (!context) {
+      return new THREE.Texture();
+    }
+
+    const base = context.createLinearGradient(0, 0, 0, canvas.height);
+    base.addColorStop(0, "#030914");
+    base.addColorStop(0.48, "#061626");
+    base.addColorStop(1, "#01030a");
+    context.fillStyle = base;
+    context.fillRect(0, 0, canvas.width, canvas.height);
+
+    const glows = [
+      { x: 88, y: 72, radius: 155, color: "rgba(92, 218, 255, 0.26)" },
+      { x: 398, y: 96, radius: 190, color: "rgba(100, 119, 255, 0.20)" },
+      { x: 260, y: 218, radius: 150, color: "rgba(41, 104, 174, 0.18)" },
+    ];
+
+    for (const glow of glows) {
+      const gradient = context.createRadialGradient(
+        glow.x,
+        glow.y,
+        0,
+        glow.x,
+        glow.y,
+        glow.radius,
+      );
+      gradient.addColorStop(0, glow.color);
+      gradient.addColorStop(1, "rgba(0, 0, 0, 0)");
+      context.fillStyle = gradient;
+      context.fillRect(0, 0, canvas.width, canvas.height);
+    }
+
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.mapping = THREE.EquirectangularReflectionMapping;
+    texture.colorSpace = THREE.SRGBColorSpace;
+    texture.needsUpdate = true;
+    return texture;
   }
 
   private readonly onPointer = (event: PointerEvent) => {
@@ -488,8 +546,9 @@ export class PrismOpeningFilm {
 
     if (this.prism) {
       const material = this.prism.material as THREE.MeshPhysicalMaterial;
-      material.opacity = 0.05 + reveal * 0.25;
-      material.transmission = 0.92 + reveal * 0.04;
+      material.transmission = 0.90 + reveal * 0.10;
+      material.dispersion = 0.01 + split * 0.08;
+      material.envMapIntensity = 0.65 + split * 0.42;
     }
 
     if (this.prismEdges) {

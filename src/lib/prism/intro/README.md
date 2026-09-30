@@ -1,29 +1,42 @@
 # PRISM Opening Film
 
-The startup sequence is intentionally minimal: one optical object, one continuous visual idea, and a clean handoff into the interactive instrument.
+The startup sequence is treated as a product film, not as an interface.
 
-## Direction
+## Visual direction
 
-The film begins in near-black space and gradually reveals a transparent optical prism. A controlled beam crosses the frame, enters the glass, refracts, and separates into a restrained spectrum. The camera moves closer as the prism becomes the visual anchor.
+The scene starts in near-black and introduces one optical event: a controlled beam reaches a glass prism, the prism catches light, and a restrained spectrum opens across the frame. The camera feeling is created through coordinated scale, parallax, spectral motion, and a physically based glass hero object.
 
-The identity reveal is deliberately sparse. ZYNASH LABS appears as a small brand mark, followed by PRISM and its full project name. Credits use a focused single-person reveal instead of a dense roster or artificial interface language.
+There are no HUD panels, telemetry readouts, fake laboratory labels, chapter cards, or decorative science montages. Typography appears only when it has narrative purpose:
 
-The final movement drives the camera toward the prism and uses a brief white/cyan light transition to hand control to the realtime PRISM application.
+1. ZYNASH LABS establishes authorship.
+2. PRISM and the full project name establish identity.
+3. A quiet closing credit identifies the team.
+4. A short white/cyan optical flare hands control to the live experience.
 
-## Engineering
+The result should read as a calm, expensive opening title sequence rather than a sci-fi dashboard.
 
-- A single Three.js renderer owns the entire cinematic scene.
-- The prism uses a physically based transmissive material with clearcoat and optical refraction.
-- Light paths, spectral lines, dust, and orbital accents are prebuilt and animated without per-frame geometry reconstruction.
-- Pixel ratio is capped for reliable startup performance.
-- WebGL failure falls back cleanly so the application can still launch.
-- Pointer movement creates restrained camera parallax on desktop.
-- Escape skips the film immediately.
-- The main PrismApp remains isolated until the opening sequence completes.
+## Rendering architecture
 
-## Credit presentation
+- PrismOpeningFilm owns the WebGL lifecycle and all cinematic animation.
+- A fullscreen procedural shader handles the atmospheric field, beam, spectral separation, glass edge energy, bloom-like lighting, grain, and final light transition.
+- A single real Three.js prism mesh sits above the shader and uses MeshPhysicalMaterial with transmission, IOR, clearcoat, dispersion, and a small generated environment texture for reflection.
+- Geometry is built once. The animation updates uniforms, transforms, and material properties instead of reconstructing geometry every frame.
+- The fullscreen shader is aspect-aware and resized with the viewport.
+- Renderer pixel ratio is capped more aggressively on small touch devices.
+- transmissionResolutionScale is reduced to keep transmissive glass from becoming a startup performance trap.
+- Custom shader output includes Three.js color-space conversion for consistent display output.
+- Visibility changes reset frame timing so tab suspension does not create a large animation jump.
 
-- Tanay Bhandari / Zyntrix.krnl.sys / LEAD
+## Interaction and accessibility
+
+- Desktop pointer movement produces restrained camera/object parallax.
+- Escape and the visible Skip control end the film immediately.
+- Reduced-motion mode keeps the visual composition while reducing animation speed and removing film grain.
+- The film delays the app handoff until the exit transition has visually completed.
+
+## Credits
+
+- Tanay Bhandari / Zyntrix.krnl.sys / Lead
 - Ashwin Nagaranjan Ramnath / Ash Collector
 - Debroop Mojumder / distortus_rexx
 - Maaz Mozzam / Unknown

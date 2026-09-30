@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { EffectComposer } from "three/examples/jsm/postprocessing/EffectComposer.js";
 import { RenderPass } from "three/examples/jsm/postprocessing/RenderPass.js";
+import { ShaderPass } from "three/examples/jsm/postprocessing/ShaderPass.js";
 import { UnrealBloomPass } from "three/examples/jsm/postprocessing/UnrealBloomPass.js";
 import { OutputPass } from "three/examples/jsm/postprocessing/OutputPass.js";
 import { CAMERA_KEYS, FINALE, SHAPE_SCHEDULE, TOTAL, type ShapeId } from "./config";
@@ -413,147 +414,127 @@ export class PrismParticleFilm {
   private readonly onVisibility = () => {
     if (document.hidden) {
       this.lastAt = performance.now();
-    } else {
-      this.lastAt = performance.now();
     }
   };
 
   private readonly resize = () => {
+    if (!this.renderer) return;
     const width = Math.max(1, window.innerWidth);
     const height = Math.max(1, window.innerHeight);
     this.camera.aspect = width / height;
     this.camera.updateProjectionMatrix();
-    this.renderer?.setSize(width, height, false);
-    this.renderer?.setPixelRatio(Math.min(window.devicePixelRatio || 1, width < 760 ? 1.25 : 1.65));
+    this.renderer.setSize(width, height, false);
     this.composer?.setSize(width, height);
-
-    const pixelRatio = Math.min(window.devicePixelRatio || 1, width < 760 ? 1.25 : 1.65);
-    this.material?.uniforms.uPixelRatio && (this.material.uniforms.uPixelRatio.value = pixelRatio);
-    this.titleMaterial?.uniforms.uPixelRatio && (this.titleMaterial.uniforms.uPixelRatio.value = pixelRatio);
+    const pixelRatio = this.renderer.getPixelRatio();
+    if (this.material) this.material.uniforms.uPixelRatio.value = pixelRatio;
+    if (this.titleMaterial) this.titleMaterial.uniforms.uPixelRatio.value = pixelRatio;
   };
 
   private readonly tick = (now: number) => {
     if (this.disposed) return;
-    const dt = Math.min(0.05, Math.max(0, (now - this.lastAt) / 1000));
+    const delta = Math.min(0.05, Math.max(0, (now - this.lastAt) / 1000));
     this.lastAt = now;
-    this.elapsed += dt;
+    this.elapsed += delta;
 
-    const t = this.time;
-    this.update(t, dt);
+    this.targetPointer.multiplyScalar(0.94);
+    this.pointer.lerp(this.targetPointer, 1 - Math.exp(-delta * 7));
+
+    const t = Math.min(this.duration / 1000, this.elapsed);
+    const progress = Math.min(1, t / (this.duration / 1000));
+    this.updateScene(t, progress);
+
+    if (this.renderer && this.composer) this.composer.render();
+    else if (this.renderer) this.renderer.render(this.scene, this.camera);
+
     this.raf = requestAnimationFrame(this.tick);
   };
 
-  private update(t: number, dt: number) {
-    const active = SHAPE_SCHEDULE.find((item) => t >= item.t0 && t < item.t1);
-    if (active && (!this.currentShape || this.currentShape.id !== active.id)) {
-      const next = this.shapes.get(active.id);
-      if (next) {
-        this.morphFrom = this.currentShape;
-        this.morphTo = next;
-        this.currentShape = { id: active.id, ...next };
-      }
-    }
-
-    if (this.pointer.distanceTo(this.targetPointer) > 0.0001) {
-      const smoothing = 1 - Math.pow(0.001, dt);
-      this.pointer.lerp(this.targetPointer, smoothing);
-    }
-
-    const cam = this.sampleCamera(t);
+  private updateScene(t: number, progress: number) {
+    const cameraKey = CAMERA_KEYS.find((key, index) => {
+      const next = CAMERA_KEYS[index + 1];
+      return !next || t <= next.t;
+    }) ?? CAMERA_KEYS[CAMERA_KEYS.length - 1];
+    const cameraIndex = CAMERA_KEYS.indexOf(cameraKey);
+    const previous = CAMERA_KEYS[Math.max(0, cameraIndex - 1)];
+    const span = Math.max(0.001, cameraKey.t - previous.t);
+    const local = Math.min(1, Math.max(0, (t - previous.t) / span));
+    const eased = local * local * (3 - 2 * local);
+    const radius = THREE.MathUtils.lerp(previous.r, cameraKey.r, eased);
+    const azimuth = THREE.MathUtils.lerp(previous.az, cameraKey.az, eased);
     this.camera.position.set(
-      Math.sin(cam.az) * cam.r + this.pointer.x * 0.35,
-      cam.h + this.pointer.y * 0.22,
-      Math.cos(cam.az) * cam.r,
+      Math.cos(azimuth) * radius + this.pointer.x * 0.45,
+      cameraKey.h + this.pointer.y * 0.28,
+      Math.sin(azimuth) * radius,
     );
-    this.camera.lookAt(this.pointer.x * 0.08, cam.ly + this.pointer.y * 0.05, 0);
-    this.camera.fov = cam.fov;
+    this.camera.lookAt(this.pointer.x * 0.25, cameraKey.ly, 0);
+    this.camera.fov = THREE.MathUtils.lerp(previous.fov, cameraKey.fov, eased);
     this.camera.updateProjectionMatrix();
 
-    const morph = this.morphFrom && this.morphTo ? this.morphAmount(t, active) : 1;
-    if (this.position && this.color && this.morphFrom && this.morphTo) {
-      const from = this.morphFrom.pos;
-      const to = this.morphTo.pos;
-      const fromCol = this.morphFrom.col;
-      const toCol = this.morphTo.col;
-      for (let i = 0; i < this.position.count; i++) {
-        const k = i * 3;
-        this.position.array[k] = THREE.MathUtils.lerp(from[k], to[k], morph);
-        this.position.array[k + 1] = THREE.MathUtils.lerp(from[k + 1], to[k + 1], morph);
-        this.position.array[k + 2] = THREE.MathUtils.lerp(from[k + 2], to[k + 2], morph);
-        this.color.array[k] = THREE.MathUtils.lerp(fromCol[k], toCol[k], morph);
-        this.color.array[k + 1] = THREE.MathUtils.lerp(fromCol[k + 1], toCol[k + 1], morph);
-        this.color.array[k + 2] = THREE.MathUtils.lerp(fromCol[k + 2], toCol[k + 2], morph);
+    const shapeEntry = SHAPE_SCHEDULE.find((entry) => t >= entry.t0 && t <= entry.t1);
+    if (shapeEntry && this.points && this.position && this.color) {
+      const target = this.shapes.get(shapeEntry.id);
+      if (target) {
+        const from = this.shapes.get(this.currentShape?.id ?? "origin") ?? target;
+        const localShape = Math.min(1, Math.max(0, (t - shapeEntry.t0) / Math.max(0.001, shapeEntry.t1 - shapeEntry.t0)));
+        const easedShape = localShape * localShape * (3 - 2 * localShape);
+        for (let i = 0; i < this.position.count; i++) {
+          const offset = i * 3;
+          this.position.array[offset] = THREE.MathUtils.lerp(from.pos[offset], target.pos[offset], easedShape);
+          this.position.array[offset + 1] = THREE.MathUtils.lerp(from.pos[offset + 1], target.pos[offset + 1], easedShape);
+          this.position.array[offset + 2] = THREE.MathUtils.lerp(from.pos[offset + 2], target.pos[offset + 2], easedShape);
+          this.color.array[offset] = THREE.MathUtils.lerp(from.col[offset], target.col[offset], easedShape);
+          this.color.array[offset + 1] = THREE.MathUtils.lerp(from.col[offset + 1], target.col[offset + 1], easedShape);
+          this.color.array[offset + 2] = THREE.MathUtils.lerp(from.col[offset + 2], target.col[offset + 2], easedShape);
+        }
+        this.position.needsUpdate = true;
+        this.color.needsUpdate = true;
+        this.currentShape = { id: shapeEntry.id, ...target };
       }
-      this.position.needsUpdate = true;
-      this.color.needsUpdate = true;
     }
 
-    const pulse = 0.5 + 0.5 * Math.sin(t * 2.1);
+    const fadeIn = THREE.MathUtils.smoothstep(t, 0, 1.1);
+    const fadeOut = 1 - THREE.MathUtils.smoothstep(t, FINALE.implode0, FINALE.flash0);
     if (this.material) {
       this.material.uniforms.uTime.value = t;
-      this.material.uniforms.uOpacity.value = THREE.MathUtils.smoothstep(Math.min(1, t / 0.8), 0, 1);
-      this.material.uniforms.uSize.value = 0.105 + pulse * 0.012;
+      this.material.uniforms.uOpacity.value = fadeIn * Math.max(0, fadeOut) * (0.74 + 0.26 * Math.sin(t * 1.8));
     }
-
     if (this.titleMaterial) {
       this.titleMaterial.uniforms.uTime.value = t;
-      this.titleMaterial.uniforms.uOpacity.value = THREE.MathUtils.smoothstep((t - 9.8) / 1.0, 0, 1) * (1 - THREE.MathUtils.smoothstep((t - 13.2) / 0.8, 0, 1));
+      this.titleMaterial.uniforms.uOpacity.value = THREE.MathUtils.smoothstep(t, 8.8, 10.9) * (1 - THREE.MathUtils.smoothstep(t, 13.2, 14.2));
     }
 
-    this.updateOptics(t);
-    this.updatePost(t);
-    this.composer?.render();
-  }
-
-  private updateOptics(t: number) {
-    const optical = THREE.MathUtils.smoothstep(Math.min(1, Math.max(0, (t - 4.2) / 1.2)), 0, 1) * (1 - THREE.MathUtils.smoothstep(Math.min(1, Math.max(0, (t - 13.2) / 1.5)), 0, 1));
     if (this.ringA) {
       this.ringA.rotation.z = t * 0.18;
-      (this.ringA.material as THREE.LineBasicMaterial).opacity = optical * 0.28;
+      (this.ringA.material as THREE.LineBasicMaterial).opacity = 0.14 + 0.08 * Math.sin(t * 1.2);
     }
     if (this.ringB) {
-      this.ringB.rotation.z = -t * 0.11;
-      (this.ringB.material as THREE.LineBasicMaterial).opacity = optical * 0.16;
+      this.ringB.rotation.z = -t * 0.12;
+      (this.ringB.material as THREE.LineBasicMaterial).opacity = 0.09 + 0.06 * Math.sin(t * 0.9 + 1);
     }
-    if (this.beam) {
-      (this.beam.material as THREE.LineBasicMaterial).opacity = THREE.MathUtils.smoothstep(Math.min(1, Math.max(0, (t - 5.8) / 0.8)), 0, 1) * (1 - THREE.MathUtils.smoothstep(Math.min(1, Math.max(0, (t - 7.4) / 0.5)), 0, 1)) * 0.75;
-    }
+
+    const optics = THREE.MathUtils.smoothstep(t, 1.5, 5.0);
+    if (this.beam) (this.beam.material as THREE.LineBasicMaterial).opacity = optics * (1 - THREE.MathUtils.smoothstep(t, 6.0, 7.2));
     this.spectral.forEach((line, index) => {
-      (line.material as THREE.LineBasicMaterial).opacity = THREE.MathUtils.smoothstep(Math.min(1, Math.max(0, (t - 6.0) / 0.7)), 0, 1) * (1 - THREE.MathUtils.smoothstep(Math.min(1, Math.max(0, (t - 8.4) / 0.7)), 0, 1)) * (0.12 + index * 0.018);
+      const material = line.material as THREE.LineBasicMaterial;
+      material.opacity = THREE.MathUtils.smoothstep(t, 3.5, 5.5) * (1 - THREE.MathUtils.smoothstep(t, 7.4, 8.4)) * (0.08 + index * 0.015);
+      line.rotation.z = Math.sin(t * 0.35 + index) * 0.08;
     });
-  }
 
-  private updatePost(t: number) {
-    if (!this.post) return;
-    const material = this.post.material as THREE.ShaderMaterial;
-    material.uniforms.time.value = t;
-    material.uniforms.amount.value = THREE.MathUtils.smoothstep(Math.min(1, Math.max(0, (t - 14.8) / 2.8)), 0, 1) * 0.0025;
-    material.uniforms.vignette.value = 0.28 + 0.06 * Math.sin(t * 0.7);
-  }
-
-  private sampleCamera(t: number) {
-    if (t <= CAMERA_KEYS[0].t) return CAMERA_KEYS[0];
-    for (let i = 1; i < CAMERA_KEYS.length; i++) {
-      const a = CAMERA_KEYS[i - 1];
-      const b = CAMERA_KEYS[i];
-      if (t <= b.t) {
-        const p = THREE.MathUtils.smoothstep((t - a.t) / (b.t - a.t), 0, 1);
-        return {
-          t,
-          r: THREE.MathUtils.lerp(a.r, b.r, p),
-          az: THREE.MathUtils.lerp(a.az, b.az, p),
-          h: THREE.MathUtils.lerp(a.h, b.h, p),
-          ly: THREE.MathUtils.lerp(a.ly, b.ly, p),
-          fov: THREE.MathUtils.lerp(a.fov, b.fov, p),
-        };
-      }
+    if (this.bloom) {
+      this.bloom.strength = 1.0 + 0.3 * Math.sin(t * 1.1) + (t > FINALE.flash0 ? 1.2 : 0);
     }
-    return CAMERA_KEYS[CAMERA_KEYS.length - 1];
-  }
+    if (this.post) {
+      this.post.uniforms.time.value = t;
+      this.post.uniforms.amount.value = THREE.MathUtils.smoothstep(t, 16.8, 18.3) * 0.025;
+    }
 
-  private morphAmount(t: number, active: { id: ShapeId; t0: number; t1: number } | undefined) {
-    if (!active) return 1;
-    const span = Math.max(0.001, active.t1 - active.t0);
-    return THREE.MathUtils.smootherstep(Math.min(1, Math.max(0, (t - active.t0) / Math.min(1.2, span))), 0, 1);
+    if (this.points) {
+      this.points.rotation.y = t * 0.035;
+      this.points.rotation.x = Math.sin(t * 0.22) * 0.04;
+      const implode = THREE.MathUtils.smoothstep(t, FINALE.implode0, FINALE.flash0);
+      this.points.scale.setScalar(1 - implode * 0.94);
+    }
+
+    void progress;
   }
 }

@@ -149,11 +149,13 @@ export class InteractionController {
   hoveredName: string | null = null;
   grabbedName: string | null = null;
   twoHandActive = false;
+  private readonly listenerAbort = new AbortController();
 
   constructor(private readonly prism: PrismScene) {
     // Mouse fallback: moving over the canvas points, holding grabs.
     // Pressing on EMPTY space orbits the camera instead of grabbing.
     const el = prism.renderer.domElement;
+    const signal = this.listenerAbort.signal;
     el.style.pointerEvents = 'auto';
     el.addEventListener('pointermove', (e) => {
       if (this.activePointers.has(e.pointerId)) {
@@ -189,7 +191,7 @@ export class InteractionController {
         ((e.clientX - rect.left) / rect.width) * 2 - 1,
         -((e.clientY - rect.top) / rect.height) * 2 + 1,
       );
-    });
+    }, { signal });
     el.addEventListener('pointerdown', (e) => {
       this.lastClient.x = e.clientX;
       this.lastClient.y = e.clientY;
@@ -226,7 +228,7 @@ export class InteractionController {
       } else if (e.button === 2) {
         this.panning = true;
       }
-    });
+    }, { signal });
     const endPointer = (e: PointerEvent | { pointerId: number; clientX?: number; clientY?: number }): void => {
       this.activePointers.delete(e.pointerId);
       if (this.activePointers.size < 2) this.pinchMode = false;
@@ -242,9 +244,9 @@ export class InteractionController {
       this.orbitArmed = false;
       this.panning = false;
     };
-    window.addEventListener('pointerup', endPointer);
-    window.addEventListener('pointercancel', endPointer);
-    el.addEventListener('contextmenu', (e) => e.preventDefault());
+    window.addEventListener('pointerup', endPointer, { signal });
+    window.addEventListener('pointercancel', endPointer, { signal });
+    el.addEventListener('contextmenu', (e) => e.preventDefault(), { signal });
     el.addEventListener(
       'wheel',
       (e) => {
@@ -259,7 +261,7 @@ export class InteractionController {
           prism.rig.target.z = THREE.MathUtils.clamp(prism.rig.target.z, -10, 10);
         }
       },
-      { passive: false },
+      { passive: false, signal },
     );
     window.addEventListener('keydown', (e) => {
       const tag = (e.target as HTMLElement | null)?.tagName;
@@ -304,10 +306,23 @@ export class InteractionController {
           break;
         }
       }
-    });
+    }, { signal });
     window.addEventListener('keyup', (e) => {
       if (e.key === ' ') this.spaceDown = false;
-    });
+    }, { signal });
+  }
+
+  /** Release all DOM/window listeners owned by this controller. */
+  dispose(): void {
+    this.listenerAbort.abort();
+    this.activePointers.clear();
+    this.release();
+    this.twoHand.reset();
+    this.cursorWorld = null;
+    this.mouseNdc = null;
+    this.mouseDown = false;
+    this.orbitArmed = false;
+    this.panning = false;
   }
 
   /** Called when the world preset changes: drop stale grabs and camera drags. */

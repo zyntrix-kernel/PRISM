@@ -65,15 +65,25 @@ export default function PrismExperienceChrome({ state, app, onCommand }: Props) 
   useEffect(() => {
     if (!presetOpen) return;
     const close = (event: PointerEvent) => { if (!presetRef.current?.contains(event.target as Node)) setPresetOpen(false); };
+    const onKey = (event: KeyboardEvent) => { if (event.key === "Escape") setPresetOpen(false); };
     window.addEventListener("pointerdown", close);
-    return () => window.removeEventListener("pointerdown", close);
+    window.addEventListener("keydown", onKey);
+    return () => {
+      window.removeEventListener("pointerdown", close);
+      window.removeEventListener("keydown", onKey);
+    };
   }, [presetOpen]);
 
   useEffect(() => {
     if (!helpOpen) return;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
     const onKey = (event: KeyboardEvent) => { if (event.key === "Escape") setHelpOpen(false); };
     window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", onKey);
+    };
   }, [helpOpen]);
 
   const preset = state?.preset ?? "space";

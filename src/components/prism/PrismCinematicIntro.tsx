@@ -146,8 +146,7 @@ function SceneCopy({
           <span>v² = u² + 2as</span>
         </div>
         <p>
-          A trajectory is not decoration. It is a record of force,
-          momentum, gravity, and time.
+          Force, momentum, gravity, and time become visible as motion.
         </p>
       </section>
     );
@@ -169,7 +168,7 @@ function SceneCopy({
           <div><b>CO₂</b><small>LINEAR MOLECULE</small></div>
           <div><b>e⁻</b><small>ENERGY LEVELS</small></div>
         </div>
-        <p>Atoms become structures. Structures become behavior.</p>
+        <p>Structure sets the conditions for observable behavior.</p>
       </section>
     );
   }
@@ -190,7 +189,7 @@ function SceneCopy({
           <span>y = sin x</span>
           <span>Σ aₙeⁱⁿˣ</span>
         </div>
-        <p>Equations stop being symbols when you let them occupy space.</p>
+        <p>Geometry turns relationships into positions, paths, and space.</p>
       </section>
     );
   }
@@ -215,7 +214,7 @@ function SceneCopy({
           <span>01010010</span>
           <span>00100001</span>
         </div>
-        <p>Measure it. Encode it. Control it. Then make it interactive.</p>
+        <p>Encode a signal, preserve its meaning, and turn information into control.</p>
       </section>
     );
   }

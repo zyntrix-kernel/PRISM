@@ -9,22 +9,30 @@ import {
 } from "lucide-react";
 import type { PrismApp, PrismState } from "@/lib/prism/app";
 import type { PresetId } from "@/lib/prism/presets/types";
+import { PRESET_CATALOG } from "@/lib/prism/presets/catalog";
 
 type Props = { state: PrismState | null; app: PrismApp | null; onCommand: () => void; };
 type PresetMeta = { icon: LucideIcon; hue: string; label: string; description: string; science: string; };
 
-const PRESETS: Record<PresetId, PresetMeta> = {
-  space: { icon: Orbit, hue: "154,220,255", label: "Space", description: "Keplerian solar system", science: "mechanics / orbit" },
-  blocks: { icon: Boxes, hue: "255,179,217", label: "Blocks", description: "Voxel stacking rig", science: "geometry / collision" },
-  test: { icon: CircleDot, hue: "201,184,255", label: "Test", description: "Three-body calibration", science: "vectors / balance" },
-  singularity: { icon: Disc, hue: "255,214,170", label: "Singularity", description: "Accretion disk + jets", science: "gravity / relativity" },
-  drive: { icon: Car, hue: "143,245,180", label: "Drive", description: "Neon circuit arcade", science: "motion / control" },
-  atom: { icon: Atom, hue: "154,220,255", label: "Atom", description: "Bohr model photon lab", science: "quantum / spectra" },
-  voxel: { icon: Grid3X3, hue: "255,207,92", label: "Voxel", description: "Place & break blocks", science: "spatial logic" },
-  gun: { icon: Target, hue: "125,211,252", label: "Range", description: "Target shooting range", science: "aim / trajectory" },
-  supernova: { icon: Sun, hue: "255,170,68", label: "Supernova", description: "Stellar explosion", science: "energy / stellar life" },
-  nebula: { icon: Cloud, hue: "165,180,252", label: "Nebula", description: "Living gas cloud", science: "field / particles" },
+const PRESET_ICONS: Record<PresetId, LucideIcon> = {
+  space: Orbit,
+  blocks: Boxes,
+  test: CircleDot,
+  singularity: Disc,
+  drive: Car,
+  atom: Atom,
+  voxel: Grid3X3,
+  gun: Target,
+  supernova: Sun,
+  nebula: Cloud,
 };
+
+const PRESETS: Record<PresetId, PresetMeta> = Object.fromEntries(
+  (Object.keys(PRESET_CATALOG) as PresetId[]).map((id) => [
+    id,
+    { ...PRESET_CATALOG[id], icon: PRESET_ICONS[id] },
+  ]),
+) as Record<PresetId, PresetMeta>;
 
 const PRESET_ORDER = Object.keys(PRESETS) as PresetId[];
 

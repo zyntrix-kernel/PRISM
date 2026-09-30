@@ -180,6 +180,17 @@ export class PrismApp {
   private setStatus(msg:string,full?:string):void{const textEl=this.el.status.querySelector('.prism-status-text')??this.el.status;textEl.textContent=msg;this.el.status.title=full??msg;this.emit();}
   private toast(message:string,kind:'success'|'info'|'warn'='info'):void{if(typeof window!=='undefined'&&typeof window.__prismToast==='function')window.__prismToast({message,kind});}
   private syncAiButton():void{this.el.aiBtn.classList.toggle('active',this.observer.isEnabled);}
+  private stopVision():void{
+    this.tracker.stop();
+    this.cameraHandle?.stop();
+    this.cameraHandle=null;
+    this.el.video.classList.remove('live');
+    this.el.cameraBtn.classList.remove('active');
+    this.el.cameraBtn.disabled=false;
+    this.setStatus('Mouse mode','Camera disabled. Mouse and touch controls remain available.');
+    this.toast('Camera disabled','info');
+    this.emit();
+  }
 
   private bindUI():void{
     const {qualitySel,presetSel,debugBtn,helpBtn,helpClose,easyBtn,aiBtn,cameraBtn,onboardClose,onboardHelp}=this.el;
@@ -211,8 +222,8 @@ export class PrismApp {
   private syncPresetUI():void{const id=this.scene.currentPreset;const {presetSel,easyBtn}=this.el;if(presetSel.options.length!==PRESET_ORDER.length){presetSel.innerHTML='';for(const pid of PRESET_ORDER){const opt=document.createElement('option');opt.value=pid;opt.textContent=PRESET_LABELS[pid];presetSel.appendChild(opt);}}presetSel.value=id;easyBtn.classList.toggle('hidden',id!=='drive');if(id==='drive'&&queryParam('easy')==='1')this.scene.currentWorld?.setEasyMode?.(true);this.syncEasyLabel();this.refreshPalette();}
   private loadPreset(id:PresetId,viaKeyboard=false,force=false):void{if(!PRESET_ORDER.includes(id))return;if(!force&&id===this.scene.currentPreset)return;this.interaction.onPresetChange();this.scene.loadPreset(id);this.syncPresetUI();this.setStatus(`Preset: ${PRESET_LABELS[id]}. Point to explore.`);if(viaKeyboard)this.toast(`Switched to ${PRESET_LABELS[id]}`,'success');if(force)this.toast('World rebuilt','info');}
 
-  private async bootVision():Promise<void>{try{if(await this.enableCamera())await this.ensureTracking();}catch(err){console.error('[PRISM] vision stack failed:',err);const full=`Hand tracking unavailable (${describeMediaError(err)}). Mouse fallback active.`;this.setStatus('Hand tracking unavailable — mouse active',full);}}
-  private async enableCamera():Promise<boolean>{if(this.cameraHandle)return true;if(this.cameraStarting)return false;this.cameraStarting=true;const {cameraBtn,video}=this.el;cameraBtn.classList.add('active');cameraBtn.disabled=true;try{this.setStatus('Requesting camera…');this.cameraHandle=await startCamera(video);video.classList.add('live');this.toast('Camera enabled — hand tracking active','success');this.setStatus('Camera ready — starting hand tracking…');return true;}catch(err){const full=err instanceof Error?err.message:String(err);this.setStatus('Mouse mode',full);this.toast(`Camera unavailable: ${full.substring(0,120)}`,'warn');cameraBtn.classList.remove('active');video.classList.remove('live');return false;}finally{this.cameraStarting=false;cameraBtn.disabled=false;this.emit();}}
+  private async bootVision():Promise<void>{try{if(await this.startCamera())await this.ensureTracking();}catch(err){console.error('[PRISM] vision stack failed:',err);const full=`Hand tracking unavailable (${describeMediaError(err)}). Mouse fallback active.`;this.setStatus('Hand tracking unavailable — mouse active',full);}}
+  private async startCamera():Promise<boolean>{if(this.cameraHandle)return true;if(this.cameraStarting)return false;this.cameraStarting=true;const {cameraBtn,video}=this.el;cameraBtn.classList.add('active');cameraBtn.disabled=true;try{this.setStatus('Requesting camera…');this.cameraHandle=await startCamera(video);video.classList.add('live');this.toast('Camera enabled — hand tracking active','success');this.setStatus('Camera ready — starting hand tracking…');return true;}catch(err){const full=err instanceof Error?err.message:String(err);this.setStatus('Mouse mode',full);this.toast(`Camera unavailable: ${full.substring(0,120)}`,'warn');cameraBtn.classList.remove('active');video.classList.remove('live');return false;}finally{this.cameraStarting=false;cameraBtn.disabled=false;this.emit();}}
   private async ensureTracking():Promise<void>{if(!this.cameraHandle)return;if(this.tracker.isTracking)return;if(!this.tracker.isReady){this.setStatus('Loading hand-tracking model…');try{await this.tracker.init((m)=>this.setStatus(m));}catch(err){const full=err instanceof Error?err.message:String(err);this.setStatus('Tracking unavailable — mouse active',full);this.toast(`Tracking init failed: ${full.substring(0,100)}`,'warn');return;}}if(!this.tracker.isReady)return;this.tracker.start(this.el.video);const handle=this.cameraHandle;this.setStatus(`Tracking ${handle.width}×${handle.height} · point to move, pinch to grab.`);}
 
   private readonly tick=(now:number):void=>{

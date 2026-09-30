@@ -92,8 +92,8 @@ function SceneCopy({
       <section className="intro-scene-copy copy-boot">
         <div className="boot-overline">ZYNASH LABS / SPATIAL RESEARCH UNIT</div>
         <div className="boot-title">
-          <span>FIRST</span>
-          <strong>PRINCIPLES</strong>
+          <span>OBSERVE</span>
+          <strong>WHAT MOVES</strong>
         </div>
         <div className="boot-line" />
         <div className="boot-caption">
@@ -115,7 +115,7 @@ function SceneCopy({
         </div>
         <div className="discipline-title">
           <span>MOTION</span>
-          <span>BECOMES <em>VISIBLE.</em></span>
+          <span>IS <em>MEASURED.</em></span>
         </div>
         <div className="formula-line">
           <span>F = ma</span>
@@ -211,7 +211,7 @@ function SceneCopy({
           <span>INFORMATION</span>
         </div>
         <div className="synthesis-divider" />
-        <strong>THE SCIENCE BECOMES A SPACE.</strong>
+        <strong>ONE INTERFACE / MANY DISCIPLINES.</strong>
       </section>
     );
   }
@@ -219,12 +219,12 @@ function SceneCopy({
   if(scene==="labs"){
     return (
       <section className="intro-scene-copy copy-labs">
-        <div className="labs-overline">A ZYNASH LABS PROJECT</div>
+        <div className="labs-overline">ZYNASH LABS / EXPERIMENTAL INTERFACE</div>
         <div className="labs-title">
           <span>ZYNASH</span>
           <strong>LABS</strong>
         </div>
-        <div className="labs-statement">ENGINEERING THE INVISIBLE.</div>
+        <div className="labs-statement">MEASURED. MODELED. INTERACTIVE.</div>
       </section>
     );
   }
@@ -238,7 +238,7 @@ function SceneCopy({
           PROJECTED REALITY INTERACTION<br />
           &amp; SPATIAL MANIPULATION
         </div>
-        <div className="prism-tagline">FROM EQUATIONS TO INTERACTION.</div>
+        <div className="prism-tagline">MEASURED. MODELED. INTERACTIVE.</div>
       </section>
     );
   }
@@ -265,9 +265,9 @@ function SceneCopy({
   return (
     <section className="intro-scene-copy copy-launch">
       <div className="launch-overline">ZYNASH LABS / PRISM</div>
-      <div className="launch-title">SEE<br /><em>THE INVISIBLE.</em></div>
+      <div className="launch-title">ENTER<br /><em>PRISM.</em></div>
       <div className="launch-sub">PROJECTED REALITY INTERACTION &amp; SPATIAL MANIPULATION</div>
-      <div className="launch-cta">ENTER SPATIAL INTERFACE</div>
+      <div className="launch-cta">SPATIAL INTERFACE / READY</div>
     </section>
   );
 }

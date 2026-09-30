@@ -27,7 +27,7 @@ const TEAM = [
   },
 ];
 
-const INTRO_DURATION = 16000; // was 11200 — longer so people can actually read it
+const INTRO_DURATION = 13200;
 
 type Particle = {
   x: number;
@@ -42,6 +42,8 @@ type Particle = {
 type Pointer = {
   x: number;
   y: number;
+  tx: number;
+  ty: number;
 };
 
 function clamp(value: number, min: number, max: number) {
@@ -50,12 +52,6 @@ function clamp(value: number, min: number, max: number) {
 
 function easeOutExpo(t: number) {
   return t >= 1 ? 1 : 1 - Math.pow(2, -10 * t);
-}
-
-function easeInOutCubic(t: number) {
-  return t < 0.5
-    ? 4 * t * t * t
-    : 1 - Math.pow(-2 * t + 2, 3) / 2;
 }
 
 function smoothstep(t: number) {
@@ -136,12 +132,18 @@ export default function PrismCinematicIntro({
   const pointer = useRef<Pointer>({
     x: 0,
     y: 0,
+    tx: 0,
+    ty: 0,
   });
 
   const particles = useRef<Particle[]>([]);
   const completed = useRef(false);
+  const lastScene = useRef(0);
+  const lastMember = useRef(-1);
+  const progressBarRef = useRef<HTMLDivElement>(null);
+  const progressLabelRef = useRef<HTMLDivElement>(null);
+  const lastProgressLabelAt = useRef(0);
 
-  const [progress, setProgress] = useState(0);
   const [scene, setScene] = useState(0);
   const [member, setMember] = useState(-1);
   const [exiting, setExiting] = useState(false);
@@ -162,14 +164,23 @@ export default function PrismCinematicIntro({
 
     if (!canvas) return;
 
-    const ctx = canvas.getContext("2d");
+    const ctx = canvas.getContext("2d", {
+      alpha: false,
+      desynchronized: true,
+    });
 
     if (!ctx) return;
 
     let raf = 0;
 
+    const reducedMotion =
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
     const resize = () => {
-      const dpr = Math.min(window.devicePixelRatio || 1, 2);
+      const dpr = Math.min(
+        window.devicePixelRatio || 1,
+        1.5,
+      );
 
       canvas.width = window.innerWidth * dpr;
       canvas.height = window.innerHeight * dpr;
@@ -185,7 +196,7 @@ export default function PrismCinematicIntro({
     window.addEventListener("resize", resize);
 
     particles.current = Array.from(
-      { length: 360 },
+      { length: reducedMotion ? 80 : 420 },
       (_, i) => ({
         x: Math.random(),
         y: Math.random(),
@@ -198,10 +209,10 @@ export default function PrismCinematicIntro({
     );
 
     const handlePointerMove = (event: PointerEvent) => {
-      pointer.current.x =
+      pointer.current.tx =
         event.clientX / window.innerWidth - 0.5;
 
-      pointer.current.y =
+      pointer.current.ty =
         event.clientY / window.innerHeight - 0.5;
     };
 
@@ -236,41 +247,89 @@ export default function PrismCinematicIntro({
       const elapsed = now - start;
       const pct = clamp(elapsed / duration, 0, 1);
 
-      setProgress(pct);
+      if (rootRef.current) {
+        rootRef.current.style.setProperty(
+          "--intro-progress",
+          String(pct),
+        );
+      }
+
+      if (progressBarRef.current) {
+        progressBarRef.current.style.transform =
+          "scaleX(var(--intro-progress))";
+      }
+
+      if (
+        progressLabelRef.current &&
+        (now - lastProgressLabelAt.current >= 100 ||
+          pct >= 1)
+      ) {
+        lastProgressLabelAt.current = now;
+        progressLabelRef.current.textContent =
+          String(
+            Math.min(
+              100,
+              Math.round(pct * 100),
+            ),
+          ).padStart(3, "0");
+      }
+
+      let nextScene = 0;
+      let nextMember = -1;
 
       if (elapsed < t1) {
-        setScene(0);
-        setMember(-1);
+        nextScene = 0;
       } else if (elapsed < t2) {
-        setScene(1);
-        setMember(-1);
+        nextScene = 1;
       } else if (elapsed < t3) {
-        setScene(2);
-        setMember(-1);
+        nextScene = 2;
       } else if (elapsed < t4) {
-        setScene(3);
-        setMember(-1);
+        nextScene = 3;
       } else if (elapsed < t5) {
-        setScene(4);
-        setMember(-1);
+        nextScene = 4;
       } else if (elapsed < t6) {
-        setScene(5);
+        nextScene = 5;
 
-        // Credits are proportional within scene 5's time span
         const creditSpan = t6 - t5;
         const local = elapsed - t5;
 
         if (local < creditSpan * 0.30) {
-          setMember(0);
+          nextMember = 0;
         } else if (local < creditSpan * 0.65) {
-          setMember(1);
+          nextMember = 1;
         } else {
-          setMember(2);
+          nextMember = 2;
         }
       } else {
-        setScene(6);
-        setMember(2);
+        nextScene = 6;
+        nextMember = 2;
       }
+
+      if (nextScene !== lastScene.current) {
+        lastScene.current = nextScene;
+        setScene(nextScene);
+      }
+
+      if (nextMember !== lastMember.current) {
+        lastMember.current = nextMember;
+        setMember(nextMember);
+      }
+
+      pointer.current.x =
+        reducedMotion
+          ? 0
+          : pointer.current.x +
+            (pointer.current.tx -
+              pointer.current.x) *
+              0.055;
+
+      pointer.current.y =
+        reducedMotion
+          ? 0
+          : pointer.current.y +
+            (pointer.current.ty -
+              pointer.current.y) *
+              0.055;
 
       const width = window.innerWidth;
       const height = window.innerHeight;
@@ -318,7 +377,7 @@ export default function PrismCinematicIntro({
         height * 0.44 +
         pointer.current.y * 25;
 
-      // sceneEnergy uses proportional timings (t1 = duration * 0.075)
+      // sceneEnergy is tied to the cinematic timeline rather than a fixed clock.
       const sceneEnergy =
         elapsed < t1
           ? 0
@@ -962,20 +1021,13 @@ export default function PrismCinematicIntro({
 
         <div className="progress-track">
           <div
+            ref={progressBarRef}
             className="progress-bar"
-            style={{
-              transform: `scaleX(${progress})`,
-            }}
           />
         </div>
 
-        <div>
-          {String(
-            Math.min(
-              100,
-              Math.round(progress * 100),
-            ),
-          ).padStart(3, "0")}
+        <div ref={progressLabelRef}>
+          000
         </div>
       </div>
 

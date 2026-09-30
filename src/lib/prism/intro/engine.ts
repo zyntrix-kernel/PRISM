@@ -91,6 +91,8 @@ export class PrismCinematicEngine implements IntroEngine {
   private slowFrameSamples = 0;
   private reducedMotion: boolean;
   private previousTimelineTime = -1;
+  private scienceFaulted = false;
+  private renderFaulted = false;
 
   private readonly onPointerMove = (event: PointerEvent) => {
     if (this.disposed) return;
@@ -362,6 +364,41 @@ export class PrismCinematicEngine implements IntroEngine {
   private readonly tick = (now: number) => {
     if (this.disposed || !this.running || this.paused) return;
 
+    try {
+      this.runFrame(now);
+    } catch (error) {
+      /*
+       * Last-resort circuit breaker: keep the cinematic timeline alive even
+       * when an unexpected browser/GPU issue escapes a subsystem guard.
+       */
+      console.error("[PRISM] cinematic frame recovered from runtime error", error);
+      this.fallback = true;
+      this.elapsedMs += 16.67;
+
+      const duration = this.options.durationMs || DEFAULT_DURATION;
+      const progress = clamp01(this.elapsedMs / Math.max(1, duration));
+      const timelineTime = progress * TOTAL_TIMELINE_MS;
+      const resolved = resolveScene(timelineTime);
+
+      this.commitScene(resolved.scene, resolved.member);
+      this.options.onProgress?.(progress, PHASE_LABELS[resolved.scene]);
+
+      if (progress >= 1) {
+        this.completed = true;
+        this.running = false;
+        this.options.onSceneChange?.("complete", 3);
+        this.options.onProgress?.(1, PHASE_LABELS.complete);
+        this.options.onComplete?.();
+        return;
+      }
+    }
+
+    if (this.running && !this.paused && !this.completed && !this.disposed) {
+      this.animationFrame = requestAnimationFrame(this.tick);
+    }
+  };
+
+  private runFrame = (now: number) => {
     const delta = Math.min(
       0.05,
       Math.max(0.0001, (now - this.lastFrameAt) / 1000),
@@ -428,27 +465,45 @@ export class PrismCinematicEngine implements IntroEngine {
     );
 
     const energy = this.computeEnergy(timelineTime);
-    this.science.update({
-      time: timelineTime / 1000,
-      delta,
-      scene: resolved.scene,
-      phase: phaseProgress,
-      energy,
-      pointer: this.pointer,
-    });
+
+    if (!this.scienceFaulted) {
+      try {
+        this.science.update({
+          time: timelineTime / 1000,
+          delta,
+          scene: resolved.scene,
+          phase: phaseProgress,
+          energy,
+          pointer: this.pointer,
+        });
+      } catch (error) {
+        /*
+         * The intro is a presentation layer. A failure in one procedural
+         * visual system must never kill the semantic timeline or handoff.
+         */
+        this.scienceFaulted = true;
+        console.error("[PRISM] science showcase disabled after runtime error", error);
+      }
+    }
 
     this.animateCamera(timelineTime, delta, resolved.scene, energy);
     this.animateLights(timelineTime, resolved.scene, energy);
     this.updatePostFx(timelineTime, energy, resolved.scene);
 
-    if (!this.fallback) {
-      if (
-        this.composer &&
-        this.qualityState.profile.postFx
-      ) {
-        this.composer.render();
-      } else {
-        this.renderer?.render(this.scene3d, this.camera);
+    if (!this.fallback && !this.renderFaulted) {
+      try {
+        if (
+          this.composer &&
+          this.qualityState.profile.postFx
+        ) {
+          this.composer.render();
+        } else {
+          this.renderer?.render(this.scene3d, this.camera);
+        }
+      } catch (error) {
+        this.renderFaulted = true;
+        this.fallback = true;
+        console.error("[PRISM] WebGL render path disabled after runtime error", error);
       }
     }
 
@@ -470,7 +525,6 @@ export class PrismCinematicEngine implements IntroEngine {
       return;
     }
 
-    this.animationFrame = requestAnimationFrame(this.tick);
   };
 
   private computeEnergy(timelineTime: number): number {

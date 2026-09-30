@@ -3,6 +3,7 @@
 @import "../lib/prism/premium.css";
 @import "../lib/prism/performance.css";
 @import "../lib/prism/command-chrome.css";
+@import "../lib/prism/preset-transition.css";
 
 @custom-variant dark (&:is(.dark *));
 

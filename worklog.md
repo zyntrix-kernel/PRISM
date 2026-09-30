@@ -3508,3 +3508,65 @@ Task: Fix production client exception: random is not defined
 - Root cause: the optimized PhysicsSystem constructor still referenced a seeded `random` object but had been changed to a zero-argument constructor, and ScienceShowcase still instantiated it without the RNG.
 - Restored `constructor(random: SeededRandom)` and changed the ScienceShowcase call to `new PhysicsSystem(random)`.
 - Static source audit confirms the constructor/call site pair is now consistent and no zero-argument PhysicsSystem instantiation remains.
+
+
+---
+Task ID: 23
+Agent: general-purpose
+Task: Rebuild PRISM intro as a motion-directed realtime science film
+
+## Creative direction
+
+- Replaced the previous intro presentation with a new 19.2s narrative: FIRST PRINCIPLES → PHYSICS → CHEMISTRY → MATHEMATICS → INFORMATION → SYNTHESIS → ZYNASH LABS → PRISM → TEAM → SPATIAL LAUNCH.
+- Applied the vendored LottieFiles motion-design guidance as the animation design reference: premium motion personality, directional easing, staged travel, hero-first choreography, secondary follow-through, and ambient support layers.
+
+## Realtime visual systems
+
+- Rebuilt `science.ts` with:
+  - cosmic continuum
+  - energy ribbon field
+  - projectile / gravity trajectory
+  - pendulum dynamics
+  - orbital mechanics
+  - atomic electron shells
+  - H₂O / CO₂-style molecular arrangements
+  - lattice structure
+  - DNA-style helix
+  - sine / cosine / parabola
+  - phi-inspired spiral
+  - Lissajous curve
+  - torus knot
+  - matrix-like signal field
+  - live signal curve
+  - custom triangular PRISM geometry
+  - refracted light paths
+  - orbital rings
+  - synthesis shockwaves
+- Added dedicated `director.ts` camera choreography and `showcase-shaders.ts` for the prism and point-field shaders.
+- Kept the hot path buffer-driven with preallocated typed arrays and no per-frame geometry creation.
+- Kept EffectComposer out of the intro for expo stability.
+
+## Presentation layer
+
+- Rebuilt `PrismCinematicIntro.tsx` and its CSS from scratch around cinematic typography, chapter rail, technical readouts, premium glass instrumentation, restrained grain/scan optics, hero staging, and a final camera-dive handoff.
+- Added the four supplied team members and their handles.
+- Synced `PrismStage` to 19,200ms and retained strict cinematic-first engine initialization.
+
+## Verification
+
+Static repository audit passed for:
+- 19.2s canonical timeline
+- information scene wiring
+- all five science laboratories
+- custom prism shader
+- dedicated camera director
+- no EffectComposer import
+- no old systems import
+- no zero-argument physics constructor
+- all four team credits
+- 19,200ms Stage duration
+- strict startup gate
+- typed-array visual systems
+- no per-frame BufferGeometry reconstruction
+
+Live browser verification is not available in the isolated runtime, so no claim of a successful local build or production deployment is made here.

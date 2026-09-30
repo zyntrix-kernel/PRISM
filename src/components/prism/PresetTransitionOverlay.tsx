@@ -1,5 +1,7 @@
 "use client";
 
+import type { CSSProperties } from "react";
+
 const PRESET_META: Record<string, { hue: string; science: string; index: string }> = {
   space: { hue: "154, 220, 255", science: "MECHANICS / ORBIT", index: "01" },
   blocks: { hue: "255, 179, 217", science: "GEOMETRY / COLLISION", index: "02" },
@@ -16,7 +18,7 @@ const PRESET_META: Record<string, { hue: string; science: string; index: string 
 export default function PresetTransitionOverlay({ preset }: { preset: string }) {
   const meta = PRESET_META[preset] ?? PRESET_META.space;
   return (
-    <div className="prism-transition" aria-hidden="true" style={{ "--transition-hue": meta.hue } as React.CSSProperties}>
+    <div className="prism-transition" aria-hidden="true" style={{ "--transition-hue": meta.hue } as CSSProperties}>
       <div className="prism-transition-wash" />
       <div className="prism-transition-scan" />
       <div className="prism-transition-core">

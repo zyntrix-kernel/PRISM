@@ -249,6 +249,9 @@ export default function CommandPalette({ onClose, state, app }: Props) {
 
   return (
     <div
+      role="dialog"
+      aria-modal="true"
+      aria-label="PRISM command palette"
       style={{
         position: "fixed",
         inset: 0,
@@ -289,6 +292,7 @@ export default function CommandPalette({ onClose, state, app }: Props) {
           <input
             ref={inputRef}
             className="prism-cmd-input"
+            aria-label="Search PRISM commands"
             value={query}
             onChange={(e) => {
               setQuery(e.target.value);
@@ -323,7 +327,7 @@ export default function CommandPalette({ onClose, state, app }: Props) {
         </div>
 
         {/* Results */}
-        <div ref={listRef} style={{ overflowY: "auto", padding: 8, flex: 1 }}>
+        <div ref={listRef} role="listbox" aria-label="Command results" style={{ overflowY: "auto", padding: 8, flex: 1 }}>
           {groups.length === 0 && (
             <div style={{ padding: "32px 16px", textAlign: "center", color: "var(--hud-fg-faint)", fontSize: 13 }}>
               No actions match “{query}”.

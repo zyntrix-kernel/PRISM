@@ -202,7 +202,7 @@
   align-items: baseline;
   column-gap: 18px;
   min-width: 0;
-  opacity: calc(0.68 + var(--credits-focus) * 0.32);
+  opacity: 0.82;
   transition: opacity 420ms ease;
 }
 

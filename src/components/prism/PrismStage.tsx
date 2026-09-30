@@ -155,10 +155,6 @@ export default function PrismStage() {
   }, [showIntro]);
 
   useEffect(() => {
-    if (state?.presentationMode) setCmdOpen(false);
-  }, [state?.presentationMode]);
-
-  useEffect(() => {
     if (!showIntro && appRef.current) {
       appRef.current.start();
     }
@@ -483,7 +479,7 @@ export default function PrismStage() {
       </header>
 
       {/* ===== Command palette (Cmd+K) — mounted fresh each open ===== */}
-      {cmdOpen && (
+      {cmdOpen && !state?.presentationMode && (
         <CommandPalette
           onClose={() => setCmdOpen(false)}
           state={state}
@@ -699,7 +695,7 @@ export default function PrismStage() {
         </div>
       )}
 
-      {!showIntro && <PrismExperienceChrome state={state} app={app} onCommand={() => setCmdOpen(true)} />}
+      {!showIntro && <PrismExperienceChrome state={state} app={app} onCommand={() => { if (!state?.presentationMode) setCmdOpen(true); }} />}
 
     </div>
   );

@@ -2,6 +2,7 @@
 @import "tw-animate-css";
 @import "../lib/prism/premium.css";
 @import "../lib/prism/performance.css";
+@import "../lib/prism/command-chrome.css";
 
 @custom-variant dark (&:is(.dark *));
 

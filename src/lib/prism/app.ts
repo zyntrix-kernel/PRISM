@@ -56,6 +56,11 @@ export interface PrismState {
   pinchPercent: number;
   twoHandActive: boolean;
   presentationMode: boolean;
+  cameraResolution: string | null;
+  trackingFps: number;
+  visionInferenceMs: number;
+  visionDelegate: string;
+  visionErrors: number;
   rail: { cam: string; hands: string; gesture: string; fps: string };
   fpsHistory: number[];
   coach: string | null;
@@ -262,6 +267,11 @@ grabbedName:this.interaction.grabbedName,
 pinchPercent:Math.round(this.interaction.pinchCloseness*100),
  twoHandActive:this.interaction.twoHandActive,
 presentationMode:this.presentationMode,
+cameraResolution:this.cameraHandle ? `${this.cameraHandle.width}×${this.cameraHandle.height}` : null,
+trackingFps:Number(this.tracker.trackingFps.toFixed(1)),
+visionInferenceMs:Number(this.tracker.averageInferenceMs.toFixed(1)),
+visionDelegate:this.tracker.delegateUsed,
+visionErrors:this.tracker.pumpErrorCount,
 rail:{cam:this.el.rail.cam?.textContent??'',hands:this.el.rail.hands?.textContent??'',gesture:this.el.rail.gesture?.textContent??'',fps:this.el.rail.fps?.textContent??''},
 fpsHistory:[...this.fpsHistory],
 coach:this.el.coach.textContent||null,

@@ -3473,3 +3473,28 @@ Task: Isolate cinematic startup from PRISM engine initialization
 - Main PRISM Three.js scene creation, MediaPipe/WASM model preload, DOM wiring, and its render loop now begin only after the cinematic completion handoff.
 - This removes startup contention between the cinematic WebGL context and the production PRISM engine.
 - Static audit confirms the startup effect is gated by showIntro and the existing app.start() handoff remains gated by !showIntro.
+
+
+---
+Task ID: 21
+Agent: general-purpose
+Task: Begin motion-directed cinematic rebuild using the vendored LottieFiles skill
+
+## Motion system
+
+- Added a vendored LottieFiles motion-design skill pack under `skills/motion-design/` with MIT license and wired it into `AGENTS.md`.
+- Added `src/lib/prism/intro/motion.ts` as PRISM's shared motion-language layer.
+- Defined a premium signature easing, dramatic/exit curves, three-layer motion budgets, duration classes, material motion traits, and staged travel that respects the 1/3 distance rule.
+
+## New visual direction
+
+- Rebuilt `science.ts` around lighter buffer-driven realtime systems.
+- Added a cinematic cosmic field, procedural wave ribbons, projectile + pendulum + orbit physics, atomic shells + electron motion + molecular geometry, mathematical curves/spirals/helix, and a central PRISM synthesis core with rings, nodes, and shockwave pulses.
+- Scene transitions now trigger a controlled physical impact pulse on the hero core.
+- Strengthened cinematic CSS staging with opaque background separation, depth rings, crosshair/grid optics, and premium reveal choreography.
+- Attempted to use Higgsfield for a generated hero visual, but the connected account returned that image generation requires Basic plan or higher, so no paid generation was forced into the project.
+
+## Runtime safety
+
+- Kept the strict cinematic-first startup handoff so the main PRISM engine does not initialize during the intro.
+- Removed EffectComposer from the intro hot path and kept geometry updates preallocated.

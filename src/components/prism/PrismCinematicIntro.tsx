@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useEffect, useRef, useState } from "react";
@@ -12,6 +11,41 @@ type Props = {
   showSkip?: boolean;
   duration?: number;
 };
+
+const SCIENCE = [
+  {
+    key: "physics",
+    index: "01",
+    eyebrow: "PHYSICS / MOTION",
+    title: "Forces become visible.",
+    formula: "F = ma",
+    detail: "Momentum · fields · trajectories",
+  },
+  {
+    key: "chemistry",
+    index: "02",
+    eyebrow: "CHEMISTRY / MATTER",
+    title: "Matter becomes a system.",
+    formula: "H₂O  ·  ΔE",
+    detail: "Atoms · bonds · energy",
+  },
+  {
+    key: "math",
+    index: "03",
+    eyebrow: "MATHEMATICS / SPACE",
+    title: "Geometry becomes interaction.",
+    formula: "∫∫  ∇  π",
+    detail: "Vectors · fields · dimensions",
+  },
+  {
+    key: "spatial",
+    index: "04",
+    eyebrow: "SPATIAL COMPUTING",
+    title: "Reality becomes an interface.",
+    formula: "x · y · z",
+    detail: "Vision · depth · gesture",
+  },
+] as const;
 
 export default function PrismCinematicIntro({
   onComplete,
@@ -63,7 +97,7 @@ export default function PrismCinematicIntro({
       root.style.setProperty("--film-time", String(current));
       root.style.setProperty("--film-progress", String(Math.min(1, current / (duration / 1000))));
 
-      if (now - lastUi >= 60) {
+      if (now - lastUi >= 50) {
         lastUi = now;
         setTime(current);
 
@@ -108,12 +142,19 @@ export default function PrismCinematicIntro({
     return () => window.removeEventListener("keydown", onKey);
   }, [showSkip]);
 
-  const titleIn = Math.min(1, Math.max(0, (time - TEXT_T0) / 0.82));
-  const titleOut = Math.min(1, Math.max(0, (time - (TEXT_T1 - 0.52)) / 0.52));
+  const titleIn = Math.min(1, Math.max(0, (time - TEXT_T0) / 0.92));
+  const titleOut = Math.min(1, Math.max(0, (time - (TEXT_T1 - 0.58)) / 0.58));
   const titleOpacity = titleIn * (1 - titleOut);
 
-  const creditsIn = Math.min(1, Math.max(0, (time - (MEMBER_T0 - 0.22)) / 0.48));
-  const creditsOut = Math.min(1, Math.max(0, (time - 14.20) / 0.60));
+  const scienceIndex =
+    time >= 1.65 && time < 10.25
+      ? Math.min(SCIENCE.length - 1, Math.floor((time - 1.65) / 2.15))
+      : -1;
+  const science = scienceIndex >= 0 ? SCIENCE[scienceIndex] : null;
+  const sciencePhase = scienceIndex >= 0 ? ((time - 1.65) % 2.15) / 2.15 : 0;
+
+  const creditsIn = Math.min(1, Math.max(0, (time - (MEMBER_T0 - 0.24)) / 0.48));
+  const creditsOut = Math.min(1, Math.max(0, (time - (MEMBER_T0 + MEMBER_DUR * TEAM.length - 0.18)) / 0.62));
   const creditsOpacity = creditsIn * (1 - creditsOut);
 
   const style = {
@@ -121,6 +162,8 @@ export default function PrismCinematicIntro({
     "--title-y": String((1 - titleIn) * 20 - titleOut * 16) + "px",
     "--credits-opacity": creditsOpacity,
     "--credits-y": String((1 - creditsIn) * 18 - creditsOut * 12) + "px",
+    "--science-index": scienceIndex,
+    "--science-progress": sciencePhase,
   } as CSSProperties;
 
   const active = memberIndex >= 0 ? TEAM[memberIndex] : null;
@@ -136,6 +179,24 @@ export default function PrismCinematicIntro({
       <canvas ref={canvasRef} className="prism-cinematic__canvas" aria-hidden="true" />
       <div className="prism-cinematic__vignette" aria-hidden="true" />
       <div className="prism-cinematic__grain" aria-hidden="true" />
+
+      <div className="prism-cinematic__science" aria-hidden="true">
+        <div className="prism-cinematic__science-orbit prism-cinematic__science-orbit-a" />
+        <div className="prism-cinematic__science-orbit prism-cinematic__science-orbit-b" />
+        <div className="prism-cinematic__science-prism" />
+        <div className="prism-cinematic__science-card">
+          <div className="prism-cinematic__science-index">{science?.index ?? "00"}</div>
+          <div className="prism-cinematic__science-copy">
+            <span>{science?.eyebrow ?? "ZYNASH LABS / RESEARCH"}</span>
+            <strong>{science?.title ?? "Reality, refracted."}</strong>
+            <small>{science?.detail ?? "A spatial instrument for seeing interaction differently"}</small>
+          </div>
+          <div className="prism-cinematic__science-formula">{science?.formula ?? "PRISM"}</div>
+        </div>
+        <div className="prism-cinematic__science-axis axis-x">X</div>
+        <div className="prism-cinematic__science-axis axis-y">Y</div>
+        <div className="prism-cinematic__science-axis axis-z">Z</div>
+      </div>
 
       <header className="prism-cinematic__header">
         <div className="prism-cinematic__brand">
@@ -155,7 +216,7 @@ export default function PrismCinematicIntro({
       </header>
 
       <section className="prism-cinematic__title" aria-live="polite">
-        <span className="prism-cinematic__title-kicker">ZYNASH LABS</span>
+        <span className="prism-cinematic__title-kicker">ZYNASH LABS / SCIENCE IN MOTION</span>
         <h1>PRISM</h1>
         <p>Projected Reality Interaction &amp; Spatial Manipulation</p>
       </section>
@@ -180,14 +241,14 @@ export default function PrismCinematicIntro({
           <strong>{active?.name ?? ""}</strong>
           <span>
             {active?.handle ?? ""}
-            {active?.role ? \` · \${active.role}\` : ""}
+            {active?.role ? ` · ${active.role}` : ""}
           </span>
         </div>
       </section>
 
       <div className="prism-cinematic__footer" aria-hidden="true">
-        <span>PRISM / ZYNASH LABS</span>
-        <i style={{ transform: \`scaleX(\${progress})\` }} />
+        <span>PRISM / ZYNASH LABS / 2026</span>
+        <i style={{ transform: `scaleX(${progress})` }} />
       </div>
     </main>
   );

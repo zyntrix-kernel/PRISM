@@ -118,6 +118,7 @@ export class PrismApp {
   private listeners = new Set<PrismStateListener>();
   private lastStateStr = '';
   private presentationMode = false;
+  private readonly uiAbort = new AbortController();
 
   constructor(elements: PrismElements) {
     this.el = elements;
@@ -174,7 +175,7 @@ export class PrismApp {
   toggleHelp(): void { this.el.helpCard.classList.toggle('hidden'); }
   dismissOnboard(): void { this.el.onboard.classList.add('hidden'); this.onboardVisible=false; try { window.localStorage.setItem(this.ONBOARD_KEY,'1'); } catch {} this.emit(); }
   start(): void { if (this.rafHandle) return; this.last=performance.now(); this.rafHandle=requestAnimationFrame(this.tick); }
-  dispose(): void { this.disposed=true; if(this.rafHandle) cancelAnimationFrame(this.rafHandle); this.rafHandle=0; this.tracker.stop(); this.cameraHandle?.stop(); this.cameraHandle=null; this.interaction.dispose(); this.observer.setEnabled(false); this.scene.dispose(); this.listeners.clear(); }
+  dispose(): void { this.disposed=true; this.uiAbort.abort(); if(this.rafHandle) cancelAnimationFrame(this.rafHandle); this.rafHandle=0; this.tracker.stop(); this.cameraHandle?.stop(); this.cameraHandle=null; this.interaction.dispose(); this.observer.setEnabled(false); this.scene.dispose(); this.listeners.clear(); }
 
   private setStatus(msg:string,full?:string):void{const textEl=this.el.status.querySelector('.prism-status-text')??this.el.status;textEl.textContent=msg;this.el.status.title=full??msg;this.emit();}
   private toast(message:string,kind:'success'|'info'|'warn'='info'):void{if(typeof window!=='undefined'&&typeof window.__prismToast==='function')window.__prismToast({message,kind});}
@@ -182,24 +183,25 @@ export class PrismApp {
 
   private bindUI():void{
     const {qualitySel,presetSel,debugBtn,helpBtn,helpClose,easyBtn,aiBtn,cameraBtn,onboardClose,onboardHelp}=this.el;
-    presetSel.addEventListener('change',()=>this.loadPreset(presetSel.value as PresetId));
-    window.addEventListener('prism-preset',(e)=>this.loadPreset((e as CustomEvent<PresetId>).detail,true));
-    window.addEventListener('prism-reset-world',()=>this.loadPreset(this.scene.currentPreset,false,true));
-    window.addEventListener('prism-easy',()=>this.toggleEasy());
-    window.addEventListener('prism-presentation',()=>this.togglePresentation());
-    window.addEventListener('prism-cycle',(e)=>{const w=this.scene.currentWorld;if(!w?.cycleBlock)return;w.cycleBlock((e as CustomEvent<number>).detail>=0?1:-1);this.refreshPalette();});
-    easyBtn.addEventListener('click',()=>this.toggleEasy());
-    aiBtn.addEventListener('click',()=>this.toggleAi());
-    cameraBtn.addEventListener('click',()=>void this.bootVision());
-    qualitySel.addEventListener('change',()=>this.setQuality(qualitySel.value));
-    debugBtn.addEventListener('click',()=>this.toggleDebug());
-    helpBtn.addEventListener('click',()=>this.toggleHelp());
-    helpClose.addEventListener('click',()=>this.el.helpCard.classList.add('hidden'));
-    onboardClose.addEventListener('click',()=>this.dismissOnboard());
-    onboardHelp.addEventListener('click',()=>{this.dismissOnboard();this.el.helpCard.classList.remove('hidden');});
-    window.addEventListener('keydown',(e)=>{if(e.key==='d'||e.key==='D')this.toggleDebug();if(e.key==='h'||e.key==='H')this.toggleHelp();if(e.key==='p'||e.key==='P')this.togglePresentation();});
-    window.addEventListener('resize',()=>{const c=this.el.container;this.scene.resize(c.clientWidth,c.clientHeight);});
-    window.addEventListener('error',(e)=>{this.setStatus('Runtime fault — mouse still works',`Runtime fault: ${e.message} — mouse fallback still works; report this text.`);});
+    const signal = this.uiAbort.signal;
+    presetSel.addEventListener('change',()=>this.loadPreset(presetSel.value as PresetId),{signal});
+    window.addEventListener('prism-preset',(e)=>this.loadPreset((e as CustomEvent<PresetId>).detail,true),{signal});
+    window.addEventListener('prism-reset-world',()=>this.loadPreset(this.scene.currentPreset,false,true),{signal});
+    window.addEventListener('prism-easy',()=>this.toggleEasy(),{signal});
+    window.addEventListener('prism-presentation',()=>this.togglePresentation(),{signal});
+    window.addEventListener('prism-cycle',(e)=>{const w=this.scene.currentWorld;if(!w?.cycleBlock)return;w.cycleBlock((e as CustomEvent<number>).detail>=0?1:-1);this.refreshPalette();},{signal});
+    easyBtn.addEventListener('click',()=>this.toggleEasy(),{signal});
+    aiBtn.addEventListener('click',()=>this.toggleAi(),{signal});
+    cameraBtn.addEventListener('click',()=>this.toggleCamera(),{signal});
+    qualitySel.addEventListener('change',()=>this.setQuality(qualitySel.value),{signal});
+    debugBtn.addEventListener('click',()=>this.toggleDebug(),{signal});
+    helpBtn.addEventListener('click',()=>this.toggleHelp(),{signal});
+    helpClose.addEventListener('click',()=>this.el.helpCard.classList.add('hidden'),{signal});
+    onboardClose.addEventListener('click',()=>this.dismissOnboard(),{signal});
+    onboardHelp.addEventListener('click',()=>{this.dismissOnboard();this.el.helpCard.classList.remove('hidden');},{signal});
+    window.addEventListener('keydown',(e)=>{if(e.key==='d'||e.key==='D')this.toggleDebug();if(e.key==='h'||e.key==='H')this.toggleHelp();if(e.key==='p'||e.key==='P')this.togglePresentation();},{signal});
+    window.addEventListener('resize',()=>{const c=this.el.container;this.scene.resize(c.clientWidth,c.clientHeight);},{signal});
+    window.addEventListener('error',(e)=>{this.setStatus('Runtime fault — mouse still works',`Runtime fault: ${e.message} — mouse fallback still works; report this text.`);},{signal});
     try{this.onboardVisible=window.localStorage.getItem(this.ONBOARD_KEY)!=='1';}catch{this.onboardVisible=true;}
     if(this.onboardVisible)this.el.onboard.classList.remove('hidden');else this.el.onboard.classList.add('hidden');
   }

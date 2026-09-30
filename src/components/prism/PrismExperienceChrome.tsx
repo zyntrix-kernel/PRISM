@@ -120,7 +120,7 @@ export default function PrismExperienceChrome({ state, app, onCommand }: Props) 
           </div>
 
           <div className="prism-command-actions">
-            <button type="button" className={`prism-command-button ${state?.cameraOn ? "is-active" : ""}`} onClick={() => app?.enableCamera()} disabled={!app || state?.cameraStarting} title="Enable camera">
+            <button type="button" className={`prism-command-button ${state?.cameraOn ? "is-active" : ""}`} onClick={() => app?.toggleCamera()} disabled={!app || state?.cameraStarting} title={state?.cameraOn ? "Disable camera" : "Enable camera"}>
               <Camera size={14} /><span>{state?.cameraOn ? "LIVE" : "CAMERA"}</span>
             </button>
 

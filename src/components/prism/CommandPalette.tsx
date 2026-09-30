@@ -25,6 +25,8 @@ import {
   Cloud,
   type LucideIcon,
 } from "lucide-react";
+import { PRESET_CATALOG } from "@/lib/prism/presets/catalog";
+import { PRESET_ORDER } from "@/lib/prism/presets/types";
 
 export interface CommandAction {
   id: string;
@@ -52,7 +54,25 @@ interface Props {
   } | null;
 }
 
-const PRESETS: Array<{ id: PrismState["preset"]; label: string; icon: LucideIcon; blurb: string }> = [
+const PRESET_ICONS: Record<PrismState["preset"], LucideIcon> = {
+  space: Orbit,
+  blocks: Boxes,
+  test: CircleIcon,
+  singularity: Disc,
+  drive: Car,
+  atom: Atom,
+  voxel: Grid3x3,
+  gun: Crosshair,
+  supernova: Sun,
+  nebula: Cloud,
+};
+
+const PRESETS = PRESET_ORDER.map((id) => ({
+  id,
+  label: PRESET_CATALOG[id].label,
+  icon: PRESET_ICONS[id],
+  blurb: PRESET_CATALOG[id].description,
+})); label: string; icon: LucideIcon; blurb: string }> = [
   { id: "space", label: "Space", icon: Orbit, blurb: "Keplerian solar system" },
   { id: "blocks", label: "Blocks", icon: Boxes, blurb: "Voxel stacking rig" },
   { id: "test", label: "Test", icon: CircleIcon, blurb: "3-orb calibration" },

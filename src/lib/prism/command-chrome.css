@@ -99,6 +99,9 @@
 .prism-command-inspection-marker:before,.prism-command-inspection-marker:after,.prism-command-inspection-marker span { content:""; position:absolute; border:1px solid color-mix(in srgb,var(--world-color) 35%,transparent); border-radius:50%; }
 .prism-command-inspection-marker:before { inset:7px; } .prism-command-inspection-marker:after { inset:11px; opacity:.5; } .prism-command-inspection-marker span { width:4px; height:4px; background:color-mix(in srgb,var(--world-color) 72%,white); box-shadow:0 0 12px color-mix(in srgb,var(--world-color) 60%,transparent); }
 .prism-command-inspection p { margin:0; color:rgba(226,241,251,.58); font-size:9px; line-height:1.6; }
+.prism-command-inspection-state { display:flex; justify-content:space-between; gap:8px; margin-top:11px; padding-top:9px; border-top:1px solid rgba(206,231,247,.07); font:700 6px/1 var(--font-mono); letter-spacing:.13em; }
+.prism-command-inspection-state span { color:rgba(213,235,249,.28); }
+.prism-command-inspection-state strong { color:color-mix(in srgb,var(--world-color) 62%,white); }
 .prism-command-inspection p::first-line { color:rgba(241,248,253,.83); font-weight:600; }
 
 .prism-command-left,.prism-command-right {

@@ -71,7 +71,6 @@ export default function PrismStage() {
   const [state, setState] = useState<PrismState | null>(null);
   const [app, setApp] = useState<PrismApp | null>(null);
   const [presetOpen, setPresetOpen] = useState(false);
-  const [paletteOpen, setPaletteOpen] = useState(false);
   const [cmdOpen, setCmdOpen] = useState(false);
   const [onboardMin, setOnboardMin] = useState(false);
 

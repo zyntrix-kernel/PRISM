@@ -102,6 +102,9 @@ export default function PrismStage() {
   const [cmdOpen, setCmdOpen] = useState(false);
   const [onboardMin, setOnboardMin] = useState(false);
   const [sfxMuted, setSfxMuted] = useState(true);
+  // True only when an AudioContext actually exists AND is running — the chip
+  // may only read "on" when sound is genuinely audible, never before.
+  const [sfxArmed, setSfxArmed] = useState(false);
 
   /*
    * App-phase audio: the film score hands the AudioContext over to the
@@ -114,15 +117,36 @@ export default function PrismStage() {
     if (phase !== "live") return;
     const score = prismScore();
     setSfxMuted(score.isMuted);
+    setSfxArmed(score.unlocked);
     score.restoreMaster(0.85, 0.9);
-    window.setTimeout(() => score.sfx("boot"), 480);
 
-    const unlock = () => score.unlock();
-    window.addEventListener("pointerdown", unlock);
-    window.addEventListener("keydown", unlock);
+    /*
+     * Boot chord: fire at +480ms when the score is already armed (the user
+     * interacted during the film), otherwise HOLD it until the first gesture —
+     * browsers forbid audio before that, so instead of losing the chord
+     * silently we play it the moment the context comes alive.
+     */
+    let bootDone = score.unlocked;
+    const playBoot = () => {
+      if (bootDone) return;
+      bootDone = true;
+      window.setTimeout(() => score.sfx("boot"), 80);
+    };
+    if (score.unlocked) window.setTimeout(() => score.sfx("boot"), 480);
+
+    /* Capture phase: runs BEFORE element handlers, so even the very first
+     * click's SFX has a live context to speak through (bubble-phase listeners
+     * fire after the target — that ordering used to swallow the first sound). */
+    const unlock = () => {
+      score.unlock();
+      setSfxArmed(score.unlocked);
+      playBoot();
+    };
+    window.addEventListener("pointerdown", unlock, true);
+    window.addEventListener("keydown", unlock, true);
     return () => {
-      window.removeEventListener("pointerdown", unlock);
-      window.removeEventListener("keydown", unlock);
+      window.removeEventListener("pointerdown", unlock, true);
+      window.removeEventListener("keydown", unlock, true);
     };
   }, [phase]);
 
@@ -177,6 +201,9 @@ export default function PrismStage() {
     const next = !score.isMuted;
     score.setMuted(next);
     setSfxMuted(next);
+    // Unmuting calls unlock() inside this gesture — re-sync the armed light
+    // immediately so the chip never claims "on" without a running context.
+    setSfxArmed(score.unlocked);
   }, []);
 
   // Cmd/Ctrl + K opens the command palette
@@ -283,18 +310,36 @@ export default function PrismStage() {
           className="prism-glass"
           onClick={toggleAppSfx}
           aria-label={sfxMuted ? "Enable sound effects" : "Mute sound effects"}
-          title={sfxMuted ? "SFX muted — click to enable" : "SFX on"}
-          data-armed={sfxMuted ? "off" : "on"}
+          title={
+            sfxMuted
+              ? "SFX muted — click to enable"
+              : sfxArmed
+                ? "SFX on"
+                : "Sound arms on your first click — interact anywhere"
+          }
+          data-armed={sfxMuted || !sfxArmed ? "off" : "on"}
         >
           <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
             <path d="M2 6h2.6L8.4 2.8v10.4L4.6 10H2z" fill="currentColor" />
-            {sfxMuted ? (
+            {sfxMuted || !sfxArmed ? (
               <path d="M11 5.6l3.4 4.8M14.4 5.6L11 10.4" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" fill="none" />
             ) : (
               <path d="M10.8 5.2a4 4 0 010 5.6M12.6 3.4a6.4 6.4 0 010 9.2" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" fill="none" />
             )}
           </svg>
         </button>
+      )}
+
+      {/* School watermark — Narayana Educational Institutions. Pinned to the
+          one corner no HUD surface claims (right edge, above the webcam
+          frame). Translucent but readable; never intercepts pointers. */}
+      {phase === "live" && (
+        <img
+          id="prism-watermark"
+          src="/narayana-logo.webp"
+          alt="Narayana Educational Institutions"
+          draggable={false}
+        />
       )}
 
       {/* Preset-switch transition overlay (dreamy radial flash on world change) */}

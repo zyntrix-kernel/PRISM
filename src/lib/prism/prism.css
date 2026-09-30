@@ -2058,3 +2058,37 @@ video#prism-webcam.live + #prism-webcam-frame .prism-webcam-placeholder {
     height: 44px;
   }
 }
+
+/* ── School watermark — Narayana Educational Institutions ──────────────────
+   A presenter's bug pinned to the one corner no HUD surface claims: the
+   right edge, just above the webcam frame (toasts own the top-right, the
+   SFX chip the bottom-left, palette/coach the center). See-through but
+   readable; never intercepts pointers. */
+#prism-watermark {
+  position: fixed;
+  right: 18px;
+  bottom: 158px;
+  z-index: 30;
+  height: 26px;
+  width: auto;
+  opacity: 0.66;
+  pointer-events: none;
+  user-select: none;
+  -webkit-user-drag: none;
+  filter: drop-shadow(0 1px 10px rgba(2, 8, 24, 0.6)) drop-shadow(0 0 2px rgba(2, 8, 24, 0.45));
+  animation: prism-wm-in 1.2s cubic-bezier(0.22, 1, 0.36, 1) 0.95s backwards;
+}
+
+@keyframes prism-wm-in {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 0.66; transform: translateY(0); }
+}
+
+@media (max-width: 768px) {
+  #prism-watermark {
+    height: 20px;
+    right: 12px;
+    bottom: 128px;
+    opacity: 0.6;
+  }
+}

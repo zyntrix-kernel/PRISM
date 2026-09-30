@@ -87,8 +87,10 @@ export default function PrismCinematicIntro({ onComplete, showSkip = true }: Pro
       score.unlock();
       setArmed(score.hasContext);
     };
-    window.addEventListener("pointerdown", unlock);
-    window.addEventListener("keydown", unlock);
+    // Capture phase — arms audio BEFORE any element handler runs, so even the
+    // very first click's cue has a live context (bubble listeners fire late).
+    window.addEventListener("pointerdown", unlock, true);
+    window.addEventListener("keydown", unlock, true);
 
     // ── No WebGL → CSS poster run (title + credits, no canvas) ──
     let film: PrismIntroFilm | null = null;
@@ -192,8 +194,8 @@ export default function PrismCinematicIntro({ onComplete, showSkip = true }: Pro
     return () => {
       window.removeEventListener("resize", onResize);
       window.removeEventListener("keydown", onKey);
-      window.removeEventListener("pointerdown", unlock);
-      window.removeEventListener("keydown", unlock);
+      window.removeEventListener("pointerdown", unlock, true);
+      window.removeEventListener("keydown", unlock, true);
       film?.dispose();
       filmRef.current = null;
       finishRef.current = null;
@@ -276,8 +278,14 @@ export default function PrismCinematicIntro({ onComplete, showSkip = true }: Pro
             type="button"
             className="prism-cinematic__sound"
             onClick={toggleSound}
-            aria-label={muted ? "Turn film sound on" : "Turn film sound off"}
-            title={muted ? "Sound off — click to enable the score" : "Sound on"}
+            aria-label={muted || !armed ? "Turn film sound on" : "Turn film sound off"}
+            title={
+              muted
+                ? "Sound off — click to enable the score"
+                : armed
+                  ? "Sound on"
+                  : "Sound on — arms at your first click anywhere"
+            }
             data-armed={armed && !muted ? "on" : "off"}
           >
             <svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true">
@@ -285,7 +293,7 @@ export default function PrismCinematicIntro({ onComplete, showSkip = true }: Pro
                 d="M2 6h2.6L8.4 2.8v10.4L4.6 10H2z"
                 fill="currentColor"
               />
-              {muted ? (
+              {muted || !armed ? (
                 <path d="M11 5.6l3.4 4.8M14.4 5.6L11 10.4" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" fill="none" />
               ) : (
                 <path
@@ -394,6 +402,15 @@ export default function PrismCinematicIntro({ onComplete, showSkip = true }: Pro
         <span className="prism-cinematic__footer-label">FIRST LIGHT · 28.8S · ZYNASH LABS 2026</span>
         <i className="prism-cinematic__progress" />
       </footer>
+
+      {/* School watermark — Narayana Educational Institutions, a presenter's
+          bug riding above the footer rail, bottom-right. */}
+      <img
+        className="prism-cinematic__schoolmark"
+        src="/narayana-logo.webp"
+        alt="Narayana Educational Institutions"
+        draggable={false}
+      />
     </main>
   );
 }

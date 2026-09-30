@@ -175,8 +175,13 @@ export class PrismScore {
   // ── app-phase one-shots ───────────────────────────────────────────────────
 
   sfx(name: "boot" | "preset" | "grab" | "release" | "toast-ok" | "toast-warn" | "toast-info" | "camera" | "click"): void {
-    if (!this.ctx || !this.master || this.muted) return;
-    if (this.ctx.state !== "running") void this.ctx.resume();
+    if (this.muted) return;
+    // Self-heal: interaction SFX are always invoked from a user gesture, so a
+    // missing or suspended context can be created/resumed right here. Without
+    // this the UI may say "sound on" while the browser never handed us a
+    // context — audio would stay dead until the user cycled the toggle.
+    if (!this.ctx || this.ctx.state !== "running") this.unlock();
+    if (!this.ctx || !this.master) return;
     switch (name) {
       case "boot": this.voiceChord([220, 330, 440, 554.4], 0.028, 1.8, 0.4); this.voiceSparkle(1600, 0.05, 3); break;
       case "preset": this.voiceWhoosh(500, 2400, 0.55, 0.16); this.voicePing(660, 0.014, 0.5); break;

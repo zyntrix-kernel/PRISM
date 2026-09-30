@@ -174,7 +174,7 @@ export class PrismApp {
   toggleHelp(): void { this.el.helpCard.classList.toggle('hidden'); }
   dismissOnboard(): void { this.el.onboard.classList.add('hidden'); this.onboardVisible=false; try { window.localStorage.setItem(this.ONBOARD_KEY,'1'); } catch {} this.emit(); }
   start(): void { if (this.rafHandle) return; this.last=performance.now(); this.rafHandle=requestAnimationFrame(this.tick); }
-  dispose(): void { this.disposed=true; if(this.rafHandle) cancelAnimationFrame(this.rafHandle); this.rafHandle=0; this.tracker.stop(); this.cameraHandle?.stop(); this.observer.setEnabled(false); this.scene.dispose(); this.listeners.clear(); }
+  dispose(): void { this.disposed=true; if(this.rafHandle) cancelAnimationFrame(this.rafHandle); this.rafHandle=0; this.tracker.stop(); this.cameraHandle?.stop(); this.cameraHandle=null; this.interaction.dispose(); this.observer.setEnabled(false); this.scene.dispose(); this.listeners.clear(); }
 
   private setStatus(msg:string,full?:string):void{const textEl=this.el.status.querySelector('.prism-status-text')??this.el.status;textEl.textContent=msg;this.el.status.title=full??msg;this.emit();}
   private toast(message:string,kind:'success'|'info'|'warn'='info'):void{if(typeof window!=='undefined'&&typeof window.__prismToast==='function')window.__prismToast({message,kind});}

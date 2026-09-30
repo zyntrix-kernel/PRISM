@@ -87,6 +87,15 @@ export default function PrismStage() {
   }, []);
 
   useEffect(() => {
+    /*
+     * Strict startup handoff:
+     * the cinematic gets the machine first. PrismApp, Three.js world creation,
+     * and MediaPipe preload begin only after the intro completes. This avoids
+     * two WebGL contexts and background WASM/model work competing during the
+     * first frame of the showcase.
+     */
+    if (showIntro) return;
+
     const container = containerRef.current;
     const video = videoRef.current;
     const overlay = overlayRef.current;
@@ -133,11 +142,8 @@ export default function PrismStage() {
       appRef.current = null;
       setApp(null);
     };
-  }, []);
+  }, [showIntro]);
 
-  // The cinematic intro is intentionally allowed to own the GPU/CPU budget
-  // during startup. PrismApp still constructs and preloads MediaPipe, but its
-  // 60fps render loop starts only after the intro hands control back.
   useEffect(() => {
     if (!showIntro && appRef.current) {
       appRef.current.start();

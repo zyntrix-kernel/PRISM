@@ -49,6 +49,8 @@ export class HandTracker {
   private detectionTotalMs = 0;
   private lastSubmittedAt = -Infinity;
   private videoFrameCallbackHandle = 0;
+  private requestedIntervalMs: number | null = null;
+  private baseIntervalMs = 180;
 
   modelOffline = false;
   delegateUsed = 'GPU';
@@ -159,7 +161,8 @@ export class HandTracker {
     // Vision is input sampling, not display rendering. Phones sample more
     // slowly than the renderer; worker backpressure keeps stale frames out.
     const defaultInterval = isTabletDevice() ? 100 : 180;
-    const targetInterval = Math.max(80, opts?.intervalMs ?? defaultInterval);
+    this.baseIntervalMs = Math.max(80, defaultInterval);
+    this.requestedIntervalMs = opts?.intervalMs != null ? Math.max(80, opts.intervalMs) : null;
     const videoWithCallback = this.video;
 
     if (this.useWorker && videoWithCallback.requestVideoFrameCallback) {
@@ -167,7 +170,7 @@ export class HandTracker {
         if (!this.running || !this.video || !videoWithCallback.requestVideoFrameCallback) return;
         this.videoFrameCallbackHandle = videoWithCallback.requestVideoFrameCallback((now) => {
           if (!this.running) return;
-          if (now - this.lastSubmittedAt >= targetInterval) this.pump(now);
+          if (now - this.lastSubmittedAt >= this.getTargetIntervalMs()) this.pump(now);
           schedule();
         });
       };
@@ -178,7 +181,7 @@ export class HandTracker {
     const loop = (): void => {
       if (!this.running) return;
       this.pump(performance.now());
-      this.loopHandle = window.setTimeout(loop, targetInterval) as unknown as number;
+      this.loopHandle = window.setTimeout(loop, this.getTargetIntervalMs()) as unknown as number;
     };
     this.loopHandle = window.setTimeout(loop, targetInterval) as unknown as number;
   }
@@ -192,6 +195,7 @@ export class HandTracker {
     }
     this.videoFrameCallbackHandle = 0;
     this.workerBusy = false;
+    this.requestedIntervalMs = null;
     this.video = null;
   }
 
@@ -272,6 +276,19 @@ export class HandTracker {
       this.pumpErrorCount += 1;
       this.lastPumpError = message.message;
     }
+  }
+
+  /**
+   * Tracking is a shared-performance budget, not a fixed FPS target.
+   * When MediaPipe inference becomes expensive, increase the sampling interval
+   * before it can compete with the renderer. Fast devices naturally settle
+   * back toward the base interval.
+   */
+  private getTargetIntervalMs(): number {
+    if (this.requestedIntervalMs !== null) return this.requestedIntervalMs;
+    const inference = this.averageInferenceMs;
+    const pressure = inference > 45 ? (inference - 45) * 1.4 : 0;
+    return Math.max(80, Math.min(260, this.baseIntervalMs + pressure));
   }
 
   private acceptResult(hands: TrackedHand[], timestampMs: number, inferenceMs: number): void {

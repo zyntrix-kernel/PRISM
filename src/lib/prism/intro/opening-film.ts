@@ -419,6 +419,10 @@ export class PrismOpeningFilm {
       this.shader.uniforms.uAspect.value = aspect;
     }
 
+    if (this.quad) {
+      this.quad.scale.set(aspect, 1, 1);
+    }
+
     if (this.prismGroup) {
       const responsive = Math.min(1, Math.max(0.62, aspect / 1.08));
       this.prismGroup.scale.set(0.82 * responsive, 0.82, 0.82);

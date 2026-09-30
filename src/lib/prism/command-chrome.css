@@ -6,15 +6,16 @@
 .prism-command-focus,
 .prism-command-footer { position:fixed; z-index:20; pointer-events:auto; color:var(--hud-fg); font-family:var(--font-ui); }
 
-.prism-command-chrome { top:14px; left:16px; right:16px; max-width:1600px; margin:auto; }
-.prism-command-top {
+.prism-command-chrome { top:14px; left:16px; right:16px; max-width:1600px; margin:auto; --world-color:rgb(125,211,252); }
+.prism-command-top { position:relative; overflow:visible;
   min-height:62px; display:grid; grid-template-columns:minmax(210px,1fr) auto minmax(320px,1.35fr);
   align-items:center; gap:18px; padding:10px 12px 10px 14px; border:1px solid rgba(201,232,255,.13);
-  border-radius:18px; background:linear-gradient(180deg,rgba(16,27,43,.80),rgba(4,9,16,.66)),radial-gradient(circle at 18% 0,rgba(126,216,255,.08),transparent 38%);
+  border-radius:18px; background:linear-gradient(180deg,rgba(16,27,43,.80),rgba(4,9,16,.66)),radial-gradient(circle at 18% 0,color-mix(in srgb,var(--world-color) 9%,transparent),transparent 38%);
   box-shadow:0 20px 70px rgba(0,0,0,.36),0 2px 10px rgba(0,0,0,.30),inset 0 1px 0 rgba(255,255,255,.09);
   -webkit-backdrop-filter:blur(20px) saturate(130%); backdrop-filter:blur(20px) saturate(130%);
   animation:prism-command-in .8s cubic-bezier(.16,.9,.16,1) both;
 }
+.prism-command-top:after { content:""; position:absolute; left:18px; right:18px; top:0; height:1px; background:linear-gradient(90deg,transparent,color-mix(in srgb,var(--world-color) 58%,white),transparent); opacity:.46; pointer-events:none; }
 .prism-command-brand { min-width:0; display:flex; align-items:center; gap:11px; }
 .prism-command-mark { position:relative; width:31px; height:31px; flex:0 0 auto; display:grid; place-items:center; overflow:hidden; border:1px solid rgba(189,230,255,.19); border-radius:10px; background:linear-gradient(145deg,rgba(90,190,255,.16),rgba(255,255,255,.025)); box-shadow:inset 0 1px 0 rgba(255,255,255,.11),0 8px 24px rgba(0,0,0,.22); }
 .prism-command-mark:before,.prism-command-mark:after,.prism-command-mark span { content:""; position:absolute; display:block; background:rgba(208,241,255,.78); border-radius:99px; box-shadow:0 0 11px rgba(126,216,255,.30); }
@@ -82,6 +83,23 @@
 .prism-command-world-strip i { width:18px; height:1px; background:linear-gradient(90deg,rgba(126,216,255,.65),transparent); }
 .prism-command-world-strip strong { color:rgba(236,247,255,.62); }
 .prism-command-world-strip em { margin-left:auto; font-style:normal; opacity:.62; }
+
+
+.prism-command-inspection {
+  position:fixed; z-index:20; left:16px; top:360px; width:248px; min-height:112px; padding:12px 13px 14px;
+  border:1px solid rgba(203,231,250,.10); border-radius:15px;
+  background:linear-gradient(180deg,rgba(10,19,31,.70),rgba(4,8,14,.52));
+  box-shadow:0 20px 60px rgba(0,0,0,.26),inset 0 1px 0 rgba(255,255,255,.045);
+  -webkit-backdrop-filter:blur(16px) saturate(125%); backdrop-filter:blur(16px) saturate(125%);
+  animation:prism-command-inspection-in .34s cubic-bezier(.16,1,.3,1) both;
+}
+.prism-command-inspection>header { display:flex; justify-content:space-between; margin-bottom:11px; font:700 7px/1 var(--font-mono); letter-spacing:.16em; color:rgba(220,239,252,.33); }
+.prism-command-inspection>header span:last-child { color:color-mix(in srgb,var(--world-color) 64%,white); }
+.prism-command-inspection-marker { position:relative; width:28px; height:28px; display:grid; place-items:center; margin-bottom:10px; border:1px solid color-mix(in srgb,var(--world-color) 34%,transparent); border-radius:9px; background:color-mix(in srgb,var(--world-color) 9%,transparent); box-shadow:inset 0 1px 0 rgba(255,255,255,.05); }
+.prism-command-inspection-marker:before,.prism-command-inspection-marker:after,.prism-command-inspection-marker span { content:""; position:absolute; border:1px solid color-mix(in srgb,var(--world-color) 35%,transparent); border-radius:50%; }
+.prism-command-inspection-marker:before { inset:7px; } .prism-command-inspection-marker:after { inset:11px; opacity:.5; } .prism-command-inspection-marker span { width:4px; height:4px; background:color-mix(in srgb,var(--world-color) 72%,white); box-shadow:0 0 12px color-mix(in srgb,var(--world-color) 60%,transparent); }
+.prism-command-inspection p { margin:0; color:rgba(226,241,251,.58); font-size:9px; line-height:1.6; }
+.prism-command-inspection p::first-line { color:rgba(241,248,253,.83); font-weight:600; }
 
 .prism-command-left,.prism-command-right {
   top:132px; width:190px; padding:12px 12px 13px; border:1px solid rgba(203,231,250,.10); border-radius:15px;
@@ -152,11 +170,13 @@
 @keyframes prism-command-focus-in { from{opacity:0;transform:translate(-50%,10px)} to{opacity:1;transform:translate(-50%,0)} }
 @keyframes prism-command-pop { from{opacity:0;transform:translateY(-4px) scale(.985)} to{opacity:1;transform:translateY(0) scale(1)} }
 @keyframes prism-command-modal-in { from{opacity:0;transform:translateY(10px) scale(.985)} to{opacity:1;transform:translateY(0) scale(1)} }
+@keyframes prism-command-inspection-in { from{opacity:0;transform:translateY(6px) scale(.99)} to{opacity:1;transform:translateY(0) scale(1)} }
 @keyframes prism-command-breathe { 0%,100%{box-shadow:0 0 0 4px rgba(112,239,170,.07),0 0 12px rgba(112,239,170,.40)} 50%{box-shadow:0 0 0 5px rgba(112,239,170,.10),0 0 20px rgba(112,239,170,.60)} }
 
 @media(max-width:1120px){
   .prism-command-top{grid-template-columns:1fr auto}.prism-command-status,.prism-command-left,.prism-command-right{display:none}
   .prism-command-focus{width:min(620px,calc(100vw - 32px))}
+  .prism-command-inspection{display:none}
 }
 @media(max-width:820px){
   .prism-command-chrome{top:10px;left:10px;right:10px}.prism-command-top{min-height:56px;gap:8px;padding:8px 9px}

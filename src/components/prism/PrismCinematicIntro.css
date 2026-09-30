@@ -681,6 +681,11 @@
 @keyframes prismBreath{0%,100%{filter:drop-shadow(0 0 27px rgba(79,164,255,.3))}50%{filter:drop-shadow(0 0 46px rgba(114,207,255,.47))}}
 @keyframes launchFlare{0%{opacity:0;transform:scale(.35)}14%{opacity:.85}52%{opacity:.25;transform:scale(1.05)}100%{opacity:0;transform:scale(1.9)}}
 
+@media (hover:none) and (pointer:coarse){
+  .intro-field{filter:blur(38px);opacity:.22}
+  .intro-grain,.intro-scan{display:none}
+  .formula-line span,.prism-tagline,.launch-cta{backdrop-filter:blur(7px);-webkit-backdrop-filter:blur(7px)}
+}
 @media(max-width:760px){
   .intro-topbar{padding:16px 18px}
   .intro-brand small,.intro-mode,.intro-chapter-rail,.intro-metric-stack{display:none}

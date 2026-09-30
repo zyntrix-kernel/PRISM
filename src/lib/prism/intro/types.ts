@@ -7,6 +7,7 @@ export type IntroScene =
   | "physics"
   | "chemistry"
   | "mathematics"
+  | "information"
   | "synthesis"
   | "labs"
   | "prism"
@@ -89,5 +90,4 @@ export interface IntroEngine {
   dispose(): void;
 }
 
-/** Kept as a shared compile-time vocabulary for future showcase plugins. */
 export type IntroMesh = THREE.Object3D;

@@ -211,6 +211,10 @@ export default function PrismExperienceChrome({ state, app, onCommand }: Props) 
           <div><span>FRAME RATE</span><strong>{fps ? fps.toFixed(0) : "--"}<small> FPS</small></strong></div>
           <b className={`prism-command-fps-badge prism-command-fps-badge--${fpsTone}`}>{fpsTone === "good" ? "STABLE" : "GUARD"}</b>
         </div>
+        <div className="prism-command-sensor-line">
+          <span>{state?.cameraResolution ? "SENSOR " + state.cameraResolution : "SENSOR OFF"}</span>
+          <span>{state?.visionErrors ? "ERR " + state.visionErrors : "PIPELINE NOMINAL"}</span>
+        </div>
         <Sparkline values={state?.fpsHistory ?? []} />
         <div className="prism-command-telemetry-grid">
           <div><span>TRACK</span><strong>{state?.cameraOn ? "MEDIAPIPE" : "POINTER"}</strong></div>

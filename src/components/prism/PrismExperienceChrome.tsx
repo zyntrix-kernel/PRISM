@@ -120,7 +120,7 @@ export default function PrismExperienceChrome({ state, app, onCommand }: Props) 
           </div>
 
           <div className="prism-command-actions">
-            <button type="button" className={`prism-command-button ${state?.cameraOn ? "is-active" : ""}`} onClick={() => app?.toggleCamera()} disabled={!app || state?.cameraStarting} title={state?.cameraOn ? "Disable camera" : "Enable camera"}>
+            <button type="button" className={`prism-command-button ${state?.cameraOn ? "is-active" : ""}`} onClick={() => app?.toggleCamera()} disabled={!app || state?.cameraStarting} aria-busy={state?.cameraStarting ?? false} aria-pressed={state?.cameraOn ?? false} aria-label={state?.cameraOn ? "Disable camera" : "Enable camera"} title={state?.cameraOn ? "Disable camera" : "Enable camera"}>
               <Camera size={14} /><span>{state?.cameraOn ? "LIVE" : "CAMERA"}</span>
             </button>
 
@@ -155,7 +155,7 @@ export default function PrismExperienceChrome({ state, app, onCommand }: Props) 
               </select>
             </label>
 
-            <button type="button" className={`prism-command-button ${state?.aiEnabled ? "is-active" : ""}`} onClick={() => app?.toggleAi()} aria-pressed={state?.aiEnabled ?? false} title="Toggle AI observer">
+            <button type="button" className={`prism-command-button ${state?.aiEnabled ? "is-active" : ""}`} onClick={() => app?.toggleAi()} aria-pressed={state?.aiEnabled ?? false} aria-label={state?.aiEnabled ? "Disable AI observer" : "Enable AI observer"} title="Toggle AI observer">
               <Sparkles size={14} /><span>AI</span>
             </button>
             <button

@@ -170,7 +170,7 @@ export default function PrismStage() {
         <PrismCinematicIntro
           onComplete={dismissIntro}
           showSkip={true}
-          duration={14500}
+          duration={15200}
         />
       )}
 

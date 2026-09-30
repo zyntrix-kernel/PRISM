@@ -55,6 +55,7 @@ export interface PrismState {
   grabbedName: string | null;
   pinchPercent: number;
   twoHandActive: boolean;
+  presentationMode: boolean;
   rail: { cam: string; hands: string; gesture: string; fps: string };
   fpsHistory: number[];
   coach: string | null;
@@ -111,6 +112,7 @@ export class PrismApp {
   private onboardCompleteAt = 0;
   private listeners = new Set<PrismStateListener>();
   private lastStateStr = '';
+  private presentationMode = false;
 
   constructor(elements: PrismElements) {
     this.el = elements;
@@ -159,6 +161,7 @@ export class PrismApp {
   setQuality(value: string): void { this.el.qualitySel.value = value; const q = this.el.qualitySel.value === 'auto' ? this.device.tier : (this.el.qualitySel.value as QualityTier); this.scene.applyQuality(q); this.governor.rebase(q); this.toast(`Quality set to ${value}`, 'info'); this.emit(); }
   toggleDebug(): boolean { const v = this.debug.toggle(); this.el.debugBtn.classList.toggle('active', v); this.toast(v ? 'Debug overlay on' : 'Debug overlay off', 'info'); this.emit(); return v; }
   toggleAi(): void { this.observer.setEnabled(!this.observer.isEnabled); this.syncAiButton(); this.toast(this.observer.isEnabled ? 'AI observer enabled' : 'AI observer disabled', 'info'); this.emit(); }
+  togglePresentation(): boolean { this.presentationMode = !this.presentationMode; this.toast(this.presentationMode ? 'Presentation mode' : 'Instrument controls restored', 'info'); this.emit(); return this.presentationMode; }
   toggleEasy(): void { const w = this.scene.currentWorld; if (this.scene.currentPreset !== 'drive' || !w?.setEasyMode || !w?.isEasyMode) return; w.setEasyMode(!w.isEasyMode()); this.syncEasyLabel(); this.emit(); }
   enableCamera(): void { void this.bootVision(); }
   toggleHelp(): void { this.el.helpCard.classList.toggle('hidden'); }
@@ -176,6 +179,7 @@ export class PrismApp {
     window.addEventListener('prism-preset',(e)=>this.loadPreset((e as CustomEvent<PresetId>).detail,true));
     window.addEventListener('prism-reset-world',()=>this.loadPreset(this.scene.currentPreset,false,true));
     window.addEventListener('prism-easy',()=>this.toggleEasy());
+    window.addEventListener('prism-presentation',()=>this.togglePresentation());
     window.addEventListener('prism-cycle',(e)=>{const w=this.scene.currentWorld;if(!w?.cycleBlock)return;w.cycleBlock((e as CustomEvent<number>).detail>=0?1:-1);this.refreshPalette();});
     easyBtn.addEventListener('click',()=>this.toggleEasy());
     aiBtn.addEventListener('click',()=>this.toggleAi());
@@ -186,7 +190,7 @@ export class PrismApp {
     helpClose.addEventListener('click',()=>this.el.helpCard.classList.add('hidden'));
     onboardClose.addEventListener('click',()=>this.dismissOnboard());
     onboardHelp.addEventListener('click',()=>{this.dismissOnboard();this.el.helpCard.classList.remove('hidden');});
-    window.addEventListener('keydown',(e)=>{if(e.key==='d'||e.key==='D')this.toggleDebug();if(e.key==='h'||e.key==='H')this.toggleHelp();});
+    window.addEventListener('keydown',(e)=>{if(e.key==='d'||e.key==='D')this.toggleDebug();if(e.key==='h'||e.key==='H')this.toggleHelp();if(e.key==='p'||e.key==='P')this.togglePresentation();});
     window.addEventListener('resize',()=>{const c=this.el.container;this.scene.resize(c.clientWidth,c.clientHeight);});
     window.addEventListener('error',(e)=>{this.setStatus('Runtime fault — mouse still works',`Runtime fault: ${e.message} — mouse fallback still works; report this text.`);});
     try{this.onboardVisible=window.localStorage.getItem(this.ONBOARD_KEY)!=='1';}catch{this.onboardVisible=true;}
@@ -256,7 +260,8 @@ inputMode:this.interaction.mode,
 focusedName:this.interaction.grabbedName??this.interaction.hoveredName,
 grabbedName:this.interaction.grabbedName,
 pinchPercent:Math.round(this.interaction.pinchCloseness*100),
-twoHandActive:this.interaction.twoHandActive,
+ twoHandActive:this.interaction.twoHandActive,
+presentationMode:this.presentationMode,
 rail:{cam:this.el.rail.cam?.textContent??'',hands:this.el.rail.hands?.textContent??'',gesture:this.el.rail.gesture?.textContent??'',fps:this.el.rail.fps?.textContent??''},
 fpsHistory:[...this.fpsHistory],
 coach:this.el.coach.textContent||null,

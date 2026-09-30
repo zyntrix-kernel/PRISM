@@ -1,6 +1,4 @@
-// Webcam acquisition with graceful errors. Kept separate from tracking so
-// camera failures (no device, permission denied) surface as friendly UI
-// messages instead of silent tracking loss.
+// Webcam acquisition with performance-aware constraints and graceful errors.
 
 export interface CameraHandle {
   stream: MediaStream;
@@ -9,12 +7,6 @@ export interface CameraHandle {
   stop(): void;
 }
 
-/**
- * Human-readable form for getUserMedia/play/model-load rejections.
- * Duck-types instead of instanceof: rejections cross realms and library
- * boundaries (DOMException, ProgressEvent, wrapped errors), where class
- * checks silently fail and String() yields "[object Event]".
- */
 export function describeMediaError(err: unknown): string {
   if (typeof err === 'string' && err) return err;
   if (err && typeof err === 'object') {
@@ -27,93 +19,74 @@ export function describeMediaError(err: unknown): string {
     const json = JSON.stringify(err);
     if (json && json !== '{}') return json;
   } catch {
-    /* unserializable (circular refs): fall through to the safe label */
+    // Ignore unserializable errors.
   }
   return typeof err === 'object' && err !== null ? 'unknown error (unserializable)' : String(err);
 }
 
-/** Rejects if the promise doesn't settle within ms (hung camera drivers exist). */
-function withTimeout<T>(promise: Promise<T>, ms: number, what: string): Promise<T> {
-  let timer: ReturnType<typeof setTimeout>;
-  const timeout = new Promise<never>((_, reject) => {
-    timer = setTimeout(() => reject(new Error(`${what} timed out after ${ms}ms`)), ms);
-  });
-  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
-}
-
-/** Requests the webcam and attaches it to the given video element. */
+/** Requests the webcam with a deliberately bounded capture workload. */
 export async function startCamera(video: HTMLVideoElement): Promise<CameraHandle> {
-  // Check for secure context — getUserMedia requires HTTPS or localhost.
-  // If served over plain HTTP on a non-localhost domain, the browser blocks it.
   if (typeof window !== 'undefined' && window.isSecureContext === false) {
-    throw new Error('Camera requires HTTPS (or localhost). The page is served over HTTP on a non-local domain — the browser blocks camera access. Use HTTPS or access via localhost:3000.');
+    throw new Error('Camera requires HTTPS (or localhost).');
   }
-
   if (!('mediaDevices' in navigator) || !navigator.mediaDevices?.getUserMedia) {
-    throw new Error('This browser does not support camera access (mediaDevices API missing). Try Chrome, Edge, or Firefox.');
+    throw new Error('This browser does not support camera access.');
   }
 
   let stream: MediaStream;
   try {
-    // Request camera with MINIMAL constraints. Asking for a specific
-    // resolution caused "Camera unavailable" on laptops whose webcams don't
-    // support that exact mode. Let the browser pick its native resolution.
+    // DO NOT ask the phone for its native 1080p/4K camera stream. Hand
+    // landmarking only needs a modest image and the previous unconstrained
+    // request allowed phones to feed far more pixels than PRISM could use.
+    // Ideal/max constraints let the browser choose a supported mode while
+    // putting a hard ceiling on the camera workload.
     stream = await navigator.mediaDevices.getUserMedia({
       video: {
-        facingMode: 'user',
+        facingMode: { ideal: 'user' },
+        width: { ideal: 640, max: 640 },
+        height: { ideal: 480, max: 480 },
+        frameRate: { ideal: 24, max: 30 },
       },
       audio: false,
     });
   } catch (err) {
-    // Permission denial gets actionable guidance (the #1 expo failure);
-    // everything else keeps the generic fallback path.
     const name = (err as { name?: unknown })?.name;
     const hint =
       name === 'NotAllowedError' || name === 'SecurityError'
-        ? 'Camera blocked: click the camera icon in the address bar, choose Allow, then press Enable camera again. Until then the mouse works fully.'
+        ? 'Camera blocked. Allow camera access and try again.'
         : name === 'NotFoundError' || name === 'DevicesNotFoundError'
-          ? 'No camera found. The mouse works fully (move = point, hold = grab).'
+          ? 'No camera found. Mouse control is still available.'
           : name === 'NotReadableError' || name === 'TrackStartError'
-            ? 'Camera is in use by another app (Zoom, Teams, etc). Close it and try again.'
-            : 'You can still try the mouse fallback (move = point, hold = grab).';
+            ? 'Camera is in use by another app. Close it and try again.'
+            : 'Mouse fallback remains available.';
     throw new Error(`${describeMediaError(err)} [${name ?? 'unknown'}]. ${hint}`);
   }
 
-  // CRITICAL: set all autoplay-required properties BEFORE assigning the stream.
   video.muted = true;
   video.playsInline = true;
   video.autoplay = true;
   video.srcObject = stream;
 
-  // Force play — some browsers don't autoplay even with muted=true unless
-  // play() is explicitly called. Retry up to 3 times.
-  for (let attempt = 0; attempt < 3; attempt++) {
+  try {
+    await video.play();
+  } catch {
+    await new Promise((resolve) => setTimeout(resolve, 120));
     try {
       await video.play();
-      break;
     } catch {
-      // Autoplay rejected — wait 200ms and retry.
-      await new Promise((r) => setTimeout(r, 200));
+      // Some WebViews resolve playback asynchronously after the stream starts.
     }
   }
 
-  // Poll for readyState. But ALSO check the stream track's `readyState` —
-  // if the track is 'live' but the video element isn't producing frames,
-  // we can still proceed (MediaPipe can read from the track directly).
   const pollStart = performance.now();
   const POLL_TIMEOUT_MS = 15_000;
   const POLL_INTERVAL_MS = 50;
   await new Promise<void>((resolve, reject) => {
     const check = (): void => {
-      // Success: video has frames
       if (video.readyState >= 2 && video.videoWidth > 0) {
         resolve();
         return;
       }
-      // Fallback success: stream track is live + video is trying to play.
-      // Some browsers (especially in iframes / previews) never reach
-      // readyState 2 but the stream IS active. If the track is 'live' and
-      // we've waited >3s, accept it — MediaPipe can still detect hands.
       const track = stream.getVideoTracks()[0];
       const elapsed = performance.now() - pollStart;
       if (track?.readyState === 'live' && elapsed > 3000 && video.readyState >= 1) {
@@ -121,7 +94,7 @@ export async function startCamera(video: HTMLVideoElement): Promise<CameraHandle
         return;
       }
       if (elapsed > POLL_TIMEOUT_MS) {
-        reject(new Error(`Camera stream started but no frames arrived within ${POLL_TIMEOUT_MS / 1000}s (readyState=${video.readyState}, videoWidth=${video.videoWidth}, track=${track?.readyState ?? 'none'}).`));
+        reject(new Error(`Camera stream started but no frames arrived within ${POLL_TIMEOUT_MS / 1000}s.`));
         return;
       }
       setTimeout(check, POLL_INTERVAL_MS);

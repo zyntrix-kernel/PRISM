@@ -1,74 +1,55 @@
-# PRISM Cinematic Intro Engine
+# PRISM Cinematic Science Engine
 
-The PRISM startup experience is intentionally implemented as a small realtime
-cinematic framework instead of a collection of unrelated CSS animations.
+The PRISM startup sequence is a realtime Three.js showcase designed as a tiny science film.
 
-## Runtime architecture
+It is deliberately separate from the main PRISM interaction engine. The intro owns its own render loop, camera, quality governor, post-processing, deterministic scene systems, and timeline. When the intro finishes, PrismStage hands control back to the actual PRISM world.
 
-```
-PrismCinematicIntro.tsx
-        |
-        v
-PrismCinematicEngine
-        |
-        +-- IntroDirector
-        +-- Timeline / cue scheduler
-        +-- Adaptive quality governor
-        +-- Three.js renderer
-        +-- EffectComposer
-        +-- UnrealBloomPass
-        +-- Cinematic post shader
-        |
-        +-- AtmosphereSystem
-        +-- StarFieldSystem
-        +-- DustSystem
-        +-- SpatialGridSystem
-        +-- EnergyRibbonSystem
-        +-- SignalOrbitSystem
-        +-- CrystalSystem
-        +-- BurstSystem
-        +-- PortalSystem
-```
+## Visual sequence
 
-## Design principles
+| Time | Scene | Visual language |
+| --- | --- | --- |
+| 0.00–0.85s | boot | star ignition, calibration marks, spatial wake-up |
+| 0.85–3.00s | physics | projectile trajectory, pendulum, orbital motion, moving field particles |
+| 3.00–5.25s | chemistry | atomic shells, electrons, H₂O, CO₂, molecular lattice |
+| 5.25–7.50s | mathematics | golden-ratio spiral, sine graph, parabola, vectors, matrix blocks, torus knot |
+| 7.50–9.25s | synthesis | the disciplines converge into a procedural crystalline core |
+| 9.25–10.40s | labs | ZYNASH LABS identity reveal |
+| 10.40–11.80s | prism | PRISM title + full expansion |
+| 11.80–14.80s | team | four-member sequential credit reveal |
+| 14.80–15.80s | launch | camera dive into the PRISM core |
+| 15.80–16.00s | complete | handoff flash |
 
-- React owns only durable UI state such as the current cinematic scene and
-  current team member.
-- The animation loop does not call React state setters every frame.
-- Procedural visuals use a deterministic seed, making the composition stable
-  between runs and easier to reproduce when debugging.
-- The renderer adapts pixel ratio and can bypass post-processing when the
-  measured frame rate becomes unhealthy.
-- Reduced-motion users receive a lighter motion profile.
-- WebGL failure does not prevent the title/team sequence from completing.
-- Timeline cues are also emitted as `prism:intro-cue` CustomEvents. This is an
-  extension point for future sound design, telemetry, haptics, or external
-  presentation controls without coupling those systems to React.
-- The main PRISM render loop remains paused while the cinematic owns the frame
-  budget.
+The timeline is normalized, so custom duration still preserves the choreography.
 
-## Timeline
+## Architecture
 
-The canonical cinematic timeline is 13.2 seconds:
+- engine.ts owns lifecycle, renderer, camera choreography, cues, post-processing, adaptive quality, and the frame loop.
+- science.ts contains the independent realtime systems for physics, chemistry, mathematics, synthesis, and procedural stars.
+- timeline.ts is the canonical source of scene boundaries and cue events.
+- quality.ts selects an initial tier and can downgrade GPU pressure during playback.
+- PrismCinematicIntro.tsx is intentionally thin. React only owns semantic scene/member labels and the accessible skip control.
+- PrismCinematicIntro.css handles the cinematic typography, glass instrumentation, scene choreography, grain, scan, vignette, and exit transition.
 
-1. Boot / initialization
-2. Spatial field awakening
-3. Optical crystal formation
-4. ZYNASH LABS reveal
-5. PRISM reveal
-6. Full project title
-7. Team credits
-8. Final portal / handoff
+## Science visualizers
 
-The component can still receive a custom duration. The engine maps that duration
-onto the canonical timeline so the scene choreography remains deterministic.
+The science content is procedural rather than a pre-rendered video:
 
-## Expo behavior
+- Physics uses a gravity-based projectile path, a harmonic pendulum, orbital bodies, and a moving field.
+- Chemistry uses electron-shell motion plus stylized molecular structures for water and carbon dioxide.
+- Mathematics uses parametric curves, vectors, a phi-inspired spiral, a graph point, and a matrix-like lattice.
+- Synthesis turns the three disciplines into one animated crystalline object.
 
-The main Stage mounts the cinematic automatically. The intro should remain
-skippable only for development/debug builds unless a presentation workflow needs
-an Escape override.
+These are presentation visualizations for the expo intro, not a scientific simulator.
 
-The PRISM application render loop starts only after the cinematic reports
-completion, preventing two continuously-rendering scenes from competing during
-the most visually demanding part of startup.
+## Interaction and resilience
+
+Pointer movement subtly bends the camera and scene composition. Escape skips. prism:intro-cue custom events expose scene boundaries for future sound, haptics, or telemetry without putting those concerns into React state.
+
+The engine pauses when the document is hidden, respects prefers-reduced-motion, uses a dedicated adaptive quality path, and falls back to the typography timeline when WebGL initialization fails.
+
+## Team credits
+
+- Zyntrix.krnl.sys — Tanay Bhandari · LEAD
+- Ash Collector — Ashwin Nagaranjan Ramnath
+- distortus_rexx — Debroop Mojumder
+- Unknown — Maaz Mozzam

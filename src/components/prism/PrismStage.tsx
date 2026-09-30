@@ -74,7 +74,7 @@ export default function PrismStage() {
 
   // Stable refs to all HUD elements (imperative engine writes to these)
   const els = useRef<Record<string, HTMLElement | null>>({});
-  const setEl = (key: string) => (e: HTMLElement | null) => {
+  const setEl = <T extends HTMLElement>(key: string) => (e: T | null) => {
     els.current[key] = e;
   };
 
@@ -283,7 +283,7 @@ export default function PrismStage() {
           <button
             id="prism-btn-camera"
             type="button"
-            ref={setEl("cameraBtn") as React.RefObject<HTMLButtonElement>}
+            ref={setEl<HTMLButtonElement>("cameraBtn")}
             aria-label="Enable camera for hand tracking"
             className="prism-pressable"
           >
@@ -363,7 +363,7 @@ export default function PrismStage() {
           {/* Hidden native select kept in sync for the engine's change events */}
           <select
             id="prism-sel-preset"
-            ref={setEl("presetSel") as React.RefObject<HTMLSelectElement>}
+            ref={setEl<HTMLSelectElement>("presetSel")}
             title="World preset (keys 1-7)"
             aria-label="World preset"
             style={{ position: "absolute", opacity: 0, pointerEvents: "none", width: 1, height: 1 }}
@@ -372,7 +372,7 @@ export default function PrismStage() {
           <button
             id="prism-btn-easy"
             type="button"
-            ref={setEl("easyBtn") as React.RefObject<HTMLButtonElement>}
+            ref={setEl<HTMLButtonElement>("easyBtn")}
             className="hidden"
             title="Easy point-and-go mode (E)"
             aria-label="Toggle easy point-and-go driving"
@@ -384,7 +384,7 @@ export default function PrismStage() {
           {/* Quality dropdown — directly in the top bar (moved from settings) */}
           <select
             id="prism-sel-quality"
-            ref={setEl("qualitySel") as React.RefObject<HTMLSelectElement>}
+            ref={setEl<HTMLSelectElement>("qualitySel")}
             title="Render quality"
             aria-label="Render quality"
             defaultValue="auto"
@@ -414,7 +414,7 @@ export default function PrismStage() {
           <button
             id="prism-btn-ai"
             type="button"
-            ref={setEl("aiBtn") as React.RefObject<HTMLButtonElement>}
+            ref={setEl<HTMLButtonElement>("aiBtn")}
             title="AI observer: watches the camera with FastVLM (off by default)"
             aria-label="Toggle AI observer"
             className={`prism-pressable ${state?.aiEnabled ? "active" : ""}`}
@@ -428,7 +428,7 @@ export default function PrismStage() {
           <button
             id="prism-btn-debug"
             type="button"
-            ref={setEl("debugBtn") as React.RefObject<HTMLButtonElement>}
+            ref={setEl<HTMLButtonElement>("debugBtn")}
             title="Toggle debug overlay (D)"
             aria-label="Toggle debug overlay"
             className={`prism-pressable ${state?.debugVisible ? "active" : ""}`}
@@ -443,7 +443,7 @@ export default function PrismStage() {
           <button
             id="prism-btn-help"
             type="button"
-            ref={setEl("helpBtn") as React.RefObject<HTMLButtonElement>}
+            ref={setEl<HTMLButtonElement>("helpBtn")}
             title="Show help (H)"
             aria-label="Show help"
             className="prism-pressable"
@@ -592,10 +592,10 @@ export default function PrismStage() {
         </div>
         {!onboardMin && (
           <div className="row">
-            <button id="prism-btn-onboard-close" type="button" ref={setEl("onboardClose") as React.RefObject<HTMLButtonElement>}>
+            <button id="prism-btn-onboard-close" type="button" ref={setEl<HTMLButtonElement>("onboardClose")}>
               Dismiss
             </button>
-            <button id="prism-btn-onboard-help" type="button" ref={setEl("onboardHelp") as React.RefObject<HTMLButtonElement>}>
+            <button id="prism-btn-onboard-help" type="button" ref={setEl<HTMLButtonElement>("onboardHelp")}>
               View guide
             </button>
           </div>
@@ -680,7 +680,7 @@ export default function PrismStage() {
           </div>
           </div>
         </div>
-        <button id="prism-btn-help-close" type="button" ref={setEl("helpClose") as React.RefObject<HTMLButtonElement>}>
+        <button id="prism-btn-help-close" type="button" ref={setEl<HTMLButtonElement>("helpClose")}>
           Close
         </button>
       </div>

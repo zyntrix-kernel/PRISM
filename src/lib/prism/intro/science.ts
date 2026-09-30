@@ -915,7 +915,7 @@ export class ScienceShowcase {
   ){
     this.cosmos=new CosmicFieldSystem(profile,random);
     this.waves=new WaveRibbonSystem(random,5);
-    this.physics=new PhysicsSystem();
+    this.physics=new PhysicsSystem(random);
     this.chemistry=new ChemistrySystem();
     this.mathematics=new MathematicsSystem();
     this.core=new PrismCoreSystem(random);

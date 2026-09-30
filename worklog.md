@@ -3405,3 +3405,35 @@ Verified through GitHub against the pushed `main` branch:
 - Legacy unused QualityMenu and ParallaxDepthLayer were removed.
 - Full local build/lint execution remains unavailable in the isolated runtime
   because external package/network access is unavailable.
+
+
+---
+Task ID: 18
+Agent: general-purpose
+Task: Replace the intro with a science-first cinematic showcase and harden startup recovery
+
+## 1. Science-film intro
+
+- Replaced the previous cinematic vocabulary with a 16s realtime sequence built around Physics, Chemistry, Mathematics, synthesis, ZYNASH LABS, PRISM, team credits, and the final spatial handoff.
+- Added `science.ts` with independent procedural visual systems for projectile motion, pendulum oscillation, orbital motion, atomic electron shells, H₂O, CO₂, molecular lattice geometry, parametric curves, vectors, a phi-inspired spiral, matrix-like blocks, and a crystalline synthesis core.
+- Reworked typography and HUD presentation to make the science feel like a premium spatial instrument rather than a conventional splash screen.
+
+## 2. Team credits
+
+- Zyntrix.krnl.sys — Tanay Bhandari · LEAD
+- Ash Collector — Ashwin Nagaranjan Ramnath
+- distortus_rexx — Debroop Mojumder
+- Unknown — Maaz Mozzam
+- Updated both the cinematic credits and the main PRISM help/credits panel.
+
+## 3. Startup resilience
+
+- Removed the superseded intro `systems.ts` and `director.ts` modules after folding the needed behavior into the science engine.
+- Added subsystem-level circuit breakers around the science update and WebGL render path so a browser/GPU-specific runtime exception cannot strand the UI on the first `OBSERVE` frame.
+- Added a last-resort frame recovery path that continues the semantic timeline and guarantees eventual PRISM handoff when an unexpected animation exception escapes a subsystem.
+- Synced `PrismStage` to the new 16,000ms intro duration.
+
+## 4. Verification
+
+- Static GitHub audit confirms the four team members, science scenes, 16s stage duration, adaptive quality, WebGL fallback, pointer-driven camera, and absence of the removed intro modules in engine imports.
+- Browser console/build verification remains pending because no local development server/dependency install is available in the isolated runtime.

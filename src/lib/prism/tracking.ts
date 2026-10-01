@@ -1,9 +1,10 @@
 // MediaPipe HandLandmarker wrapper.
 //
 // Performance architecture:
-// detectForVideo() is synchronous inside the worker, never the render thread.
-// Camera frames are sampled through requestVideoFrameCallback when available,
-// with strict backpressure so PRISM never queues stale frames.
+// detectForVideo() is synchronous inside the worker, never the render thread
+// when the browser supports the transferable VideoFrame path. Unsupported or
+// unstable worker/video-frame implementations automatically fall back to the
+// main-thread VIDEO path instead of silently producing zero detections.
 
 import { FilesetResolver, HandLandmarker } from '@mediapipe/tasks-vision';
 import { PrismConfig } from './config';
@@ -51,6 +52,8 @@ export class HandTracker {
   private videoFrameCallbackHandle = 0;
   private requestedIntervalMs: number | null = null;
   private baseIntervalMs = 180;
+  private workerFailureCount = 0;
+  private mainThreadFallbackStarted = false;
 
   modelOffline = false;
   delegateUsed = 'GPU';
@@ -60,11 +63,27 @@ export class HandTracker {
   async init(onProgress: (msg: string) => void): Promise<void> {
     if (this.landmarker || this.useWorker) return;
     if (this.workerInitPromise) return this.workerInitPromise;
-    if (typeof Worker !== 'undefined') {
+
+    // A worker is only useful here when the browser can actually transfer
+    // VideoFrame objects. Some tablet browsers expose Worker but cannot run
+    // the MediaPipe VideoFrame path reliably. Previously that left PRISM in a
+    // worker that initialized successfully but never returned detections.
+    const canUseVideoFrameWorker =
+      typeof Worker !== 'undefined' &&
+      typeof VideoFrame !== 'undefined';
+
+    if (canUseVideoFrameWorker) {
       this.workerInitPromise = this.initWorker(onProgress);
-      try { await this.workerInitPromise; return; }
-      catch { this.worker?.terminate(); this.worker = null; this.workerInitPromise = null; }
+      try {
+        await this.workerInitPromise;
+        return;
+      } catch {
+        this.worker?.terminate();
+        this.worker = null;
+        this.workerInitPromise = null;
+      }
     }
+
     await this.initMainThread(onProgress);
   }
 
@@ -77,11 +96,21 @@ export class HandTracker {
       worker.onmessage = (event: MessageEvent<WorkerMessage>) => {
         const message = event.data;
         if (message.type === 'ready') {
-          window.clearTimeout(timeout); this.modelOffline = message.offline;
-          this.delegateUsed = message.delegate; this.useWorker = true; resolve();
-        } else if (message.type === 'error') { window.clearTimeout(timeout); reject(new Error(message.message)); }
+          window.clearTimeout(timeout);
+          this.modelOffline = message.offline;
+          this.delegateUsed = message.delegate;
+          this.useWorker = true;
+          this.workerFailureCount = 0;
+          resolve();
+        } else if (message.type === 'error') {
+          window.clearTimeout(timeout);
+          reject(new Error(message.message));
+        }
       };
-      worker.onerror = (event) => { window.clearTimeout(timeout); reject(new Error(event.message || 'Tracking worker failed to initialize')); };
+      worker.onerror = (event) => {
+        window.clearTimeout(timeout);
+        reject(new Error(event.message || 'Tracking worker failed to initialize'));
+      };
       worker.postMessage({ type: 'init' });
     });
     worker.onmessage = (event: MessageEvent<WorkerMessage>) => this.handleWorkerMessage(event.data);
@@ -104,7 +133,10 @@ export class HandTracker {
               minHandPresenceConfidence: PrismConfig.tracking.minHandPresenceConfidence,
               minTrackingConfidence: PrismConfig.tracking.minTrackingConfidence,
             });
-            this.modelOffline = offline; this.delegateUsed = delegate; return;
+            this.modelOffline = offline;
+            this.delegateUsed = delegate;
+            this.mainThreadFallbackStarted = false;
+            return;
           } catch (err) { lastError = err; }
         }
       } catch (err) { lastError = err; }
@@ -117,13 +149,17 @@ export class HandTracker {
 
   start(video: HTMLVideoElement, opts?: { intervalMs?: number }): void {
     if (!this.isReady) throw new Error('HandTracker.start() called before init().');
-    this.stop(); this.video = video as VideoFrameVideo; this.running = true; this.lastSubmittedAt = -Infinity;
+    this.stop();
+    this.video = video as VideoFrameVideo;
+    this.running = true;
+    this.lastSubmittedAt = -Infinity;
+    this.workerFailureCount = 0;
     const defaultInterval = isTabletDevice() ? PrismConfig.tracking.tabletIntervalMs : PrismConfig.tracking.intervalMs;
-    // Do not impose a 40ms floor: 30-33ms sampling is the low-latency target.
     this.baseIntervalMs = Math.max(30, defaultInterval);
     this.requestedIntervalMs = opts?.intervalMs != null ? Math.max(30, opts.intervalMs) : null;
     const videoWithCallback = this.video;
-    if (this.useWorker && videoWithCallback.requestVideoFrameCallback) {
+
+    if (this.useWorker && videoWithCallback.requestVideoFrameCallback && typeof VideoFrame !== 'undefined') {
       const schedule = (): void => {
         if (!this.running || !this.video || !videoWithCallback.requestVideoFrameCallback) return;
         this.videoFrameCallbackHandle = videoWithCallback.requestVideoFrameCallback((now) => {
@@ -132,8 +168,12 @@ export class HandTracker {
           schedule();
         });
       };
-      schedule(); return;
+      schedule();
+      return;
     }
+
+    // Main-thread fallback is intentionally frame-rate capped. It is more
+    // important to have a reliable detector than a broken off-thread path.
     const loop = (): void => {
       if (!this.running) return;
       this.pump(performance.now());
@@ -143,14 +183,24 @@ export class HandTracker {
   }
 
   stop(): void {
-    this.running = false; clearTimeout(this.loopHandle); this.loopHandle = 0;
+    this.running = false;
+    clearTimeout(this.loopHandle);
+    this.loopHandle = 0;
     if (this.videoFrameCallbackHandle && this.video?.cancelVideoFrameCallback) this.video.cancelVideoFrameCallback(this.videoFrameCallbackHandle);
-    this.videoFrameCallbackHandle = 0; this.workerBusy = false; this.requestedIntervalMs = null; this.video = null;
+    this.videoFrameCallbackHandle = 0;
+    this.workerBusy = false;
+    this.requestedIntervalMs = null;
+    this.video = null;
   }
 
   dispose(): void {
-    this.stop(); this.worker?.terminate(); this.worker = null; this.useWorker = false; this.workerInitPromise = null;
-    this.landmarker?.close(); this.landmarker = null;
+    this.stop();
+    this.worker?.terminate();
+    this.worker = null;
+    this.useWorker = false;
+    this.workerInitPromise = null;
+    this.landmarker?.close();
+    this.landmarker = null;
   }
 
   getFrame(): HandFrame | null { return this.latest; }
@@ -160,30 +210,76 @@ export class HandTracker {
   private pump(timestampHint: number): void {
     const video = this.video;
     if (!video || video.readyState < 1 || (video.videoWidth === 0 && video.readyState < 2)) return;
+
     if (this.useWorker && this.worker) {
       if (this.workerBusy) return;
       try {
         if (typeof VideoFrame === 'undefined') throw new Error('VideoFrame API unavailable');
         const frame = new VideoFrame(video);
-        this.workerBusy = true; this.lastSubmittedAt = performance.now();
+        this.workerBusy = true;
+        this.lastSubmittedAt = performance.now();
         this.worker.postMessage({ type: 'frame', frame, timestampMs: timestampHint }, [frame]);
-      } catch (err) { this.workerBusy = false; this.pumpErrorCount += 1; this.lastPumpError = err instanceof Error ? err.message : String(err); }
+      } catch (err) {
+        this.workerBusy = false;
+        this.pumpErrorCount += 1;
+        this.workerFailureCount += 1;
+        this.lastPumpError = err instanceof Error ? err.message : String(err);
+        void this.fallbackFromWorker();
+      }
       return;
     }
+
     if (!this.landmarker) return;
-    const now = performance.now(); const t0 = now;
+    const now = performance.now();
+    const t0 = now;
     try {
       const result = this.landmarker.detectForVideo(video, now);
       this.acceptResult((result.landmarks ?? []).map((landmarks, i) => ({
         landmarks: landmarks.map((p) => ({ x: p.x, y: p.y, z: p.z ?? 0 })),
-        handedness: result.handedness?.[i]?.[0]?.categoryName ?? 'Unknown', confidence: result.handedness?.[i]?.[0]?.score ?? 0,
+        handedness: result.handedness?.[i]?.[0]?.categoryName ?? 'Unknown',
+        confidence: result.handedness?.[i]?.[0]?.score ?? 0,
       })), now, performance.now() - t0);
-    } catch (err) { this.pumpErrorCount += 1; this.lastPumpError = err instanceof Error ? err.message : String(err); }
+    } catch (err) {
+      this.pumpErrorCount += 1;
+      this.lastPumpError = err instanceof Error ? err.message : String(err);
+    }
   }
 
   private handleWorkerMessage(message: WorkerMessage): void {
-    if (message.type === 'result') { this.workerBusy = false; this.pumpErrorCount = 0; this.acceptResult(message.hands, message.timestampMs, message.inferenceMs); }
-    else if (message.type === 'pump-error') { this.workerBusy = false; this.pumpErrorCount += 1; this.lastPumpError = message.message; }
+    if (message.type === 'result') {
+      this.workerBusy = false;
+      this.workerFailureCount = 0;
+      this.pumpErrorCount = 0;
+      this.acceptResult(message.hands, message.timestampMs, message.inferenceMs);
+    } else if (message.type === 'pump-error') {
+      this.workerBusy = false;
+      this.pumpErrorCount += 1;
+      this.workerFailureCount += 1;
+      this.lastPumpError = message.message;
+      if (this.workerFailureCount >= 3) void this.fallbackFromWorker();
+    }
+  }
+
+  private async fallbackFromWorker(): Promise<void> {
+    if (this.mainThreadFallbackStarted || !this.running) return;
+    this.mainThreadFallbackStarted = true;
+    const video = this.video;
+    this.worker?.terminate();
+    this.worker = null;
+    this.useWorker = false;
+    this.workerBusy = false;
+    this.workerInitPromise = null;
+    if (!video) {
+      this.mainThreadFallbackStarted = false;
+      return;
+    }
+    try {
+      await this.initMainThread(() => undefined);
+      if (this.running && this.video === video) this.start(video);
+    } catch (err) {
+      this.lastPumpError = err instanceof Error ? err.message : String(err);
+      this.mainThreadFallbackStarted = false;
+    }
   }
 
   private getTargetIntervalMs(): number {
@@ -194,8 +290,12 @@ export class HandTracker {
   }
 
   private acceptResult(hands: TrackedHand[], timestampMs: number, inferenceMs: number): void {
-    this.detectionCount += 1; this.detectionTotalMs += inferenceMs;
-    if (this.detectionCount > 30) { this.detectionCount = Math.floor(this.detectionCount / 2); this.detectionTotalMs /= 2; }
+    this.detectionCount += 1;
+    this.detectionTotalMs += inferenceMs;
+    if (this.detectionCount > 30) {
+      this.detectionCount = Math.floor(this.detectionCount / 2);
+      this.detectionTotalMs /= 2;
+    }
     this.latest = { hands, timestampMs };
   }
 }
@@ -207,10 +307,27 @@ const SKELETON: Array<readonly [number, number]> = [
 ];
 
 export function drawLandmarkOverlay(ctx: CanvasRenderingContext2D, frame: HandFrame | null): void {
-  const canvas = ctx.canvas; ctx.clearRect(0, 0, canvas.width, canvas.height); if (!frame) return;
+  const canvas = ctx.canvas;
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  if (!frame) return;
   frame.hands.forEach((hand, handIndex) => {
-    const color = handIndex === 0 ? '#9adcff' : '#a8ffc9'; ctx.strokeStyle = color; ctx.lineWidth = 2; ctx.fillStyle = color;
-    for (const [a, b] of SKELETON) { const p = hand.landmarks[a]; const q = hand.landmarks[b]; ctx.beginPath(); ctx.moveTo(p.x * canvas.width, p.y * canvas.height); ctx.lineTo(q.x * canvas.width, q.y * canvas.height); ctx.stroke(); }
-    hand.landmarks.forEach((p, i) => { const r = i === 4 || i === 8 ? 4 : 2.5; ctx.beginPath(); ctx.arc(p.x * canvas.width, p.y * canvas.height, r, 0, Math.PI * 2); ctx.fill(); });
+    const color = handIndex === 0 ? '#9adcff' : '#a8ffc9';
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 2;
+    ctx.fillStyle = color;
+    for (const [a, b] of SKELETON) {
+      const p = hand.landmarks[a];
+      const q = hand.landmarks[b];
+      ctx.beginPath();
+      ctx.moveTo(p.x * canvas.width, p.y * canvas.height);
+      ctx.lineTo(q.x * canvas.width, q.y * canvas.height);
+      ctx.stroke();
+    }
+    hand.landmarks.forEach((p, i) => {
+      const r = i === 4 || i === 8 ? 4 : 2.5;
+      ctx.beginPath();
+      ctx.arc(p.x * canvas.width, p.y * canvas.height, r, 0, Math.PI * 2);
+      ctx.fill();
+    });
   });
 }

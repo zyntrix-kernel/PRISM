@@ -98,6 +98,7 @@ export class PrismApp {
   private cameraHandle: CameraHandle | null = null;
   private cameraStarting = false;
   private rafHandle = 0;
+  private renderRequested = false;
   private disposed = false;
   private last = 0;
   private elapsed = 0;
@@ -144,6 +145,11 @@ export class PrismApp {
       this.scene.applyQuality(tier);
       if (qualitySel.value === 'auto') this.setStatus(`Auto quality → ${tier} (protecting frame rate)`);
     });
+    // Camera mode uses render-on-demand. Hand tracking invalidates exactly
+    // one render when a meaningful landmark result arrives, instead of keeping
+    // a permanent 60 Hz WebGL loop alive while the camera is open.
+    this.tracker.onResult = () => this.requestFrame();
+
     this.observer = new AiObserver({
       createWorker: () => new Worker(new URL('./ai/ai-worker.ts', import.meta.url), { type: 'module' }),
       modelId: PrismConfig.ai.modelId,
@@ -174,8 +180,13 @@ export class PrismApp {
   toggleCamera(): void { if (this.cameraHandle) this.stopVision(); else void this.bootVision(); }
   toggleHelp(): void { this.el.helpCard.classList.toggle('hidden'); }
   dismissOnboard(): void { this.el.onboard.classList.add('hidden'); this.onboardVisible=false; try { window.localStorage.setItem(this.ONBOARD_KEY,'1'); } catch {} this.emit(); }
-  start(): void { if (this.rafHandle) return; this.last=performance.now(); this.rafHandle=requestAnimationFrame(this.tick); }
-  dispose(): void { this.disposed=true; this.uiAbort.abort(); if(this.rafHandle) cancelAnimationFrame(this.rafHandle); this.rafHandle=0; this.tracker.stop(); this.cameraHandle?.stop(); this.cameraHandle=null; this.interaction.dispose(); this.observer.setEnabled(false); this.scene.dispose(); this.listeners.clear(); }
+  start(): void { this.requestFrame(); }
+  private requestFrame(): void {
+    if (this.disposed || this.renderRequested) return;
+    this.renderRequested = true;
+    this.rafHandle = requestAnimationFrame(this.tick);
+  }
+  dispose(): void { this.disposed=true; this.uiAbort.abort(); if(this.rafHandle) cancelAnimationFrame(this.rafHandle); this.rafHandle=0; this.renderRequested=false; this.tracker.stop(); this.cameraHandle?.stop(); this.cameraHandle=null; this.interaction.dispose(); this.observer.setEnabled(false); this.scene.dispose(); this.listeners.clear(); }
 
   private setStatus(msg:string,full?:string):void{const textEl=this.el.status.querySelector('.prism-status-text')??this.el.status;textEl.textContent=msg;this.el.status.title=full??msg;this.emit();}
   private toast(message:string,kind:'success'|'info'|'warn'='info'):void{if(typeof window!=='undefined'&&typeof window.__prismToast==='function')window.__prismToast({message,kind});}
@@ -184,6 +195,7 @@ export class PrismApp {
     this.tracker.stop();
     this.cameraHandle?.stop();
     this.cameraHandle=null;
+    this.requestFrame();
     this.el.video.classList.remove('live');
     this.el.cameraBtn.classList.remove('active');
     this.el.cameraBtn.disabled=false;
@@ -223,12 +235,13 @@ export class PrismApp {
   private loadPreset(id:PresetId,viaKeyboard=false,force=false):void{if(!PRESET_ORDER.includes(id))return;if(!force&&id===this.scene.currentPreset)return;this.interaction.onPresetChange();this.scene.loadPreset(id);this.syncPresetUI();this.setStatus(`Preset: ${PRESET_LABELS[id]}. Point to explore.`);if(viaKeyboard)this.toast(`Switched to ${PRESET_LABELS[id]}`,'success');if(force)this.toast('World rebuilt','info');}
 
   private async bootVision():Promise<void>{try{if(await this.startCamera())await this.ensureTracking();}catch(err){console.error('[PRISM] vision stack failed:',err);const full=`Hand tracking unavailable (${describeMediaError(err)}). Mouse fallback active.`;this.setStatus('Hand tracking unavailable — mouse active',full);}}
-  private async startCamera():Promise<boolean>{if(this.cameraHandle)return true;if(this.cameraStarting)return false;this.cameraStarting=true;const {cameraBtn,video}=this.el;cameraBtn.classList.add('active');cameraBtn.disabled=true;try{this.setStatus('Requesting camera…');this.cameraHandle=await startCamera(video);video.classList.add('live');this.toast('Camera enabled — hand tracking active','success');this.setStatus('Camera ready — starting hand tracking…');return true;}catch(err){const full=err instanceof Error?err.message:String(err);this.setStatus('Mouse mode',full);this.toast(`Camera unavailable: ${full.substring(0,120)}`,'warn');cameraBtn.classList.remove('active');video.classList.remove('live');return false;}finally{this.cameraStarting=false;cameraBtn.disabled=false;this.emit();}}
+  private async startCamera():Promise<boolean>{if(this.cameraHandle)return true;if(this.cameraStarting)return false;this.cameraStarting=true;const {cameraBtn,video}=this.el;cameraBtn.classList.add('active');cameraBtn.disabled=true;try{this.setStatus('Requesting camera…');this.cameraHandle=await startCamera(video);video.classList.add('live');this.requestFrame();this.toast('Camera enabled — hand tracking active','success');this.setStatus('Camera ready — starting hand tracking…');return true;}catch(err){const full=err instanceof Error?err.message:String(err);this.setStatus('Mouse mode',full);this.toast(`Camera unavailable: ${full.substring(0,120)}`,'warn');cameraBtn.classList.remove('active');video.classList.remove('live');return false;}finally{this.cameraStarting=false;cameraBtn.disabled=false;this.emit();}}
   private async ensureTracking():Promise<void>{if(!this.cameraHandle)return;if(this.tracker.isTracking)return;if(!this.tracker.isReady){this.setStatus('Loading hand-tracking model…');try{await this.tracker.init((m)=>this.setStatus(m));}catch(err){const full=err instanceof Error?err.message:String(err);this.setStatus('Tracking unavailable — mouse active',full);this.toast(`Tracking init failed: ${full.substring(0,100)}`,'warn');return;}}if(!this.tracker.isReady)return;this.tracker.start(this.el.video);const handle=this.cameraHandle;this.setStatus(`Tracking ${handle.width}×${handle.height} · point to move, pinch to grab.`);}
 
   private readonly tick=(now:number):void=>{
+    this.renderRequested = false;
+    this.rafHandle = 0;
     if(this.disposed)return;
-    this.rafHandle=requestAnimationFrame(this.tick);
     if(typeof document!=='undefined'&&document.hidden)return;
     try{
       const showDebug=this.debug.isVisible;
@@ -258,6 +271,11 @@ export class PrismApp {
       const infoName=this.interaction.grabbedName??this.interaction.hoveredName;if(infoName!==this._lastInfoName){this._lastInfoName=infoName;const info=this.scene.bodyInfo(infoName);if(info){this.el.planetInfo.textContent=info;this.el.planetInfo.classList.remove('hidden');}else this.el.planetInfo.classList.add('hidden');}
       this.debug.update(now,{renderFps:this.renderFps,hands:frame?.hands.length??0,confidence:frame?.hands[0]?.confidence??0,deviceLine:showDebug?this.deviceLine():''},this.interaction,this.tracker,this.scene.drawCalls,this.scene.triangles,this.scene.grabbables.length,showDebug?this.observer.snapshot():null);
       this.scene.render();
+
+      // Static scene + camera active: wait for the next meaningful tracker
+      // result. Camera mode therefore does not burn a WebGL frame when nothing
+      // changed. Camera off keeps the existing continuous animation behavior.
+      if(!this.cameraHandle && !this.disposed) this.requestFrame();
     }catch(err){const full=`Frame fault (${err instanceof Error?err.message:String(err)}) — continuing; report this text.`;this.setStatus('Frame fault — continuing',full);console.error('[PRISM] frame fault:',err);}
   };
 

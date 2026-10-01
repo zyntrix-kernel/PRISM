@@ -2,6 +2,9 @@ import type { PresetId } from './presets/types';
 
 // Central tunable constants for PRISM. Performance-sensitive values live here
 // so the exhibition build can be tuned without hunting through the renderer.
+// This configuration is intentionally mutable: gesture calibration adapts the
+// pinch thresholds at runtime, so a deep `as const` would make a real feature
+// fight the type system.
 export const PrismConfig = {
   tracking: {
     localModelUrl: './models/hand_landmarker.task',
@@ -13,9 +16,6 @@ export const PrismConfig = {
     minHandPresenceConfidence: 0.3,
     minTrackingConfidence: 0.3,
     intervalMs: 45,
-    // 12.7-inch-class tablets have ample screen real estate, but sustained
-    // inference still needs thermal headroom. 40ms is a better exhibition
-    // target than pushing the camera/model harder than necessary.
     tabletIntervalMs: 40,
   },
 
@@ -25,8 +25,6 @@ export const PrismConfig = {
     maxWidth: 640,
     maxHeight: 480,
     maxFrameRate: 30,
-    // A 12.7-inch panel benefits more from a stable 30fps camera than from
-    // unnecessarily large frames that increase upload/copy/inference cost.
     tabletIdealWidth: 768,
     tabletIdealHeight: 576,
   },
@@ -52,8 +50,6 @@ export const PrismConfig = {
     },
     grabSmoothing: 0.56,
     tabletGrabSmoothing: 0.48,
-    // Slightly calmer camera motion on a large panel prevents the scene from
-    // feeling twitchy when the user makes broad arm movements.
     tabletOrbitSpeed: 0.0038,
     tabletPanSpeed: 0.0030,
     tabletZoomSpeed: 2.2,
@@ -98,11 +94,8 @@ export const PrismConfig = {
     high: { pixelRatio: 1.5 },
     medium: { pixelRatio: 1.15 },
     low: { pixelRatio: 0.85 },
-    // 12.7-inch tablets generally have high-density panels. Capping DPR
-    // avoids rendering 4x+ as many pixels while preserving visual sharpness.
     tablet: { pixelRatio: 1.35 },
   } as Record<string, { pixelRatio: number }>,
-
-} as const;
+};
 
 export type QualityTier = 'ultra' | 'high' | 'medium' | 'low';

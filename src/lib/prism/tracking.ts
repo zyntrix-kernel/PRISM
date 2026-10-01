@@ -286,3 +286,56 @@ export class HandTracker {
     this.onResult?.();
   }
 }
+
+const HAND_CONNECTIONS: ReadonlyArray<readonly [number, number]> = [
+  [0,1],[1,2],[2,3],[3,4],
+  [0,5],[5,6],[6,7],[7,8],
+  [5,9],[9,10],[10,11],[11,12],
+  [9,13],[13,14],[14,15],[15,16],
+  [13,17],[17,18],[18,19],[19,20],
+  [0,17],
+];
+
+/** Draws the latest two-hand landmarks into PRISM's lightweight sensor overlay. */
+export function drawLandmarkOverlay(ctx: CanvasRenderingContext2D, frame: HandFrame): void {
+  const { width, height } = ctx.canvas;
+  ctx.clearRect(0, 0, width, height);
+
+  ctx.save();
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+
+  for (const hand of frame.hands) {
+    const points = hand.landmarks;
+    if (!points.length) continue;
+
+    ctx.beginPath();
+    for (const [a, b] of HAND_CONNECTIONS) {
+      const pa = points[a];
+      const pb = points[b];
+      if (!pa || !pb) continue;
+      const ax = (1 - pa.x) * width;
+      const ay = pa.y * height;
+      const bx = (1 - pb.x) * width;
+      const by = pb.y * height;
+      ctx.moveTo(ax, ay);
+      ctx.lineTo(bx, by);
+    }
+    ctx.strokeStyle = 'rgba(126, 216, 255, 0.72)';
+    ctx.lineWidth = Math.max(1.25, width / 320);
+    ctx.stroke();
+
+    for (let i = 0; i < points.length; i += 1) {
+      const p = points[i];
+      const x = (1 - p.x) * width;
+      const y = p.y * height;
+      const radius = i === 8 || i === 4 ? Math.max(3, width / 72) : Math.max(1.5, width / 150);
+      ctx.beginPath();
+      ctx.arc(x, y, radius, 0, Math.PI * 2);
+      ctx.fillStyle = i === 8 || i === 4 ? 'rgba(255, 221, 170, 0.96)' : 'rgba(228, 246, 255, 0.82)';
+      ctx.fill();
+    }
+  }
+
+  ctx.restore();
+}

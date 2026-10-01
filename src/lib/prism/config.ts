@@ -9,14 +9,16 @@ export const PrismConfig = {
     wasmUrl: './wasm',
     cdnWasmUrl: 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@1.0.1/wasm',
     // Two hands are required for PRISM's two-hand transforms. Vision sampling
-    // is intentionally much slower than display rendering and now runs in a
-    // worker on supported browsers.
+    // runs in a worker and uses adaptive backpressure, so the display thread
+    // stays responsive while capable devices get a much fresher hand signal.
     numHands: 2,
     minHandDetectionConfidence: 0.3,
     minHandPresenceConfidence: 0.3,
     minTrackingConfidence: 0.3,
-    intervalMs: 100,
-    tabletIntervalMs: 66,
+    // ~22 fps target on capable hardware. tracking.ts backs off automatically
+    // when inference becomes expensive instead of forcing stale queued work.
+    intervalMs: 45,
+    tabletIntervalMs: 45,
   },
 
   camera: {
@@ -34,21 +36,25 @@ export const PrismConfig = {
     pinchExit: 0.55,
     pinchMinFrames: 1,
     pinchEnterMs: 0,
-    pinchExitMs: 150,
+    // Shorter release latch makes pinch release feel immediate while still
+    // rejecting brief tracking noise.
+    pinchExitMs: 90,
     extendedRatio: 1.10,
   },
 
   interaction: {
     pointerAdaptive: {
       maxSpeed: 4.0,
-      slowCutoff: 0.35,
-      fastCutoff: 3.0,
-      betaBase: 0.07,
-      betaRate: 0.06,
-      maxLeadSec: 0.10,
-      maxLeadDist: 0.040,
+      slowCutoff: 0.42,
+      fastCutoff: 3.4,
+      betaBase: 0.08,
+      betaRate: 0.07,
+      maxLeadSec: 0.12,
+      maxLeadDist: 0.055,
     },
-    grabSmoothing: 0.72,
+    // Lower drag smoothing removes the rubber-band feeling without exposing
+    // raw landmark jitter because the pointer filter already handles noise.
+    grabSmoothing: 0.56,
     zoomSpeed: 2.5,
     rotateSpeed: 0.6,
     worldScaleMin: 0.4,
@@ -94,6 +100,7 @@ export const PrismConfig = {
     medium: { pixelRatio: 1.15 },
     low: { pixelRatio: 0.85 },
   } as Record<string, { pixelRatio: number }>,
-};
+
+} as const;
 
 export type QualityTier = 'ultra' | 'high' | 'medium' | 'low';

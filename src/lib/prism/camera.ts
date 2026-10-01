@@ -1,6 +1,7 @@
 // Webcam acquisition with performance-aware constraints and graceful errors.
 
 import { PrismConfig } from './config';
+import { isTabletDevice } from './device';
 
 export interface CameraHandle {
   stream: MediaStream;
@@ -48,7 +49,10 @@ export async function startCamera(video: HTMLVideoElement): Promise<CameraHandle
         width: { ideal: PrismConfig.camera.idealWidth, max: PrismConfig.camera.maxWidth },
         height: { ideal: PrismConfig.camera.idealHeight, max: PrismConfig.camera.maxHeight },
         aspectRatio: { ideal: 4 / 3 },
-        frameRate: { ideal: PrismConfig.camera.maxFrameRate, max: PrismConfig.camera.maxFrameRate },
+        frameRate: {
+          ideal: isTabletDevice() ? PrismConfig.camera.tabletMaxFrameRate : PrismConfig.camera.maxFrameRate,
+          max: isTabletDevice() ? PrismConfig.camera.tabletMaxFrameRate : PrismConfig.camera.maxFrameRate,
+        },
       },
       audio: false,
     });

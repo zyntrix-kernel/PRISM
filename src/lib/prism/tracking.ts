@@ -25,7 +25,7 @@ async function resolveModel(): Promise<{ bytes: Uint8Array; offline: boolean }> 
 }
 
 type WorkerReady = { type: 'ready'; delegate: string; offline: boolean };
-type WorkerError = { type: 'error' | 'pump-error'; message: string };
+type WorkerError = { type: 'error' | 'pump-error' | 'track-error'; message: string };
 type WorkerResult = { type: 'result'; hands: TrackedHand[]; timestampMs: number; inferenceMs: number };
 type WorkerMessage = WorkerReady | WorkerError | WorkerResult;
 type VideoFrameCallback = (now: number, metadata: VideoFrameCallbackMetadata) => void;
@@ -128,25 +128,22 @@ export class HandTracker {
     // MediaStreamTrackProcessor then creates VideoFrames off the main thread
     // with a one-frame buffer, so the UI never waits for camera frame
     // extraction and stale frames are discarded instead of queued.
-    if (
-      this.useWorker &&
-      sourceTrack &&
-      typeof Worker !== 'undefined'
-    ) {
+    if (this.useWorker && sourceTrack && typeof Worker !== 'undefined') {
       try {
-        const trackProcessorSupported = 'MediaStreamTrackProcessor' in globalThis;
-        if (trackProcessorSupported) {
-          const workerTrack = sourceTrack.clone();
-          this.workerOwnsTrack = true;
-          this.worker?.postMessage({ type: 'track', track: workerTrack }, [workerTrack]);
-          return;
-        }
+        // MediaStreamTrackProcessor is worker-only in modern browsers, so do
+        // not probe for it on the main thread. Send the cloned track and let
+        // the worker decide whether its zero-copy processing path is available.
+        const workerTrack = sourceTrack.clone();
+        this.workerOwnsTrack = true;
+        this.worker?.postMessage({ type: 'track', track: workerTrack }, [workerTrack]);
+        return;
       } catch {
         this.workerOwnsTrack = false;
       }
     }
 
-    // Compatibility path for browsers without MediaStreamTrackProcessor.
+    // Compatibility path for browsers without worker-side
+    // MediaStreamTrackProcessor.
     const videoWithCallback = this.video;
     if (this.useWorker && videoWithCallback.requestVideoFrameCallback && typeof VideoFrame !== 'undefined') {
       const schedule = (): void => {
@@ -215,8 +212,40 @@ export class HandTracker {
   }
 
   private handleWorkerMessage(message: WorkerMessage): void {
-    if (message.type === 'result') { this.workerBusy = false; this.pumpErrorCount = 0; this.acceptResult(message.hands, message.timestampMs, message.inferenceMs); }
-    else if (message.type === 'pump-error') { this.workerBusy = false; this.pumpErrorCount += 1; this.lastPumpError = message.message; }
+    if (message.type === 'result') {
+      this.workerBusy = false;
+      this.pumpErrorCount = 0;
+      this.acceptResult(message.hands, message.timestampMs, message.inferenceMs);
+      return;
+    }
+
+    if (message.type === 'track-error') {
+      // Worker loaded correctly but cannot consume MediaStreamTrackProcessor
+      // on this browser. Fall back to the older VideoFrame worker path, still
+      // keeping MediaPipe inference off the UI thread.
+      this.workerOwnsTrack = false;
+      const video = this.video;
+      if (this.running && video && video.requestVideoFrameCallback && typeof VideoFrame !== 'undefined') {
+        const schedule = (): void => {
+          if (!this.running || !this.video || !video.requestVideoFrameCallback) return;
+          this.videoFrameCallbackHandle = video.requestVideoFrameCallback((now) => {
+            if (!this.running) return;
+            if (now - this.lastSubmittedAt >= this.getTargetIntervalMs()) this.pump(now);
+            schedule();
+          });
+        };
+        schedule();
+      }
+      this.pumpErrorCount += 1;
+      this.lastPumpError = message.message;
+      return;
+    }
+
+    if (message.type === 'pump-error') {
+      this.workerBusy = false;
+      this.pumpErrorCount += 1;
+      this.lastPumpError = message.message;
+    }
   }
 
   private getTargetIntervalMs(): number { return this.requestedIntervalMs !== null ? this.requestedIntervalMs : this.baseIntervalMs; }

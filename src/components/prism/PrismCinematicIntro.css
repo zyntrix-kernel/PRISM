@@ -804,16 +804,16 @@
 }
 
 /* ── School watermark — Narayana Educational Institutions ──────────────────
-   A subtle presenter's bug riding above the footer rail, bottom-right —
-   the film's quietest corner. Fades out with the exit. */
+   A presenter's bug riding above the footer label, bottom-left — aligned
+   with the film's left margin. Fades out with the exit. */
 .prism-cinematic__schoolmark {
   position: absolute;
-  right: clamp(24px, 4.4vw, 64px);
+  left: clamp(24px, 4.4vw, 64px);
   bottom: calc(clamp(18px, 3.4vh, 36px) + 42px);
   z-index: 6;
-  height: 24px;
+  height: 28px;
   width: auto;
-  opacity: 0.68;
+  opacity: 0.72;
   pointer-events: none;
   user-select: none;
   -webkit-user-drag: none;
@@ -827,7 +827,7 @@
 
 @media (max-width: 640px) {
   .prism-cinematic__schoolmark {
-    height: 18px;
-    opacity: 0.6;
+    height: 20px;
+    opacity: 0.64;
   }
 }

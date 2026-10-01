@@ -9,6 +9,7 @@ const nextConfig: NextConfig = {
     ignoreBuildErrors: true,
   },
   reactStrictMode: false,
+  devIndicators: false,
 };
 
 export default nextConfig;

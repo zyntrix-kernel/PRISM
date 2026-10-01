@@ -23,3 +23,23 @@
     filter: blur(44px);
   }
 }
+
+
+/* Tablet/GPU compositor budget. Keep glass depth, but avoid expensive
+   full-resolution blur stacks competing with Three.js and MediaPipe. */
+@media (pointer: coarse) and (min-width: 768px) {
+  .prism-scene {
+    will-change: auto;
+  }
+
+  .prism-glass,
+  .prism-glass-premium {
+    -webkit-backdrop-filter: blur(12px) saturate(135%);
+    backdrop-filter: blur(12px) saturate(135%);
+  }
+
+  #prism-hud {
+    -webkit-backdrop-filter: blur(14px) saturate(140%);
+    backdrop-filter: blur(14px) saturate(140%);
+  }
+}

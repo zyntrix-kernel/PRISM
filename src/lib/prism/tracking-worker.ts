@@ -16,8 +16,10 @@ async function fetchModel(url: string): Promise<Uint8Array> {
 }
 
 async function resolveModel(): Promise<{ bytes: Uint8Array; offline: boolean }> {
+  const proxyUrl = new URL(PrismConfig.tracking.modelProxyUrl, self.location.origin).toString();
   const urls = [
     PrismConfig.tracking.localModelUrl,
+    proxyUrl,
     PrismConfig.tracking.cdnModelUrl,
     PrismConfig.tracking.fallbackModelUrl,
   ];

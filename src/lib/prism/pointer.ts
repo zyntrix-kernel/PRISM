@@ -82,13 +82,13 @@ export class AdaptivePointerFilter {
   private speed = 0; // filtered pointer speed, NDC/sec
 
   constructor(opts: AdaptivePointerOpts = {}) {
-    this.maxSpeed = opts.maxSpeed ?? 8.5;
-    this.slowCutoff = opts.slowCutoff ?? 10;
-    this.fastCutoff = opts.fastCutoff ?? 22;
-    this.betaBase = opts.betaBase ?? 0.18;
-    this.betaRate = opts.betaRate ?? 0.32;
-    this.maxLeadSec = opts.maxLeadSec ?? 0.018;
-    this.maxLeadDist = opts.maxLeadDist ?? 0.018;
+    this.maxSpeed = opts.maxSpeed ?? 10.5;
+    this.slowCutoff = opts.slowCutoff ?? 14;
+    this.fastCutoff = opts.fastCutoff ?? 38;
+    this.betaBase = opts.betaBase ?? 0.35;
+    this.betaRate = opts.betaRate ?? 0.55;
+    this.maxLeadSec = opts.maxLeadSec ?? 0.03;
+    this.maxLeadDist = opts.maxLeadDist ?? 0.04;
   }
 
   /** Measured tracking rate (Hz). Drives every adaptive tuning. */

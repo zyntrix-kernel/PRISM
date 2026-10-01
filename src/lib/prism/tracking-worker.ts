@@ -7,46 +7,60 @@ type Message = InitMessage | FrameMessage;
 
 let landmarker: HandLandmarker | null = null;
 
-async function resolveModelUrls(): Promise<{ urls: string[]; offline: boolean }> {
-  try {
-    const probe = await fetch(PrismConfig.tracking.localModelUrl, { method: 'HEAD' });
-    const type = probe.headers.get('content-type') ?? '';
-    const length = Number(probe.headers.get('content-length') ?? '0');
-    if (probe.ok && !type.includes('text/html') && length > 1_000_000) {
-      return { urls: [PrismConfig.tracking.localModelUrl], offline: true };
+async function fetchModel(url: string): Promise<Uint8Array> {
+  const response = await fetch(url, { cache: 'force-cache', redirect: 'follow' });
+  if (!response.ok) throw new Error(`Model fetch failed (${response.status})`);
+  const bytes = new Uint8Array(await response.arrayBuffer());
+  if (bytes.byteLength < 1_000_000) throw new Error(`Invalid hand model payload (${bytes.byteLength} bytes)`);
+  return bytes;
+}
+
+async function resolveModel(): Promise<{ bytes: Uint8Array; offline: boolean }> {
+  const urls = [
+    PrismConfig.tracking.localModelUrl,
+    PrismConfig.tracking.cdnModelUrl,
+    PrismConfig.tracking.fallbackModelUrl,
+  ];
+  let lastError: unknown = null;
+  for (const [index, url] of urls.entries()) {
+    try {
+      return { bytes: await fetchModel(url), offline: index === 0 };
+    } catch (err) {
+      lastError = err;
     }
-  } catch {
-    // Continue to resilient remote sources.
   }
-  return {
-    urls: [PrismConfig.tracking.cdnModelUrl, PrismConfig.tracking.fallbackModelUrl],
-    offline: false,
-  };
+  throw lastError instanceof Error ? lastError : new Error(String(lastError));
 }
 
 async function init(): Promise<void> {
-  const wasmUrls = [PrismConfig.tracking.wasmUrl, PrismConfig.tracking.cdnWasmUrl].filter((u, i, all) => u && all.indexOf(u) === i);
+  const wasmUrls = [PrismConfig.tracking.wasmUrl, PrismConfig.tracking.cdnWasmUrl]
+    .filter((u, i, all) => u && all.indexOf(u) === i);
   let lastError: unknown = null;
-  const { urls: modelUrls, offline } = await resolveModelUrls();
+  let model: { bytes: Uint8Array; offline: boolean };
+
+  try {
+    model = await resolveModel();
+  } catch (err) {
+    self.postMessage({ type: 'error', message: err instanceof Error ? err.message : String(err) });
+    return;
+  }
 
   for (const wasmUrl of wasmUrls) {
     try {
       const vision = await FilesetResolver.forVisionTasks(wasmUrl);
-      for (const modelUrl of modelUrls) {
-        for (const delegate of ['GPU', 'CPU'] as const) {
-          try {
-            landmarker = await HandLandmarker.createFromOptions(vision, {
-              baseOptions: { modelAssetPath: modelUrl, delegate },
-              runningMode: 'VIDEO',
-              numHands: PrismConfig.tracking.numHands,
-              minHandDetectionConfidence: PrismConfig.tracking.minHandDetectionConfidence,
-              minHandPresenceConfidence: PrismConfig.tracking.minHandPresenceConfidence,
-              minTrackingConfidence: PrismConfig.tracking.minTrackingConfidence,
-            });
-            self.postMessage({ type: 'ready', delegate, offline });
-            return;
-          } catch (err) { lastError = err; }
-        }
+      for (const delegate of ['GPU', 'CPU'] as const) {
+        try {
+          landmarker = await HandLandmarker.createFromOptions(vision, {
+            baseOptions: { modelAssetBuffer: model.bytes, delegate },
+            runningMode: 'VIDEO',
+            numHands: PrismConfig.tracking.numHands,
+            minHandDetectionConfidence: PrismConfig.tracking.minHandDetectionConfidence,
+            minHandPresenceConfidence: PrismConfig.tracking.minHandPresenceConfidence,
+            minTrackingConfidence: PrismConfig.tracking.minTrackingConfidence,
+          });
+          self.postMessage({ type: 'ready', delegate, offline: model.offline });
+          return;
+        } catch (err) { lastError = err; }
       }
     } catch (err) { lastError = err; }
   }

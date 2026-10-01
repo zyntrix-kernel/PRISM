@@ -14,14 +14,19 @@ public class MainActivity extends BridgeActivity {
 
         WebView webView = getBridge().getWebView();
         if (webView != null) {
-            // PRISM is a WebGL + camera application. Keep the WebView on the
-            // GPU-backed path and remove Android's overscroll work from the
-            // interaction surface.
-            webView.setLayerType(View.LAYER_TYPE_HARDWARE, null);
+            // WebView is already hardware accelerated by the Activity/window.
+            // Do not force a hardware layer: an extra WebView layer can add a
+            // texture/compositing pass, which is particularly costly while
+            // WebGL + camera frames are active.
             webView.setOverScrollMode(View.OVER_SCROLL_NEVER);
 
             WebSettings settings = webView.getSettings();
             settings.setMediaPlaybackRequiresUserGesture(false);
+            settings.setJavaScriptEnabled(true);
+            settings.setDomStorageEnabled(true);
+            settings.setSupportZoom(false);
+            settings.setBuiltInZoomControls(false);
+            settings.setDisplayZoomControls(false);
         }
     }
 }

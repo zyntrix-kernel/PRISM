@@ -25,7 +25,11 @@ export function isAndroidWebView(): boolean {
   const ua = navigator.userAgent.toLowerCase();
   return ua.includes('android') && (ua.includes('wv') || ua.includes('version/4.0'));
 }
-export function recommendTier(env: { isMobile: boolean; isTablet: boolean; gpuRenderer: string | null; hardwareConcurrency?: number; deviceMemoryGB?: number }): QualityTier {
+export function recommendTier(env: { isMobile: boolean; isTablet: boolean; gpuRenderer: string | null; hardwareConcurrency?: number; deviceMemoryGB?: number; isWebView?: boolean }): QualityTier {
+  // WebView has less rendering headroom than standalone Chrome. Reserve GPU
+  // time for WebGL + camera compositing + MediaPipe rather than spending it on
+  // excess scene pixels. This is especially important during hand interaction.
+  if (env.isWebView) return 'low';
   if (env.isTablet) return 'medium';
   if (env.isMobile) return 'low';
   const cores = env.hardwareConcurrency ?? 8;
@@ -72,6 +76,7 @@ export function detectDevice(overrides: Partial<DeviceEnv> = {}): DeviceInfo {
   const env = { ...readEnv(), ...overrides }; const isTablet = detectTablet(env); const minDim = Math.min(env.screenWidth, env.screenHeight); const ua = env.userAgent.toLowerCase();
   const isPhone = !isTablet && (ua.includes('iphone') || (ua.includes('android') && ua.includes('mobile')) || (env.maxTouchPoints > 0 && minDim < 768));
   const isMobile = isTablet || isPhone || (env.coarsePointer && minDim < 768);
-  const isWeakGpu = classifyGpu(env.gpuRenderer);
-  return { ...env, isMobile, isTablet, isWeakGpu, hasTouch: env.maxTouchPoints > 0 || env.coarsePointer, tier: recommendTier({ ...env, isMobile, isTablet }) };
+  const isWebView = isAndroidWebView();
+  const isWeakGpu = classifyGpu(env.gpuRenderer) || isWebView;
+  return { ...env, isMobile, isTablet, isWeakGpu, hasTouch: env.maxTouchPoints > 0 || env.coarsePointer, tier: recommendTier({ ...env, isMobile, isTablet, isWebView }) };
 }

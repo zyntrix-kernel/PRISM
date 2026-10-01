@@ -15,15 +15,13 @@ export const PrismConfig = {
     minHandDetectionConfidence: 0.3,
     minHandPresenceConfidence: 0.3,
     minTrackingConfidence: 0.3,
-    // ~22 fps target on capable hardware. tracking.ts backs off automatically
-    // when inference becomes expensive instead of forcing stale queued work.
     intervalMs: 45,
-    tabletIntervalMs: 45,
+    // Tablet cameras are the primary hands-free input surface. Sample more
+    // aggressively, while tracking.ts still backs off when inference is slow.
+    tabletIntervalMs: 36,
   },
 
   camera: {
-    // Hard camera ceiling. The hand model does not benefit enough from a
-    // phone's 1080p/4K stream to justify the additional capture bandwidth.
     idealWidth: 640,
     idealHeight: 480,
     maxWidth: 640,
@@ -36,8 +34,6 @@ export const PrismConfig = {
     pinchExit: 0.55,
     pinchMinFrames: 1,
     pinchEnterMs: 0,
-    // Shorter release latch makes pinch release feel immediate while still
-    // rejecting brief tracking noise.
     pinchExitMs: 90,
     extendedRatio: 1.10,
   },
@@ -52,9 +48,10 @@ export const PrismConfig = {
       maxLeadSec: 0.12,
       maxLeadDist: 0.055,
     },
-    // Lower drag smoothing removes the rubber-band feeling without exposing
-    // raw landmark jitter because the pointer filter already handles noise.
     grabSmoothing: 0.56,
+    // Slightly more direct dragging on large touchscreens. This is used only
+    // by the tablet interaction path and leaves desktop mouse feel unchanged.
+    tabletGrabSmoothing: 0.48,
     zoomSpeed: 2.5,
     rotateSpeed: 0.6,
     worldScaleMin: 0.4,
@@ -92,9 +89,6 @@ export const PrismConfig = {
   },
 
   quality: {
-    // Mobile is deliberately capped below native DPR. The camera experience
-    // is a realtime interaction product, so stable frame time beats drawing
-    // millions of extra pixels that the eye cannot use during motion.
     ultra: { pixelRatio: 1.75 },
     high: { pixelRatio: 1.5 },
     medium: { pixelRatio: 1.15 },

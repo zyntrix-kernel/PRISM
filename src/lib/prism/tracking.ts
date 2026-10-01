@@ -47,6 +47,7 @@ export class HandTracker {
   private videoFrameCallbackHandle = 0;
   private requestedIntervalMs: number | null = null;
   private baseIntervalMs = 16;
+  private workerOwnsTrack = false;
 
   modelOffline = false;
   delegateUsed = 'GPU';
@@ -110,9 +111,42 @@ export class HandTracker {
 
   start(video: HTMLVideoElement, opts?: { intervalMs?: number }): void {
     if (!this.isReady) throw new Error('HandTracker.start() called before init().');
-    this.stop(); this.video = video as VideoFrameVideo; this.running = true; this.lastSubmittedAt = -Infinity; this.workerBusy = false;
+    this.stop();
+    this.video = video as VideoFrameVideo;
+    this.running = true;
+    this.lastSubmittedAt = -Infinity;
+    this.workerBusy = false;
+
     this.baseIntervalMs = isTabletDevice() ? 16 : 16;
     this.requestedIntervalMs = opts?.intervalMs != null ? Math.max(16, opts.intervalMs) : null;
+
+    const sourceTrack = video.srcObject instanceof MediaStream
+      ? video.srcObject.getVideoTracks()[0]
+      : null;
+
+    // Best path: transfer a CLONED camera track to the dedicated worker.
+    // MediaStreamTrackProcessor then creates VideoFrames off the main thread
+    // with a one-frame buffer, so the UI never waits for camera frame
+    // extraction and stale frames are discarded instead of queued.
+    if (
+      this.useWorker &&
+      sourceTrack &&
+      typeof Worker !== 'undefined'
+    ) {
+      try {
+        const trackProcessorSupported = 'MediaStreamTrackProcessor' in globalThis;
+        if (trackProcessorSupported) {
+          const workerTrack = sourceTrack.clone();
+          this.workerOwnsTrack = true;
+          this.worker?.postMessage({ type: 'track', track: workerTrack }, [workerTrack]);
+          return;
+        }
+      } catch {
+        this.workerOwnsTrack = false;
+      }
+    }
+
+    // Compatibility path for browsers without MediaStreamTrackProcessor.
     const videoWithCallback = this.video;
     if (this.useWorker && videoWithCallback.requestVideoFrameCallback && typeof VideoFrame !== 'undefined') {
       const schedule = (): void => {
@@ -123,16 +157,33 @@ export class HandTracker {
           schedule();
         });
       };
-      schedule(); return;
+      schedule();
+      return;
     }
-    const loop = (): void => { if (!this.running) return; this.pump(performance.now()); this.loopHandle = window.setTimeout(loop, 16) as unknown as number; };
+
+    const loop = (): void => {
+      if (!this.running) return;
+      this.pump(performance.now());
+      this.loopHandle = window.setTimeout(loop, 16) as unknown as number;
+    };
     this.loopHandle = window.setTimeout(loop, 16) as unknown as number;
   }
 
   stop(): void {
-    this.running = false; clearTimeout(this.loopHandle); this.loopHandle = 0;
-    if (this.videoFrameCallbackHandle && this.video?.cancelVideoFrameCallback) this.video.cancelVideoFrameCallback(this.videoFrameCallbackHandle);
-    this.videoFrameCallbackHandle = 0; this.workerBusy = false; this.requestedIntervalMs = null; this.video = null;
+    this.running = false;
+    clearTimeout(this.loopHandle);
+    this.loopHandle = 0;
+    if (this.videoFrameCallbackHandle && this.video?.cancelVideoFrameCallback) {
+      this.video.cancelVideoFrameCallback(this.videoFrameCallbackHandle);
+    }
+    this.videoFrameCallbackHandle = 0;
+    if (this.workerOwnsTrack && this.worker) {
+      this.worker.postMessage({ type: 'stop-track' });
+    }
+    this.workerOwnsTrack = false;
+    this.workerBusy = false;
+    this.requestedIntervalMs = null;
+    this.video = null;
   }
 
   dispose(): void { this.stop(); this.worker?.terminate(); this.worker = null; this.useWorker = false; this.workerInitPromise = null; this.landmarker?.close(); this.landmarker = null; }

@@ -118,6 +118,8 @@ export class HandTracker {
     this.stop();
     this.video = video as VideoFrameVideo;
     this.running = true;
+    this.latest = null;
+    this.lastResultSignature = '';
     this.lastSubmittedAt = -Infinity;
     this.workerBusy = false;
 
@@ -184,6 +186,8 @@ export class HandTracker {
     this.workerOwnsTrack = false;
     this.workerBusy = false;
     this.requestedIntervalMs = null;
+    this.latest = null;
+    this.lastResultSignature = '';
     this.video = null;
   }
 
@@ -217,6 +221,7 @@ export class HandTracker {
 
   private handleWorkerMessage(message: WorkerMessage): void {
     if (message.type === 'result') {
+      if (!this.running) return;
       this.workerBusy = false;
       this.pumpErrorCount = 0;
       this.acceptResult(message.hands, message.timestampMs, message.inferenceMs, message.captureAgeMs);

@@ -11,18 +11,18 @@ export const PrismConfig = {
     minHandDetectionConfidence: 0.3,
     minHandPresenceConfidence: 0.3,
     minTrackingConfidence: 0.3,
-    intervalMs: 16,
-    tabletIntervalMs: 16,
+    intervalMs: 20,
+    tabletIntervalMs: 20,
   },
   camera: {
-    idealWidth: 640, idealHeight: 480, maxWidth: 640, maxHeight: 480, maxFrameRate: 60,
+    idealWidth: 640, idealHeight: 480, maxWidth: 640, maxHeight: 480, maxFrameRate: 30,
     tabletIdealWidth: 640, tabletIdealHeight: 480,
   },
   gestures: {
     pinchEnter: 0.36, pinchExit: 0.55, pinchMinFrames: 1, pinchEnterMs: 0, pinchExitMs: 90, extendedRatio: 1.10,
   },
   interaction: {
-    pointerAdaptive: { maxSpeed: 12, slowCutoff: 16, fastCutoff: 48, betaBase: 0.48, betaRate: 0.70, maxLeadSec: 0.045, maxLeadDist: 0.055 },
+    pointerAdaptive: { maxSpeed: 14, slowCutoff: 18, fastCutoff: 60, betaBase: 0.55, betaRate: 0.85, maxLeadSec: 0.06, maxLeadDist: 0.07 },
     grabSmoothing: 0.56, tabletGrabSmoothing: 0.48, tabletOrbitSpeed: 0.0038, tabletPanSpeed: 0.0030, tabletZoomSpeed: 2.2,
     zoomSpeed: 2.5, rotateSpeed: 0.6, worldScaleMin: 0.4, worldScaleMax: 3.0, gridSnap: 0.6, hoverRadius: 0.12,
     hoverClearMs: 150, coastMs: 500, tapMaxMs: 700, tapMaxMove: 0.08,
@@ -31,7 +31,7 @@ export const PrismConfig = {
   bloom: { strength: 0.75, radius: 0.5, threshold: 0.85 },
   preset: 'space' as PresetId,
   models: {
-    hand: { backend: 'mediapipe', precision: 'float16', hands: 2, maxInferenceFps: 60 },
+    hand: { backend: 'mediapipe', precision: 'float16', hands: 2, maxInferenceFps: 30 },
     vision: { modelId: 'onnx-community/FastVLM-0.5B-ONNX', intervalMs: 3000, frameWidth: 448, maxTokens: 96 },
   },
   audio: { sfxEnabledByDefault: true, masterGain: 0.9 },

@@ -123,7 +123,7 @@ export class HandTracker {
     this.lastSubmittedAt = -Infinity;
     this.workerBusy = false;
 
-    this.baseIntervalMs = isAndroidWebView() ? 42 : isTabletDevice() ? 33 : 16;
+    this.baseIntervalMs = isAndroidWebView() ? 33 : isTabletDevice() ? 33 : 16;
     this.requestedIntervalMs = opts?.intervalMs != null ? Math.max(16, opts.intervalMs) : null;
 
     const sourceTrack = video.srcObject instanceof MediaStream

@@ -158,11 +158,12 @@ export class HandTracker {
     this.running = true;
     this.lastSubmittedAt = -Infinity;
 
-    // Vision is input sampling, not display rendering. Phones sample more
-    // slowly than the renderer; worker backpressure keeps stale frames out.
+    // Vision is input sampling, not display rendering. The config value is a
+    // target, while getTargetIntervalMs() backs off only when inference needs
+    // more time. Explicit opts remain hard overrides for special environments.
     const defaultInterval = isTabletDevice() ? PrismConfig.tracking.tabletIntervalMs : PrismConfig.tracking.intervalMs;
-    this.baseIntervalMs = Math.max(80, defaultInterval);
-    this.requestedIntervalMs = opts?.intervalMs != null ? Math.max(80, opts.intervalMs) : null;
+    this.baseIntervalMs = Math.max(40, defaultInterval);
+    this.requestedIntervalMs = opts?.intervalMs != null ? Math.max(40, opts.intervalMs) : null;
     const videoWithCallback = this.video;
 
     if (this.useWorker && videoWithCallback.requestVideoFrameCallback) {
@@ -288,7 +289,7 @@ export class HandTracker {
     if (this.requestedIntervalMs !== null) return this.requestedIntervalMs;
     const inference = this.averageInferenceMs;
     const pressure = inference > 45 ? (inference - 45) * 1.4 : 0;
-    return Math.max(80, Math.min(260, this.baseIntervalMs + pressure));
+    return Math.max(40, Math.min(260, this.baseIntervalMs + pressure));
   }
 
   private acceptResult(hands: TrackedHand[], timestampMs: number, inferenceMs: number): void {

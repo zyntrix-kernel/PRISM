@@ -26,7 +26,7 @@ async function resolveModel(): Promise<{ bytes: Uint8Array; offline: boolean }> 
 
 type WorkerReady = { type: 'ready'; delegate: string; offline: boolean };
 type WorkerError = { type: 'error' | 'pump-error' | 'track-error'; message: string };
-type WorkerResult = { type: 'result'; hands: TrackedHand[]; timestampMs: number; inferenceMs: number };
+type WorkerResult = { type: 'result'; hands: TrackedHand[]; timestampMs: number; captureAgeMs: number; inferenceMs: number };
 type WorkerMessage = WorkerReady | WorkerError | WorkerResult;
 type VideoFrameCallback = (now: number, metadata: VideoFrameCallbackMetadata) => void;
 type VideoFrameVideo = HTMLVideoElement & { requestVideoFrameCallback?: (callback: VideoFrameCallback) => number; cancelVideoFrameCallback?: (handle: number) => void };
@@ -211,7 +211,7 @@ export class HandTracker {
     const now = performance.now(); const t0 = now;
     try {
       const result = this.landmarker.detectForVideo(video, now);
-      this.acceptResult((result.landmarks ?? []).map((landmarks, i) => ({ landmarks: landmarks.map((p) => ({ x: p.x, y: p.y, z: p.z ?? 0 })), handedness: result.handedness?.[i]?.[0]?.categoryName ?? 'Unknown', confidence: result.handedness?.[i]?.[0]?.score ?? 0 })), now, performance.now() - t0);
+      this.acceptResult((result.landmarks ?? []).map((landmarks, i) => ({ landmarks: landmarks.map((p) => ({ x: p.x, y: p.y, z: p.z ?? 0 })), handedness: result.handedness?.[i]?.[0]?.categoryName ?? 'Unknown', confidence: result.handedness?.[i]?.[0]?.score ?? 0 })), now, performance.now() - t0, performance.now() - now);
     } catch (err) { this.pumpErrorCount += 1; this.lastPumpError = err instanceof Error ? err.message : String(err); }
   }
 
@@ -219,7 +219,7 @@ export class HandTracker {
     if (message.type === 'result') {
       this.workerBusy = false;
       this.pumpErrorCount = 0;
-      this.acceptResult(message.hands, message.timestampMs, message.inferenceMs);
+      this.acceptResult(message.hands, message.timestampMs, message.inferenceMs, message.captureAgeMs);
       return;
     }
 
@@ -254,7 +254,7 @@ export class HandTracker {
 
   private getTargetIntervalMs(): number { return this.requestedIntervalMs !== null ? this.requestedIntervalMs : this.baseIntervalMs; }
 
-  private acceptResult(hands: TrackedHand[], timestampMs: number, inferenceMs: number): void {
+  private acceptResult(hands: TrackedHand[], timestampMs: number, inferenceMs: number, captureAgeMs = 0): void {
     this.detectionCount += 1;
     this.detectionTotalMs += inferenceMs;
     if (this.detectionCount > 30) {
@@ -262,7 +262,8 @@ export class HandTracker {
       this.detectionTotalMs /= 2;
     }
 
-    this.latest = { hands, timestampMs };
+    this.latest = { hands, timestampMs, captureAgeMs: Math.max(0, captureAgeMs) };
+    if (!this.latest) return;
 
     // Landmarks are compact enough to compare on the main thread. A sub-pixel
     // threshold suppresses duplicate/noise-only results so the renderer is

@@ -92,6 +92,7 @@ async function runTrack(track: MediaStreamTrack, session: number, intervalMs: nu
   let readerDone = false;
   let wakeInference: (() => void) | null = null;
   let clockOffsetMs: number | null = null;
+  let lastInferenceAt = -Infinity;
   let lastInferenceStartedAt = -Infinity;
 
   currentReaderCancel = () => { void reader?.cancel(); };

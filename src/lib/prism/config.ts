@@ -12,7 +12,7 @@ export const PrismConfig = {
     minHandPresenceConfidence: 0.25,
     minTrackingConfidence: 0.25,
     intervalMs: 16,
-    tabletIntervalMs: 16,
+    tabletIntervalMs: 33,
   },
   camera: {
     idealWidth: 480, idealHeight: 360, maxWidth: 480, maxHeight: 360, maxFrameRate: 60,

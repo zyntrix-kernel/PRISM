@@ -11,12 +11,12 @@ export const PrismConfig = {
     minHandDetectionConfidence: 0.3,
     minHandPresenceConfidence: 0.3,
     minTrackingConfidence: 0.3,
-    intervalMs: 20,
-    tabletIntervalMs: 20,
+    intervalMs: 16,
+    tabletIntervalMs: 16,
   },
   camera: {
-    idealWidth: 640, idealHeight: 480, maxWidth: 640, maxHeight: 480, maxFrameRate: 30,
-    tabletIdealWidth: 640, tabletIdealHeight: 480,
+    idealWidth: 480, idealHeight: 360, maxWidth: 480, maxHeight: 360, maxFrameRate: 60,
+    tabletIdealWidth: 480, tabletIdealHeight: 360,
   },
   gestures: {
     pinchEnter: 0.36, pinchExit: 0.55, pinchMinFrames: 1, pinchEnterMs: 0, pinchExitMs: 90, extendedRatio: 1.10,
@@ -31,13 +31,13 @@ export const PrismConfig = {
   bloom: { strength: 0.75, radius: 0.5, threshold: 0.85 },
   preset: 'space' as PresetId,
   models: {
-    hand: { backend: 'mediapipe', precision: 'float16', hands: 2, maxInferenceFps: 30 },
+    hand: { backend: 'mediapipe', precision: 'float16', hands: 2, maxInferenceFps: 60 },
     vision: { modelId: 'onnx-community/FastVLM-0.5B-ONNX', intervalMs: 3000, frameWidth: 448, maxTokens: 96 },
   },
   audio: { sfxEnabledByDefault: true, masterGain: 0.9 },
   ai: { modelId: 'onnx-community/FastVLM-0.5B-ONNX', intervalMs: 3000, frameWidth: 448, maxTokens: 96 },
   quality: {
-    ultra: { pixelRatio: 1.5 }, high: { pixelRatio: 1.25 }, medium: { pixelRatio: 1.0 }, low: { pixelRatio: 0.75 }, tablet: { pixelRatio: 1.15 },
+    ultra: { pixelRatio: 1.5 }, high: { pixelRatio: 1.25 }, medium: { pixelRatio: 1.0 }, low: { pixelRatio: 0.75 }, tablet: { pixelRatio: 1.0 },
   } as Record<string, { pixelRatio: number }>,
 };
 

@@ -223,7 +223,7 @@ export class PrismApp {
     onboardClose.addEventListener('click',()=>this.dismissOnboard(),{signal});
     onboardHelp.addEventListener('click',()=>{this.dismissOnboard();this.el.helpCard.classList.remove('hidden');},{signal});
     window.addEventListener('keydown',(e)=>{if(e.key==='d'||e.key==='D')this.toggleDebug();if(e.key==='h'||e.key==='H')this.toggleHelp();if(e.key==='p'||e.key==='P')this.togglePresentation();},{signal});
-    window.addEventListener('resize',()=>{const c=this.el.container;this.scene.resize(c.clientWidth,c.clientHeight);},{signal});
+    window.addEventListener('resize',()=>{const c=this.el.container;this.scene.resize(c.clientWidth,c.clientHeight);this.requestFrame();},{signal});
     window.addEventListener('error',(e)=>{this.setStatus('Runtime fault — mouse still works',`Runtime fault: ${e.message} — mouse fallback still works; report this text.`);},{signal});
     try{this.onboardVisible=window.localStorage.getItem(this.ONBOARD_KEY)!=='1';}catch{this.onboardVisible=true;}
     if(this.onboardVisible)this.el.onboard.classList.remove('hidden');else this.el.onboard.classList.add('hidden');

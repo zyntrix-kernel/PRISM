@@ -37,7 +37,6 @@
   --color-secondary-foreground: var(--secondary-foreground);
   --color-secondary: var(--secondary);
   --color-popover-foreground: var(--popover-foreground);
-  --color-popover: var(--popover);
   --color-card-foreground: var(--card-foreground);
   --color-card: var(--card);
   --radius-sm: calc(var(--radius) - 4px);
@@ -94,7 +93,6 @@
   --muted-foreground: oklch(0.708 0 0);
   --accent: oklch(0.269 0 0);
   --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.704 0.191 22.216);
   --border: oklch(1 0 0 / 10%);
   --input: oklch(1 0 0 / 15%);
   --ring: oklch(0.556 0 0);
@@ -106,46 +104,75 @@
   --sidebar: oklch(0.205 0 0);
   --sidebar-foreground: oklch(0.985 0 0);
   --sidebar-primary: oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
+  --sidebar-primary-foreground: oklch(0.985 0.985 0);
   --sidebar-border: oklch(1 0 0 / 10%);
   --sidebar-ring: oklch(0.556 0 0);
 }
 
 @layer base {
-  *, *::before, *::after {
-    @apply border-border outline-ring/50;
-  }
+  *, *::before, *::after { @apply border-border outline-ring/50; }
 
   html {
     color-scheme: dark;
     background: #000;
     overscroll-behavior: none;
+    height: 100%;
+    height: 100dvh;
+    touch-action: none;
   }
 
   body {
     @apply bg-background text-foreground;
     margin: 0;
     min-height: 100dvh;
+    width: 100%;
     overflow: hidden;
     background: #000;
     overscroll-behavior: none;
     -webkit-tap-highlight-color: transparent;
     -webkit-font-smoothing: antialiased;
     text-rendering: optimizeLegibility;
+    touch-action: none;
+    user-select: none;
+    -webkit-user-select: none;
   }
 
-  button, select, input, textarea {
-    font: inherit;
-  }
+  button, select, input, textarea { font: inherit; }
 
   button, [role="button"] {
     -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+    min-height: 44px;
+    min-width: 44px;
   }
 
   :focus-visible {
     outline: 2px solid rgba(126, 211, 252, 0.9);
     outline-offset: 3px;
   }
+}
+
+/* Tablet ergonomics: keep controls away from rounded corners, camera cutouts,
+   home indicators and browser chrome. Also increase control hit areas without
+   changing the visual scale of the desktop UI. */
+@media (pointer: coarse) and (min-width: 768px) {
+  :root {
+    --prism-safe-top: max(16px, env(safe-area-inset-top));
+    --prism-safe-right: max(16px, env(safe-area-inset-right));
+    --prism-safe-bottom: max(20px, env(safe-area-inset-bottom));
+    --prism-safe-left: max(16px, env(safe-area-inset-left));
+  }
+
+  button, [role="button"], select {
+    min-height: 48px;
+    min-width: 48px;
+  }
+}
+
+@media (orientation: portrait) and (pointer: coarse) and (min-width: 768px) {
+  /* Give the scene breathing room in portrait, where the camera feed and
+     controls otherwise compete for vertical space. */
+  body { min-height: 100svh; }
 }
 
 @media (prefers-reduced-motion: reduce) {

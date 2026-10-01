@@ -46,6 +46,7 @@ export class InteractionController {
   private readonly rayHits: THREE.Intersection[] = [];
   private lastHandFrameTimestamp = -1;
   private lastHandResultAt = 0;
+  private lastHandResultReceivedAt = 0;
   /** Estimated capture-to-display age from the tracker, in milliseconds. */
   private lastHandCaptureAgeMs = 0;
   private frameCount = 0;
@@ -180,7 +181,7 @@ export class InteractionController {
     this.mouseDown = false; this.orbitArmed = false; this.panning = false; this.orbitDragPrimed = false;
     this.actionHeld = false; this.actionPressed = false; this.actionReleased = false; this.tap = false; this.tapArmed = false; this.prevActionHeld = false; this.mouseClicked = false; this.spaceDown = false;
     this.displayedHover = null; this.hoverMissMs = 0; this.cursorWorld = null; this.activePointers.clear(); this.pinchMode = false; this.primaryFirst = true;
-    this.anchorA = null; this.anchorB = null; this.lastRaw.x = 0; this.lastRaw.y = 0; this.lastHandFrameTimestamp = -1; this.lastHandResultAt = 0; this.calibrator.reset();
+    this.anchorA = null; this.anchorB = null; this.lastRaw.x = 0; this.lastRaw.y = 0; this.lastHandFrameTimestamp = -1; this.lastHandResultAt = 0; this.lastHandResultReceivedAt = 0; this.lastHandCaptureAgeMs = 0; this.calibrator.reset();
   }
 
   get pointerNX(): number { return this.pointerNdc.x; }
@@ -220,7 +221,10 @@ export class InteractionController {
   }
 
   private advanceHandPointer(_dt: number): void {
-    const age = this.lastHandResultAt > 0 ? Math.min(Math.max((performance.now() - this.lastHandResultAt) / 1000, 0), 0.08) : 0;
+    const resultAgeMs = this.lastHandResultReceivedAt > 0 ? Math.max(0, performance.now() - this.lastHandResultReceivedAt) : 0;
+    const captureAgeMs = Math.max(0, this.lastHandCaptureAgeMs);
+    const maxLeadSec = PrismConfig.interaction.pointerAdaptive.maxLeadSec;
+    const age = Math.min((resultAgeMs + captureAgeMs) / 1000, maxLeadSec);
     const predictedX = this.pointerTarget.x + this.pointerFilter.velocityX * age; const predictedY = this.pointerTarget.y + this.pointerFilter.velocityY * age;
     const dx = predictedX - this.pointerTarget.x; const dy = predictedY - this.pointerTarget.y; const extra = Math.hypot(dx, dy); const maxExtra = 0.07; const k = extra > maxExtra ? maxExtra / extra : 1;
     this.pointerNdc.set(THREE.MathUtils.clamp(this.pointerTarget.x + dx * k, -1, 1), THREE.MathUtils.clamp(this.pointerTarget.y + dy * k, -1, 1));
@@ -247,7 +251,7 @@ export class InteractionController {
     const raw=this.toNdc(tip);
     if(jumped){this.tmpNdcSample.x=raw.x;this.tmpNdcSample.y=raw.y;this.pointerFilter.reset(this.tmpNdcSample);this.pointerTarget.set(raw.x,raw.y);this.pointerNdc.set(raw.x,raw.y);this.lastRaw.x=raw.x;this.lastRaw.y=raw.y;}
     else {const dead=this.pointerFilter.pointerSpeed<0.3?0.00025+Math.min(this.pointerFilter.noisePerSample*0.06,0.001):0;if(dead>0&&Math.hypot(raw.x-this.lastRaw.x,raw.y-this.lastRaw.y)<dead){raw.x=this.lastRaw.x;raw.y=this.lastRaw.y;}this.lastRaw.x=raw.x;this.lastRaw.y=raw.y;}
-    this.tmpNdcSample.x=raw.x;this.tmpNdcSample.y=raw.y;this.pointerFilter.update(this.tmpNdcSample,trackDtMs,primaryHand.confidence,this.tmpSmoothed);this.pointerTarget.set(raw.x,raw.y);this.pickDirty=true;this.lastHandResultAt=frame.timestampMs;this.advanceHandPointer(dt);
+    this.tmpNdcSample.x=raw.x;this.tmpNdcSample.y=raw.y;this.pointerFilter.update(this.tmpNdcSample,trackDtMs,primaryHand.confidence,this.tmpSmoothed);this.pointerTarget.set(raw.x,raw.y);this.pickDirty=true;this.lastHandResultAt=frame.timestampMs;this.lastHandResultReceivedAt=performance.now();this.lastHandCaptureAgeMs=Math.max(0,frame.captureAgeMs);this.advanceHandPointer(dt);
     this.prism.trackPointer(this.pointerNdc.x,this.pointerNdc.y);this.raycaster.setFromCamera(this.pointerNdc,this.prism.camera);this.cachedPick=this.pick();this.pickDirty=false;
 
     const primeP=prime.pinch.isPinching, secP=this.trackers[1].pinch.isPinching, now=performance.now();

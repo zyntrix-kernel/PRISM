@@ -1,16 +1,12 @@
 import { NextResponse } from 'next/server';
 
-export const runtime = 'nodejs';
-export const dynamic = 'force-dynamic';
-
+// PRISM is deployed as a static export. Keep this handler statically
+// compatible: a runtime-only `force-dynamic` route makes `next build` fail.
 const MODEL_URL = 'https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task';
 
 export async function GET(): Promise<Response> {
   try {
-    const upstream = await fetch(MODEL_URL, {
-      cache: 'force-cache',
-      next: { revalidate: 86400 },
-    });
+    const upstream = await fetch(MODEL_URL, { cache: 'force-cache' });
 
     if (!upstream.ok || !upstream.body) {
       return NextResponse.json(

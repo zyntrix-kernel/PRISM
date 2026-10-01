@@ -12,8 +12,11 @@ export const PrismConfig = {
     minHandDetectionConfidence: 0.3,
     minHandPresenceConfidence: 0.3,
     minTrackingConfidence: 0.3,
-    intervalMs: 45,
-    tabletIntervalMs: 40,
+    // Camera cursor is latency-sensitive. 30-33 FPS sampling is preferable
+    // to a slower 40-45ms cadence, while worker backpressure still prevents
+    // stale frames from piling up.
+    intervalMs: 33,
+    tabletIntervalMs: 33,
   },
 
   camera: {
@@ -22,8 +25,10 @@ export const PrismConfig = {
     maxWidth: 640,
     maxHeight: 480,
     maxFrameRate: 30,
-    tabletIdealWidth: 768,
-    tabletIdealHeight: 576,
+    // Do not increase camera resolution just because the tablet is large.
+    // Hand landmarks benefit far more from fresh frames than oversized frames.
+    tabletIdealWidth: 640,
+    tabletIdealHeight: 480,
   },
 
   gestures: {
@@ -37,13 +42,15 @@ export const PrismConfig = {
 
   interaction: {
     pointerAdaptive: {
-      maxSpeed: 4.0,
-      slowCutoff: 0.42,
-      fastCutoff: 3.4,
-      betaBase: 0.08,
-      betaRate: 0.07,
-      maxLeadSec: 0.12,
-      maxLeadDist: 0.055,
+      maxSpeed: 4.5,
+      slowCutoff: 0.70,
+      fastCutoff: 5.0,
+      betaBase: 0.12,
+      betaRate: 0.10,
+      // Compensate for camera + worker latency instead of hiding it behind
+      // heavy smoothing. Prediction is hard-capped to avoid cursor flings.
+      maxLeadSec: 0.16,
+      maxLeadDist: 0.075,
     },
     grabSmoothing: 0.56,
     tabletGrabSmoothing: 0.48,
@@ -87,7 +94,7 @@ export const PrismConfig = {
       backend: 'mediapipe',
       precision: 'float16',
       hands: 2,
-      maxInferenceFps: 25,
+      maxInferenceFps: 30,
     },
     vision: {
       modelId: 'onnx-community/FastVLM-0.5B-ONNX',
@@ -97,14 +104,11 @@ export const PrismConfig = {
     },
   },
 
-  // New sessions start with the complete PRISM soundscape enabled. A user's
-  // explicit mute choice is still persisted by PrismScore.
   audio: {
     sfxEnabledByDefault: true,
     masterGain: 0.9,
   },
 
-  // Keep the old AI namespace as a compatibility alias for existing callers.
   ai: {
     modelId: 'onnx-community/FastVLM-0.5B-ONNX',
     intervalMs: 3000,

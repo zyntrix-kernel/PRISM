@@ -11,21 +11,29 @@ import { PrismConfig } from './config';
 import { isTabletDevice } from './device';
 import type { HandFrame, TrackedHand } from './types';
 
-async function resolveModelUrls(): Promise<{ urls: string[]; offline: boolean }> {
-  try {
-    const probe = await fetch(PrismConfig.tracking.localModelUrl, { method: 'HEAD' });
-    const type = probe.headers.get('content-type') ?? '';
-    const length = Number(probe.headers.get('content-length') ?? '0');
-    if (probe.ok && !type.includes('text/html') && length > 1_000_000) {
-      return { urls: [PrismConfig.tracking.localModelUrl], offline: true };
+async function fetchModel(url: string): Promise<Uint8Array> {
+  const response = await fetch(url, { cache: 'force-cache', redirect: 'follow' });
+  if (!response.ok) throw new Error(`Model fetch failed (${response.status})`);
+  const bytes = new Uint8Array(await response.arrayBuffer());
+  if (bytes.byteLength < 1_000_000) throw new Error(`Invalid hand model payload (${bytes.byteLength} bytes)`);
+  return bytes;
+}
+
+async function resolveModel(): Promise<{ bytes: Uint8Array; offline: boolean }> {
+  const urls = [
+    PrismConfig.tracking.localModelUrl,
+    PrismConfig.tracking.cdnModelUrl,
+    PrismConfig.tracking.fallbackModelUrl,
+  ];
+  let lastError: unknown = null;
+  for (const [index, url] of urls.entries()) {
+    try {
+      return { bytes: await fetchModel(url), offline: index === 0 };
+    } catch (err) {
+      lastError = err;
     }
-  } catch {
-    // Continue to resilient remote sources.
   }
-  return {
-    urls: [PrismConfig.tracking.cdnModelUrl, PrismConfig.tracking.fallbackModelUrl],
-    offline: false,
-  };
+  throw lastError instanceof Error ? lastError : new Error(String(lastError));
 }
 
 type WorkerReady = { type: 'ready'; delegate: string; offline: boolean };
@@ -114,31 +122,36 @@ export class HandTracker {
 
   private async initMainThread(onProgress: (msg: string) => void): Promise<void> {
     onProgress('Loading vision runtime…');
-    const wasmUrls = [PrismConfig.tracking.wasmUrl, PrismConfig.tracking.cdnWasmUrl].filter((u, i, all) => u && all.indexOf(u) === i);
+    const wasmUrls = [PrismConfig.tracking.wasmUrl, PrismConfig.tracking.cdnWasmUrl]
+      .filter((u, i, all) => u && all.indexOf(u) === i);
     let lastError: unknown = null;
-    const { urls: modelUrls, offline } = await resolveModelUrls();
+    let model: { bytes: Uint8Array; offline: boolean };
+
+    try {
+      model = await resolveModel();
+    } catch (err) {
+      throw err instanceof Error ? err : new Error(String(err));
+    }
 
     for (const wasmUrl of wasmUrls) {
       try {
         const vision = await FilesetResolver.forVisionTasks(wasmUrl);
-        for (const modelUrl of modelUrls) {
-          for (const delegate of ['GPU', 'CPU'] as const) {
-            try {
-              onProgress(`Loading hand model (${offline ? 'local' : 'network fallback'}, ${delegate})…`);
-              this.landmarker = await HandLandmarker.createFromOptions(vision, {
-                baseOptions: { modelAssetPath: modelUrl, delegate },
-                runningMode: 'VIDEO',
-                numHands: PrismConfig.tracking.numHands,
-                minHandDetectionConfidence: PrismConfig.tracking.minHandDetectionConfidence,
-                minHandPresenceConfidence: PrismConfig.tracking.minHandPresenceConfidence,
-                minTrackingConfidence: PrismConfig.tracking.minTrackingConfidence,
-              });
-              this.modelOffline = offline;
-              this.delegateUsed = delegate;
-              this.mainThreadFallbackStarted = false;
-              return;
-            } catch (err) { lastError = err; }
-          }
+        for (const delegate of ['GPU', 'CPU'] as const) {
+          try {
+            onProgress(`Loading hand model (${model.offline ? 'local' : 'network fallback'}, ${delegate})…`);
+            this.landmarker = await HandLandmarker.createFromOptions(vision, {
+              baseOptions: { modelAssetBuffer: model.bytes, delegate },
+              runningMode: 'VIDEO',
+              numHands: PrismConfig.tracking.numHands,
+              minHandDetectionConfidence: PrismConfig.tracking.minHandDetectionConfidence,
+              minHandPresenceConfidence: PrismConfig.tracking.minHandPresenceConfidence,
+              minTrackingConfidence: PrismConfig.tracking.minTrackingConfidence,
+            });
+            this.modelOffline = model.offline;
+            this.delegateUsed = delegate;
+            this.mainThreadFallbackStarted = false;
+            return;
+          } catch (err) { lastError = err; }
         }
       } catch (err) { lastError = err; }
     }

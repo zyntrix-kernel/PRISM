@@ -184,6 +184,7 @@ export class InteractionController {
   }
 
   get pointerNX(): number { return this.pointerNdc.x; }
+  get pointerSpeed(): number { return this.pointerFilter.pointerSpeed; }
   get pointerNDC(): THREE.Vector2 { return this.pointerNdc; }
   get pinchCloseness(): number { if (this.pinchValue === null) return 0; const g = PrismConfig.gestures; return THREE.MathUtils.clamp((g.pinchExit - this.pinchValue) / (g.pinchExit - g.pinchEnter), 0, 1); }
 

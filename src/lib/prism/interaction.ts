@@ -458,32 +458,6 @@ export class InteractionController {
       }
     }
 
-    // ── RENDER-RATE POINTER FOLLOW ───────────────────────────────────────
-    // Tracking arrives at a lower cadence than rendering. One fast,
-    // monotonic exponential chase fills the gaps without a spring state or
-    // second velocity simulation in the hot render loop.
-    if (this.mode === 'hand') {
-      // Continue the last measured hand trajectory between MediaPipe samples.
-      // This compensates for capture/inference age without adding a second
-      // slow smoothing stage that makes the cursor feel detached.
-      const stepDt = Math.min(Math.max(dt, 1 / 240), 0.05);
-      const age = this.lastHandResultAt > 0
-        ? Math.min((performance.now() - this.lastHandResultAt) / 1000, 0.035)
-        : 0;
-      const predictedX = this.pointerTarget.x + this.pointerFilter.velocityX * age;
-      const predictedY = this.pointerTarget.y + this.pointerFilter.velocityY * age;
-      const dx = predictedX - this.pointerTarget.x;
-      const dy = predictedY - this.pointerTarget.y;
-      const extra = Math.hypot(dx, dy);
-      const maxExtra = 0.035;
-      const k = extra > maxExtra ? maxExtra / extra : 1;
-      this.tmpNdcSample.x = this.pointerTarget.x + dx * k;
-      this.tmpNdcSample.y = this.pointerTarget.y + dy * k;
-      const followRate = 240 + Math.min(this.pointerFilter.pointerSpeed * 12, 100);
-      const alpha = 1 - Math.exp(-followRate * stepDt);
-      this.pointerNdc.lerp(this.tmpNdcSample, alpha);
-    }
-
     // Unified action edges (hand pinch or non-orbit mouse hold / click).
     const held =
       this.mode === 'hand'
@@ -534,11 +508,45 @@ export class InteractionController {
 
   // ---- hand input -------------------------------------------------------
 
+  /**
+   * Advance the displayed hand cursor before any raycast/pick is performed.
+   * Keeping this immediately upstream of interaction eliminates the old
+   * one-render-frame disconnect where the cursor moved first and hover/grab
+   * only caught up on the next frame.
+   */
+  private advanceHandPointer(dt: number): void {
+    const stepDt = Math.min(Math.max(dt, 1 / 240), 0.05);
+    const age = this.lastHandResultAt > 0
+      ? Math.min((performance.now() - this.lastHandResultAt) / 1000, 0.045)
+      : 0;
+
+    // Predict only across the current camera/result age. Keep the lead
+    // bounded so a delayed inference result can never fling the cursor.
+    const predictedX = this.pointerTarget.x + this.pointerFilter.velocityX * age;
+    const predictedY = this.pointerTarget.y + this.pointerFilter.velocityY * age;
+    const dx = predictedX - this.pointerTarget.x;
+    const dy = predictedY - this.pointerTarget.y;
+    const extra = Math.hypot(dx, dy);
+    const maxExtra = 0.045;
+    const k = extra > maxExtra ? maxExtra / extra : 1;
+    this.tmpNdcSample.x = this.pointerTarget.x + dx * k;
+    this.tmpNdcSample.y = this.pointerTarget.y + dy * k;
+
+    // Near-immediate chase. The pointer filter provides the actual smoothing;
+    // this stage only fills the render-rate gaps between camera samples.
+    const followRate = 320 + Math.min(this.pointerFilter.pointerSpeed * 16, 140);
+    const alpha = 1 - Math.exp(-followRate * stepDt);
+    this.pointerNdc.lerp(this.tmpNdcSample, alpha);
+  }
+
   private updateFromHands(dt: number, dtMs: number, frame: HandFrame): void {
     // MediaPipe produces a fresh result at tracking cadence, not render
     // cadence. Keep raycast/drag/cursor rendering live, but don't redo hand
     // matching, gesture decoding, or filtering against the same frame.
     if (frame.timestampMs === this.lastHandFrameTimestamp) {
+      // Fill the pointer from the latest target/prediction before interaction
+      // evaluation so hit-testing and the visible cursor share the same point.
+      this.advanceHandPointer(dt);
       this.raycaster.setFromCamera(this.pointerNdc, this.prism.camera);
       this.prism.trackPointer(this.pointerNdc.x, this.pointerNdc.y);
       if (this.twoHandActive) {
@@ -657,6 +665,10 @@ export class InteractionController {
     // small gap since the latest completed tracking result.
     this.pointerTarget.set(this.tmpSmoothed.x, this.tmpSmoothed.y);
     this.lastHandResultAt = performance.now();
+
+    // Advance the displayed pointer immediately after receiving fresh tracking
+    // data. Raycast, hover, grab, and the cursor now all use the same position.
+    this.advanceHandPointer(dt);
 
     // Two-hand transform takes precedence over single-hand dragging.
     // COAST for slow cameras: the second hand often drops out for 1-3 frames.

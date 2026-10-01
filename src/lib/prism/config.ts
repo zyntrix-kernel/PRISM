@@ -1,14 +1,11 @@
 import type { PresetId } from './presets/types';
 
-// Central tunable constants for PRISM. Performance-sensitive values live here
-// so the exhibition build can be tuned without hunting through the renderer.
-// This configuration is intentionally mutable: gesture calibration adapts the
-// pinch thresholds at runtime, so a deep `as const` would make a real feature
-// fight the type system.
+// Central tunable constants for PRISM. Keep runtime-tuned values mutable: the
+// gesture calibrator adapts thresholds per user/camera during a session.
 export const PrismConfig = {
   tracking: {
     localModelUrl: './models/hand_landmarker.task',
-    cdnModelUrl: 'https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task',
+    cdnModelUrl: 'https://storage.googleapis.com/mediapipe-models/hand_landmarker/float16/1/hand_landmarker.task',
     wasmUrl: './wasm',
     cdnWasmUrl: 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@1.0.1/wasm',
     numHands: 2,
@@ -82,6 +79,32 @@ export const PrismConfig = {
 
   preset: 'space' as PresetId,
 
+  // Model policy: keep hand tracking local and deterministic; reserve the
+  // vision-language model for low-frequency semantic assistance so it never
+  // competes with the real-time interaction loop.
+  models: {
+    hand: {
+      backend: 'mediapipe',
+      precision: 'float16',
+      hands: 2,
+      maxInferenceFps: 25,
+    },
+    vision: {
+      modelId: 'onnx-community/FastVLM-0.5B-ONNX',
+      intervalMs: 3000,
+      frameWidth: 448,
+      maxTokens: 96,
+    },
+  },
+
+  // New sessions start with the complete PRISM soundscape enabled. A user's
+  // explicit mute choice is still persisted by PrismScore.
+  audio: {
+    sfxEnabledByDefault: true,
+    masterGain: 0.9,
+  },
+
+  // Keep the old AI namespace as a compatibility alias for existing callers.
   ai: {
     modelId: 'onnx-community/FastVLM-0.5B-ONNX',
     intervalMs: 3000,

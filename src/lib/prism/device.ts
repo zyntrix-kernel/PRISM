@@ -20,9 +20,12 @@ export function detectTablet(env: { userAgent: string; maxTouchPoints: number; s
   if (Math.min(env.screenWidth, env.screenHeight) < 768) return false;
   return ua.includes('ipad') || (ua.includes('macintosh') && env.maxTouchPoints > 0) || (ua.includes('android') && !ua.includes('mobile')) || TABLET_TOKEN.test(ua);
 }
+export function isAndroidWebView(): boolean {
+  if (typeof navigator === 'undefined') return false;
+  const ua = navigator.userAgent.toLowerCase();
+  return ua.includes('android') && (ua.includes('wv') || ua.includes('version/4.0'));
+}
 export function recommendTier(env: { isMobile: boolean; isTablet: boolean; gpuRenderer: string | null; hardwareConcurrency?: number; deviceMemoryGB?: number }): QualityTier {
-  // High post-processing adds render latency on touch devices. Medium keeps the
-  // scene responsive while the hand tracker is active; the user can still select High.
   if (env.isTablet) return 'medium';
   if (env.isMobile) return 'low';
   const cores = env.hardwareConcurrency ?? 8;

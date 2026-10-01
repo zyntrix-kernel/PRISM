@@ -224,7 +224,13 @@ self.onmessage = async (event: MessageEvent<Message>) => {
         handedness: result.handedness?.[i]?.[0]?.categoryName ?? 'Unknown',
         confidence: result.handedness?.[i]?.[0]?.score ?? 0,
       }));
-      self.postMessage({ type: 'result', hands, timestampMs: message.timestampMs, inferenceMs: performance.now() - started });
+      self.postMessage({
+        type: 'result',
+        hands,
+        timestampMs: message.timestampMs,
+        captureAgeMs: 0,
+        inferenceMs: performance.now() - started,
+      });
     } catch (err) {
       self.postMessage({ type: 'pump-error', message: err instanceof Error ? err.message : String(err) });
     } finally {

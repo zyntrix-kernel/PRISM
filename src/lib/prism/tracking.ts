@@ -1,5 +1,5 @@
 // MediaPipe HandLandmarker wrapper.
-// Latency-first: never queue stale frames and never deliberately slow the tracker.
+// Latency-first: tracking stays off the UI thread and never queues stale frames.
 
 import { FilesetResolver, HandLandmarker } from '@mediapipe/tasks-vision';
 import { PrismConfig } from './config';
@@ -47,8 +47,6 @@ export class HandTracker {
   private videoFrameCallbackHandle = 0;
   private requestedIntervalMs: number | null = null;
   private baseIntervalMs = 16;
-  private workerFailureCount = 0;
-  private mainThreadFallbackStarted = false;
 
   modelOffline = false;
   delegateUsed = 'GPU';
@@ -64,6 +62,9 @@ export class HandTracker {
       try { await this.workerInitPromise; return; }
       catch { this.worker?.terminate(); this.worker = null; this.workerInitPromise = null; }
     }
+    // Only use main-thread tracking when the browser cannot run the worker
+    // architecture at all. Never silently move inference onto the UI thread
+    // after a runtime pump error, because that turns camera load into tab jank.
     await this.initMainThread(onProgress);
   }
 
@@ -75,7 +76,7 @@ export class HandTracker {
       const timeout = window.setTimeout(() => reject(new Error('Tracking worker initialization timed out')), 20_000);
       worker.onmessage = (event: MessageEvent<WorkerMessage>) => {
         const message = event.data;
-        if (message.type === 'ready') { window.clearTimeout(timeout); this.modelOffline = message.offline; this.delegateUsed = message.delegate; this.useWorker = true; this.workerFailureCount = 0; resolve(); }
+        if (message.type === 'ready') { window.clearTimeout(timeout); this.modelOffline = message.offline; this.delegateUsed = message.delegate; this.useWorker = true; resolve(); }
         else if (message.type === 'error') { window.clearTimeout(timeout); reject(new Error(message.message)); }
       };
       worker.onerror = (event) => { window.clearTimeout(timeout); reject(new Error(event.message || 'Tracking worker failed to initialize')); };
@@ -95,8 +96,8 @@ export class HandTracker {
         for (const delegate of ['GPU', 'CPU'] as const) {
           try {
             onProgress(`Loading hand model (${model.offline ? 'local' : 'network fallback'}, ${delegate})…`);
-            this.landmarker = await HandLandmarker.createFromOptions(vision, { baseOptions: { modelAssetBuffer: model.bytes, delegate }, runningMode: 'VIDEO', numHands: 1, minHandDetectionConfidence: 0.25, minHandPresenceConfidence: 0.25, minTrackingConfidence: 0.25 });
-            this.modelOffline = model.offline; this.delegateUsed = delegate; this.mainThreadFallbackStarted = false; return;
+            this.landmarker = await HandLandmarker.createFromOptions(vision, { baseOptions: { modelAssetBuffer: model.bytes, delegate }, runningMode: 'VIDEO', numHands: 2, minHandDetectionConfidence: 0.25, minHandPresenceConfidence: 0.25, minTrackingConfidence: 0.25 });
+            this.modelOffline = model.offline; this.delegateUsed = delegate; return;
           } catch (err) { lastError = err; }
         }
       } catch (err) { lastError = err; }
@@ -109,9 +110,8 @@ export class HandTracker {
 
   start(video: HTMLVideoElement, opts?: { intervalMs?: number }): void {
     if (!this.isReady) throw new Error('HandTracker.start() called before init().');
-    this.stop(); this.video = video as VideoFrameVideo; this.running = true; this.lastSubmittedAt = -Infinity; this.workerFailureCount = 0;
-    const defaultInterval = isTabletDevice() ? 16 : 16;
-    this.baseIntervalMs = defaultInterval;
+    this.stop(); this.video = video as VideoFrameVideo; this.running = true; this.lastSubmittedAt = -Infinity; this.workerBusy = false;
+    this.baseIntervalMs = isTabletDevice() ? 16 : 16;
     this.requestedIntervalMs = opts?.intervalMs != null ? Math.max(16, opts.intervalMs) : null;
     const videoWithCallback = this.video;
     if (this.useWorker && videoWithCallback.requestVideoFrameCallback && typeof VideoFrame !== 'undefined') {
@@ -144,12 +144,15 @@ export class HandTracker {
     const video = this.video;
     if (!video || video.readyState < 2 || video.videoWidth === 0) return;
     if (this.useWorker && this.worker) {
+      // Back-pressure is intentional: never queue VideoFrames. The UI always
+      // waits for the newest completed inference rather than processing stale
+      // camera history, which is the main source of perceived hand lag.
       if (this.workerBusy) return;
       try {
         const frame = new VideoFrame(video);
         this.workerBusy = true; this.lastSubmittedAt = performance.now();
         this.worker.postMessage({ type: 'frame', frame, timestampMs: timestampHint }, [frame]);
-      } catch (err) { this.workerBusy = false; this.pumpErrorCount += 1; this.lastPumpError = err instanceof Error ? err.message : String(err); void this.fallbackFromWorker(); }
+      } catch (err) { this.workerBusy = false; this.pumpErrorCount += 1; this.lastPumpError = err instanceof Error ? err.message : String(err); }
       return;
     }
     if (!this.landmarker) return;
@@ -161,23 +164,11 @@ export class HandTracker {
   }
 
   private handleWorkerMessage(message: WorkerMessage): void {
-    if (message.type === 'result') { this.workerBusy = false; this.workerFailureCount = 0; this.pumpErrorCount = 0; this.acceptResult(message.hands, message.timestampMs, message.inferenceMs); }
-    else if (message.type === 'pump-error') { this.workerBusy = false; this.pumpErrorCount += 1; this.workerFailureCount += 1; this.lastPumpError = message.message; if (this.workerFailureCount >= 3) void this.fallbackFromWorker(); }
+    if (message.type === 'result') { this.workerBusy = false; this.pumpErrorCount = 0; this.acceptResult(message.hands, message.timestampMs, message.inferenceMs); }
+    else if (message.type === 'pump-error') { this.workerBusy = false; this.pumpErrorCount += 1; this.lastPumpError = message.message; }
   }
 
-  private async fallbackFromWorker(): Promise<void> {
-    if (this.mainThreadFallbackStarted || !this.running) return;
-    this.mainThreadFallbackStarted = true; const video = this.video;
-    this.worker?.terminate(); this.worker = null; this.useWorker = false; this.workerBusy = false; this.workerInitPromise = null;
-    if (!video) { this.mainThreadFallbackStarted = false; return; }
-    try { await this.initMainThread(() => undefined); if (this.running && this.video === video) this.start(video); }
-    catch (err) { this.lastPumpError = err instanceof Error ? err.message : String(err); this.mainThreadFallbackStarted = false; }
-  }
-
-  private getTargetIntervalMs(): number {
-    if (this.requestedIntervalMs !== null) return this.requestedIntervalMs;
-    return 16;
-  }
+  private getTargetIntervalMs(): number { return this.requestedIntervalMs !== null ? this.requestedIntervalMs : this.baseIntervalMs; }
 
   private acceptResult(hands: TrackedHand[], timestampMs: number, inferenceMs: number): void {
     this.detectionCount += 1; this.detectionTotalMs += inferenceMs;

@@ -24,7 +24,7 @@ export const PrismConfig = {
     pinchEnter: 0.36, pinchExit: 0.55, pinchMinFrames: 1, pinchEnterMs: 0, pinchExitMs: 90, extendedRatio: 1.10,
   },
   interaction: {
-    pointerAdaptive: { maxSpeed: 8.5, slowCutoff: 10, fastCutoff: 22, betaBase: 0.18, betaRate: 0.32, maxLeadSec: 0.018, maxLeadDist: 0.018 },
+    pointerAdaptive: { maxSpeed: 10.5, slowCutoff: 14, fastCutoff: 38, betaBase: 0.35, betaRate: 0.55, maxLeadSec: 0.03, maxLeadDist: 0.04 },
     grabSmoothing: 0.56, tabletGrabSmoothing: 0.48, tabletOrbitSpeed: 0.0038, tabletPanSpeed: 0.0030, tabletZoomSpeed: 2.2,
     zoomSpeed: 2.5, rotateSpeed: 0.6, worldScaleMin: 0.4, worldScaleMax: 3.0, gridSnap: 0.6, hoverRadius: 0.12,
     hoverClearMs: 150, coastMs: 500, tapMaxMs: 700, tapMaxMove: 0.08,

@@ -2,7 +2,6 @@
 
 import { PrismConfig } from './config';
 import { isTabletDevice } from './device';
-import { isTabletDevice } from './device';
 
 export interface CameraHandle {
   stream: MediaStream;

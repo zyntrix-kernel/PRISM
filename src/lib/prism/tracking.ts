@@ -11,18 +11,21 @@ import { PrismConfig } from './config';
 import { isTabletDevice } from './device';
 import type { HandFrame, TrackedHand } from './types';
 
-async function resolveModelUrl(): Promise<{ url: string; offline: boolean }> {
+async function resolveModelUrls(): Promise<{ urls: string[]; offline: boolean }> {
   try {
     const probe = await fetch(PrismConfig.tracking.localModelUrl, { method: 'HEAD' });
     const type = probe.headers.get('content-type') ?? '';
     const length = Number(probe.headers.get('content-length') ?? '0');
     if (probe.ok && !type.includes('text/html') && length > 1_000_000) {
-      return { url: PrismConfig.tracking.localModelUrl, offline: true };
+      return { urls: [PrismConfig.tracking.localModelUrl], offline: true };
     }
   } catch {
-    // CDN fallback.
+    // Continue to resilient remote sources.
   }
-  return { url: PrismConfig.tracking.cdnModelUrl, offline: false };
+  return {
+    urls: [PrismConfig.tracking.cdnModelUrl, PrismConfig.tracking.fallbackModelUrl],
+    offline: false,
+  };
 }
 
 type WorkerReady = { type: 'ready'; delegate: string; offline: boolean };
@@ -64,14 +67,7 @@ export class HandTracker {
     if (this.landmarker || this.useWorker) return;
     if (this.workerInitPromise) return this.workerInitPromise;
 
-    // A worker is only useful here when the browser can actually transfer
-    // VideoFrame objects. Some tablet browsers expose Worker but cannot run
-    // the MediaPipe VideoFrame path reliably. Previously that left PRISM in a
-    // worker that initialized successfully but never returned detections.
-    const canUseVideoFrameWorker =
-      typeof Worker !== 'undefined' &&
-      typeof VideoFrame !== 'undefined';
-
+    const canUseVideoFrameWorker = typeof Worker !== 'undefined' && typeof VideoFrame !== 'undefined';
     if (canUseVideoFrameWorker) {
       this.workerInitPromise = this.initWorker(onProgress);
       try {
@@ -120,24 +116,29 @@ export class HandTracker {
     onProgress('Loading vision runtime…');
     const wasmUrls = [PrismConfig.tracking.wasmUrl, PrismConfig.tracking.cdnWasmUrl].filter((u, i, all) => u && all.indexOf(u) === i);
     let lastError: unknown = null;
+    const { urls: modelUrls, offline } = await resolveModelUrls();
+
     for (const wasmUrl of wasmUrls) {
       try {
         const vision = await FilesetResolver.forVisionTasks(wasmUrl);
-        const { url, offline } = await resolveModelUrl();
-        for (const delegate of ['GPU', 'CPU'] as const) {
-          try {
-            onProgress(`Loading hand model (${offline ? 'local' : 'CDN'}, ${delegate})…`);
-            this.landmarker = await HandLandmarker.createFromOptions(vision, {
-              baseOptions: { modelAssetPath: url, delegate }, runningMode: 'VIDEO', numHands: PrismConfig.tracking.numHands,
-              minHandDetectionConfidence: PrismConfig.tracking.minHandDetectionConfidence,
-              minHandPresenceConfidence: PrismConfig.tracking.minHandPresenceConfidence,
-              minTrackingConfidence: PrismConfig.tracking.minTrackingConfidence,
-            });
-            this.modelOffline = offline;
-            this.delegateUsed = delegate;
-            this.mainThreadFallbackStarted = false;
-            return;
-          } catch (err) { lastError = err; }
+        for (const modelUrl of modelUrls) {
+          for (const delegate of ['GPU', 'CPU'] as const) {
+            try {
+              onProgress(`Loading hand model (${offline ? 'local' : 'network fallback'}, ${delegate})…`);
+              this.landmarker = await HandLandmarker.createFromOptions(vision, {
+                baseOptions: { modelAssetPath: modelUrl, delegate },
+                runningMode: 'VIDEO',
+                numHands: PrismConfig.tracking.numHands,
+                minHandDetectionConfidence: PrismConfig.tracking.minHandDetectionConfidence,
+                minHandPresenceConfidence: PrismConfig.tracking.minHandPresenceConfidence,
+                minTrackingConfidence: PrismConfig.tracking.minTrackingConfidence,
+              });
+              this.modelOffline = offline;
+              this.delegateUsed = delegate;
+              this.mainThreadFallbackStarted = false;
+              return;
+            } catch (err) { lastError = err; }
+          }
         }
       } catch (err) { lastError = err; }
     }
@@ -172,8 +173,6 @@ export class HandTracker {
       return;
     }
 
-    // Main-thread fallback is intentionally frame-rate capped. It is more
-    // important to have a reliable detector than a broken off-thread path.
     const loop = (): void => {
       if (!this.running) return;
       this.pump(performance.now());
@@ -269,10 +268,7 @@ export class HandTracker {
     this.useWorker = false;
     this.workerBusy = false;
     this.workerInitPromise = null;
-    if (!video) {
-      this.mainThreadFallbackStarted = false;
-      return;
-    }
+    if (!video) { this.mainThreadFallbackStarted = false; return; }
     try {
       await this.initMainThread(() => undefined);
       if (this.running && this.video === video) this.start(video);
@@ -318,16 +314,11 @@ export function drawLandmarkOverlay(ctx: CanvasRenderingContext2D, frame: HandFr
     for (const [a, b] of SKELETON) {
       const p = hand.landmarks[a];
       const q = hand.landmarks[b];
-      ctx.beginPath();
-      ctx.moveTo(p.x * canvas.width, p.y * canvas.height);
-      ctx.lineTo(q.x * canvas.width, q.y * canvas.height);
-      ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(p.x * canvas.width, p.y * canvas.height); ctx.lineTo(q.x * canvas.width, q.y * canvas.height); ctx.stroke();
     }
     hand.landmarks.forEach((p, i) => {
       const r = i === 4 || i === 8 ? 4 : 2.5;
-      ctx.beginPath();
-      ctx.arc(p.x * canvas.width, p.y * canvas.height, r, 0, Math.PI * 2);
-      ctx.fill();
+      ctx.beginPath(); ctx.arc(p.x * canvas.width, p.y * canvas.height, r, 0, Math.PI * 2); ctx.fill();
     });
   });
 }

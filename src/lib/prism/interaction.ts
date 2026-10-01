@@ -514,29 +514,27 @@ export class InteractionController {
    * one-render-frame disconnect where the cursor moved first and hover/grab
    * only caught up on the next frame.
    */
-  private advanceHandPointer(dt: number): void {
-    const stepDt = Math.min(Math.max(dt, 1 / 240), 0.05);
+  /**
+   * Render the pointer from the newest sensor target immediately.
+   * No post-filter lerp: any interpolation here is pure input latency.
+   */
+  private advanceHandPointer(_dt: number): void {
     const age = this.lastHandResultAt > 0
-      ? Math.min((performance.now() - this.lastHandResultAt) / 1000, 0.045)
+      ? Math.min(Math.max((performance.now() - this.lastHandResultAt) / 1000, 0), 0.08)
       : 0;
 
-    // Predict only across the current camera/result age. Keep the lead
-    // bounded so a delayed inference result can never fling the cursor.
     const predictedX = this.pointerTarget.x + this.pointerFilter.velocityX * age;
     const predictedY = this.pointerTarget.y + this.pointerFilter.velocityY * age;
     const dx = predictedX - this.pointerTarget.x;
     const dy = predictedY - this.pointerTarget.y;
     const extra = Math.hypot(dx, dy);
-    const maxExtra = 0.045;
+    const maxExtra = 0.07;
     const k = extra > maxExtra ? maxExtra / extra : 1;
-    this.tmpNdcSample.x = this.pointerTarget.x + dx * k;
-    this.tmpNdcSample.y = this.pointerTarget.y + dy * k;
 
-    // Near-immediate chase. The pointer filter provides the actual smoothing;
-    // this stage only fills the render-rate gaps between camera samples.
-    const followRate = 320 + Math.min(this.pointerFilter.pointerSpeed * 16, 140);
-    const alpha = 1 - Math.exp(-followRate * stepDt);
-    this.pointerNdc.lerp(this.tmpNdcSample, alpha);
+    this.pointerNdc.set(
+      THREE.MathUtils.clamp(this.pointerTarget.x + dx * k, -1, 1),
+      THREE.MathUtils.clamp(this.pointerTarget.y + dy * k, -1, 1),
+    );
   }
 
   private updateFromHands(dt: number, dtMs: number, frame: HandFrame): void {
@@ -639,6 +637,7 @@ export class InteractionController {
       this.tmpNdcSample.x = raw.x;
       this.tmpNdcSample.y = raw.y;
       this.pointerFilter.reset(this.tmpNdcSample);
+      this.pointerTarget.set(raw.x, raw.y);
       this.pointerNdc.set(raw.x, raw.y);
       this.lastRaw.x = raw.x;
       this.lastRaw.y = raw.y;
@@ -658,16 +657,19 @@ export class InteractionController {
     }
     this.tmpNdcSample.x = raw.x;
     this.tmpNdcSample.y = raw.y;
-    // Tracking-clock step (NOT render dt) + sensor confidence: the filter
-    // stays honest whether frames arrive at 10 Hz or 120 Hz, clean or noisy.
+    // Keep the adaptive filter running as a velocity / outlier estimator,
+    // but do not make the visible cursor wait for its smoothed output.
     this.pointerFilter.update(this.tmpNdcSample, trackDtMs, primaryHand.confidence, this.tmpSmoothed);
-    // Timestamp the fresh target so render-rate extrapolation only covers the
-    // small gap since the latest completed tracking result.
-    this.pointerTarget.set(this.tmpSmoothed.x, this.tmpSmoothed.y);
-    this.lastHandResultAt = performance.now();
+    this.pointerTarget.set(this.tmpNdcSample.x, this.tmpNdcSample.y);
 
-    // Advance the displayed pointer immediately after receiving fresh tracking
-    // data. Raycast, hover, grab, and the cursor now all use the same position.
+    // Preserve capture-time, not completion-time. Worker inference can take
+    // tens of milliseconds; prediction must compensate for that full age.
+    this.lastHandResultAt = frame.timestampMs;
+
+    // Advance the displayed pointer immediately after fresh tracking data.
+    this.advanceHandPointer(dt);
+
+    // Two-hand transform takes precedence over single-hand dragging.
     this.advanceHandPointer(dt);
 
     // Two-hand transform takes precedence over single-hand dragging.

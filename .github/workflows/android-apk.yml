@@ -25,6 +25,11 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v5
 
+      - name: Setup Node 22
+        uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
         with:
@@ -46,10 +51,7 @@ jobs:
       - name: Build Next.js static site
         run: bun run build
 
-      - name: Generate Capacitor Android project
-        run: npx cap add android
-
-      - name: Sync web assets into Android
+      - name: Sync Capacitor Android project
         run: npx cap sync android
 
       - name: Validate Gradle wrapper

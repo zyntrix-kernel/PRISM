@@ -3,7 +3,7 @@ import { PrismConfig } from './config';
 
 interface InitMessage { type: 'init' }
 interface FrameMessage { type: 'frame'; frame: VideoFrame; timestampMs: number }
-interface TrackMessage { type: 'track'; track: MediaStreamTrack }
+interface TrackMessage { type: 'track'; track: MediaStreamTrack; intervalMs: number }
 interface StopTrackMessage { type: 'stop-track' }
 type Message = InitMessage | FrameMessage | TrackMessage | StopTrackMessage;
 
@@ -83,7 +83,7 @@ let currentTrack: MediaStreamTrack | null = null;
 let currentReaderCancel: (() => void) | null = null;
 let currentWakeInference: (() => void) | null = null;
 
-async function runTrack(track: MediaStreamTrack, session: number): Promise<void> {
+async function runTrack(track: MediaStreamTrack, session: number, intervalMs: number): Promise<void> {
   currentTrack = track;
   let reader: ReadableStreamDefaultReader<VideoFrame> | null = null;
   let latestFrame: VideoFrame | null = null;
@@ -92,6 +92,7 @@ async function runTrack(track: MediaStreamTrack, session: number): Promise<void>
   let readerDone = false;
   let wakeInference: (() => void) | null = null;
   let clockOffsetMs: number | null = null;
+  let lastInferenceStartedAt = -Infinity;
 
   currentReaderCancel = () => { void reader?.cancel(); };
   currentWakeInference = () => { wakeInference?.(); wakeInference = null; };
@@ -155,7 +156,18 @@ async function runTrack(track: MediaStreamTrack, session: number): Promise<void>
         consumedVersion = latestVersion;
         if (!frame) continue;
 
+        // Do not let the worker consume the camera at an unlimited rate.
+        // Android WebView has less headroom than standalone Chrome, and
+        // saturating MediaPipe leaves too little time for WebGL and input.
+        const waitMs = intervalMs - (performance.now() - lastInferenceStartedAt);
+        if (waitMs > 0) await new Promise<void>((resolve) => setTimeout(resolve, waitMs));
+        if (session !== trackSession) {
+          frame.close();
+          break;
+        }
+
         const started = performance.now();
+        lastInferenceStartedAt = started;
         try {
           if (!landmarker) throw new Error('Tracking worker is not initialized');
           const result = landmarker.detectForVideo(frame, frame.timestamp / 1000);
@@ -206,7 +218,7 @@ self.onmessage = async (event: MessageEvent<Message>) => {
   if (message.type === 'track') {
     trackSession += 1;
     currentTrack?.stop();
-    void runTrack(message.track, trackSession);
+    void runTrack(message.track, trackSession, Math.max(16, message.intervalMs));
     return;
   }
 

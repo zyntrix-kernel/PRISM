@@ -1,5 +1,5 @@
 export const dynamic = "force-static";
 
-export default function Page() {
-  return null;
+export async function GET() {
+  return new Response(null, { status: 204 });
 }

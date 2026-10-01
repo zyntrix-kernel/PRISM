@@ -3,7 +3,7 @@
 
 import { FilesetResolver, HandLandmarker } from '@mediapipe/tasks-vision';
 import { PrismConfig } from './config';
-import { isTabletDevice } from './device';
+import { isAndroidWebView, isTabletDevice } from './device';
 import type { HandFrame, TrackedHand } from './types';
 
 async function fetchModel(url: string): Promise<Uint8Array> {
@@ -123,7 +123,7 @@ export class HandTracker {
     this.lastSubmittedAt = -Infinity;
     this.workerBusy = false;
 
-    this.baseIntervalMs = isTabletDevice() ? 16 : 16;
+    this.baseIntervalMs = isAndroidWebView() ? 42 : isTabletDevice() ? 33 : 16;
     this.requestedIntervalMs = opts?.intervalMs != null ? Math.max(16, opts.intervalMs) : null;
 
     const sourceTrack = video.srcObject instanceof MediaStream
@@ -141,7 +141,7 @@ export class HandTracker {
         // the worker decide whether its zero-copy processing path is available.
         const workerTrack = sourceTrack.clone();
         this.workerOwnsTrack = true;
-        this.worker?.postMessage({ type: 'track', track: workerTrack }, [workerTrack]);
+        this.worker?.postMessage({ type: 'track', track: workerTrack, intervalMs: this.getTargetIntervalMs() }, [workerTrack]);
         return;
       } catch {
         this.workerOwnsTrack = false;

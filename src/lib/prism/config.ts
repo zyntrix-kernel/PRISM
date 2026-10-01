@@ -39,7 +39,7 @@ export const PrismConfig = {
   audio: { sfxEnabledByDefault: true, masterGain: 0.9 },
   ai: { modelId: 'onnx-community/FastVLM-0.5B-ONNX', intervalMs: 3000, frameWidth: 448, maxTokens: 96 },
   quality: {
-    ultra: { pixelRatio: 1.75 }, high: { pixelRatio: 1.5 }, medium: { pixelRatio: 1.15 }, low: { pixelRatio: 0.85 }, tablet: { pixelRatio: 1.35 },
+    ultra: { pixelRatio: 1.5 }, high: { pixelRatio: 1.25 }, medium: { pixelRatio: 1.0 }, low: { pixelRatio: 0.75 }, tablet: { pixelRatio: 1.15 },
   } as Record<string, { pixelRatio: number }>,
 };
 

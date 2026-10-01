@@ -316,8 +316,11 @@ export class PrismScene {
     high: 1000,
     ultra: 1500,
   } as const;
-  private readonly composer: EffectComposer;
-  private readonly caPass: ShaderPass;
+  private composer: EffectComposer | null = null;
+  private caPass: ShaderPass | null = null;
+  private bloomPass: UnrealBloomPass | null = null;
+  private viewportWidth = 1;
+  private viewportHeight = 1;
   // grainPass removed (animated hash noise read as TV static over the scene).
   private readonly glowTex: THREE.Texture;
   private readonly nebulaTex: THREE.Texture;
@@ -335,14 +338,16 @@ export class PrismScene {
     // occasionally reports a "major performance caveat". Without this, WebGL
     // context creation would throw on those devices and the whole app would
     // crash on first paint — the FPS governor is the proper backstop instead.
-    const useAA = quality === 'high' || quality === 'ultra';
+    const useAA = quality === 'ultra';
     this.renderer = new THREE.WebGLRenderer({
       antialias: useAA,
       powerPreference: 'high-performance',
       stencil: false,
       failIfMajorPerformanceCaveat: false,
     });
-    this.renderer.setSize(container.clientWidth, container.clientHeight);
+    this.viewportWidth = Math.max(1, container.clientWidth);
+    this.viewportHeight = Math.max(1, container.clientHeight);
+    this.renderer.setSize(this.viewportWidth, this.viewportHeight);
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
     this.renderer.toneMappingExposure = 1.15;
     // Performance: disable shadow maps (not used; saves allocation + render pass).
@@ -432,18 +437,7 @@ export class PrismScene {
     // adds organic texture; OutputPass applies tone mapping + color space.
     // All passes are always constructed (cheap to instantiate); only
     // composer.render() is gated by quality tier in render().
-    this.composer = new EffectComposer(this.renderer);
-    this.composer.addPass(new RenderPass(this.scene, this.camera));
-    const bloom = new UnrealBloomPass(
-      new THREE.Vector2(container.clientWidth, container.clientHeight),
-      PrismConfig.bloom.strength,
-      PrismConfig.bloom.radius,
-      PrismConfig.bloom.threshold,
-    );
-    this.composer.addPass(bloom);
-    this.caPass = new ShaderPass(CA_VIGNETTE_SHADER);
-    this.composer.addPass(this.caPass);
-    this.composer.addPass(new OutputPass());
+    if (quality === 'high' || quality === 'ultra') this.ensureComposer();
     // NOTE: the FILM_GRAIN_SHADER pass was removed — its per-pixel hash noise
     // animated every frame and read as 'TV static covering the whole 3D scene'
     // even at uAmount = 0.04. Not premium; just noisy. The vignette in CA_VIGNETTE
@@ -532,13 +526,49 @@ export class PrismScene {
   // ---- quality ----------------------------------------------------------
 
   private applyPixelRatio(): void {
-    const ratio = PrismConfig.quality[this.quality]?.pixelRatio ?? 1.5;
+    const ratio = PrismConfig.quality[this.quality]?.pixelRatio ?? 1.25;
     const pr = Math.min(window.devicePixelRatio || 1, ratio);
     this.renderer.setPixelRatio(pr);
     this.composer?.setPixelRatio(pr);
-    // Star point-size scales with framebuffer pixel ratio; keep the uniform
-    // in sync so stars stay a consistent visual size across DPR changes.
     if (this.starMat) this.starMat.uniforms.uPixelRatio.value = pr;
+  }
+
+  private ensureComposer(): void {
+    if (this.composer) {
+      this.applyPostQuality();
+      return;
+    }
+    this.composer = new EffectComposer(this.renderer);
+    this.composer.addPass(new RenderPass(this.scene, this.camera));
+    this.bloomPass = new UnrealBloomPass(
+      new THREE.Vector2(this.viewportWidth, this.viewportHeight),
+      PrismConfig.bloom.strength,
+      PrismConfig.bloom.radius,
+      PrismConfig.bloom.threshold,
+    );
+    this.composer.addPass(this.bloomPass);
+    this.caPass = new ShaderPass(CA_VIGNETTE_SHADER);
+    this.composer.addPass(this.caPass);
+    this.composer.addPass(new OutputPass());
+    this.composer.setPixelRatio(this.renderer.getPixelRatio());
+    this.composer.setSize(this.viewportWidth, this.viewportHeight);
+    this.applyPostQuality();
+  }
+
+  private applyPostQuality(): void {
+    if (!this.composer) return;
+    if (this.caPass) this.caPass.enabled = this.quality === 'ultra';
+    if (this.bloomPass) this.bloomPass.strength =
+      this.quality === 'ultra' ? PrismConfig.bloom.strength : PrismConfig.bloom.strength * 0.88;
+  }
+
+  private disposeComposer(): void {
+    this.bloomPass?.dispose();
+    (this.caPass?.material as THREE.ShaderMaterial | undefined)?.dispose();
+    this.composer?.dispose();
+    this.bloomPass = null;
+    this.caPass = null;
+    this.composer = null;
   }
 
   /** High+ tier gets procedural planet maps; low/med use flat colors. */
@@ -556,21 +586,24 @@ export class PrismScene {
   }
 
   applyQuality(tier: QualityTier): void {
+    if (this.quality === tier) return;
     this.quality = tier;
     this.applyPixelRatio();
     this.applyTextureMaps();
-    // Quality changes are live. Reduce point count via drawRange instead of
-    // rebuilding the starfield, preserving its deterministic spatial layout.
     this.updateStarDensity(tier);
+    if (tier === 'high' || tier === 'ultra') this.ensureComposer();
+    else this.disposeComposer();
   }
 
   // ---- frame ------------------------------------------------------------
 
   resize(width: number, height: number): void {
-    this.camera.aspect = width / Math.max(1, height);
+    this.viewportWidth = Math.max(1, width);
+    this.viewportHeight = Math.max(1, height);
+    this.camera.aspect = this.viewportWidth / this.viewportHeight;
     this.camera.updateProjectionMatrix();
-    this.renderer.setSize(width, height);
-    this.composer.setSize(width, height);
+    this.renderer.setSize(this.viewportWidth, this.viewportHeight);
+    this.composer?.setSize(this.viewportWidth, this.viewportHeight);
   }
 
   /**
@@ -697,13 +730,14 @@ export class PrismScene {
     }
     this.cursor.visible = true;
     this.cursor.position.copy(worldPos);
-    this.cursor.scale.setScalar(sizeScale);
+    if (Math.abs(this.cursor.scale.x - sizeScale) > 1e-4) this.cursor.scale.setScalar(sizeScale);
     // Progress ring cinches from wide/faint to tight/bright with the pinch.
     const c = Math.min(1, Math.max(0, closeness));
     this.cursorRing.visible = true;
     this.cursorRing.position.copy(worldPos);
     this.cursorRing.lookAt(this.camera.position);
-    this.cursorRing.scale.setScalar(pinchRingScale(c));
+    const ringScale = pinchRingScale(c);
+    if (Math.abs(this.cursorRing.scale.x - ringScale) > 1e-4) this.cursorRing.scale.setScalar(ringScale);
     this.cursorRingMat.opacity = 0.22 + 0.68 * c;
     this.cursorRingMat.color.copy(this.ringCyan).lerp(this.ringMagenta, c);
     const colors: Record<CursorMode, number> = {
@@ -713,8 +747,11 @@ export class PrismScene {
       pinch: 0xffa8d8,
       grab: 0xffd2a8,
     };
-    this.cursorMat.color.setHex(colors[mode]);
-    (this.rayLine.material as THREE.LineBasicMaterial).color.setHex(colors[mode]);
+    const colorHex = colors[mode];
+    if (this.cursorMat.color.getHex() !== colorHex) {
+      this.cursorMat.color.setHex(colorHex);
+      (this.rayLine.material as THREE.LineBasicMaterial).color.setHex(colorHex);
+    }
 
     this.tmpVec.copy(worldPos).sub(this.camera.position).normalize();
     this.rayPositions[0] = this.camera.position.x;
@@ -745,7 +782,8 @@ export class PrismScene {
 
   render(): void {
     if (this.quality === 'high' || this.quality === 'ultra') {
-      this.composer.render();
+      this.ensureComposer();
+      this.composer!.render();
     } else {
       this.renderer.render(this.scene, this.camera);
     }
@@ -765,9 +803,7 @@ export class PrismScene {
     // Free starfield GPU resources (geometry attributes + shader program).
     this.stars?.geometry.dispose();
     this.starMat?.dispose();
-    // Free the fullscreen-quad shader materials backing the post passes.
-    (this.caPass?.material as THREE.ShaderMaterial | undefined)?.dispose();
-    this.composer?.dispose();
+    this.disposeComposer();
     this.renderer.dispose();
   }
 }

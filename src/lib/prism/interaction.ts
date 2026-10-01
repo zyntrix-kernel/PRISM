@@ -64,6 +64,8 @@ export class InteractionController {
   private readonly tmpSmoothed = { x: 0, y: 0, z: 0 };
   private readonly tmpNdc = new THREE.Vector2();
   private readonly tmpProj = new THREE.Vector3();
+  private readonly rayHits: THREE.Intersection[] = [];
+  private lastHandFrameTimestamp = -1;
   /** Per-frame pick memo: hover, grab, and cursor share one raycast. */
   private frameCount = 0;
   private pickFrame = -1;
@@ -356,6 +358,7 @@ export class InteractionController {
     this.anchorB = null;
     this.lastRaw.x = 0;
     this.lastRaw.y = 0;
+    this.lastHandFrameTimestamp = -1;
     this.calibrator.reset();
   }
 
@@ -439,6 +442,7 @@ export class InteractionController {
       this.trackers[1].update(null, dtMs);
       // Tracking clock restarts on resume: no fake time jump into the latch.
       this.lastTrackT = 0;
+      this.lastHandFrameTimestamp = -1;
       // Coast: keep the last cursor/hover briefly instead of blinking out.
       if (performance.now() - this.lastSeenAt > PrismConfig.interaction.coastMs) {
         this.hoverMissMs = PrismConfig.interaction.hoverClearMs;
@@ -510,6 +514,33 @@ export class InteractionController {
   // ---- hand input -------------------------------------------------------
 
   private updateFromHands(dt: number, dtMs: number, frame: HandFrame): void {
+    // MediaPipe produces a fresh result at tracking cadence, not render
+    // cadence. Keep raycast/drag/cursor rendering live, but don't redo hand
+    // matching, gesture decoding, or filtering against the same frame.
+    if (frame.timestampMs === this.lastHandFrameTimestamp) {
+      this.raycaster.setFromCamera(this.pointerNdc, this.prism.camera);
+      this.prism.trackPointer(this.pointerNdc.x, this.pointerNdc.y);
+      if (this.twoHandActive) {
+        this.applyHover(null, dtMs);
+        this.lastSeenAt = performance.now();
+        this.updateCursor();
+        return;
+      }
+      const hovered = this.pick();
+      if (this.isPinching) {
+        if (!this.grabbed && hovered) this.grab(hovered);
+        if (this.grabbed) this.drag(dt);
+      } else if (this.grabbed) {
+        this.release();
+      }
+      this.applyHover(hovered, dtMs);
+      this.grabbedName = this.grabbed?.name ?? null;
+      this.lastSeenAt = performance.now();
+      this.updateCursor();
+      return;
+    }
+
+    this.lastHandFrameTimestamp = frame.timestampMs;
     const hands = frame.hands;
     // Tracking-clock delta (NOT render dt): at 10 fps frames arrive 100 ms
     // apart, and the pinch latch + pointer filter must see true time or
@@ -721,7 +752,8 @@ export class InteractionController {
   private pick(): THREE.Mesh | null {
     if (this.pickFrame === this.frameCount) return this.cachedPick;
     this.pickFrame = this.frameCount;
-    const hits = this.raycaster.intersectObjects(this.prism.grabbables, false);
+    this.rayHits.length = 0;
+    const hits = this.raycaster.intersectObjects(this.prism.grabbables, false, this.rayHits);
     const direct = (hits[0]?.object as THREE.Mesh | undefined) ?? null;
     if (direct) {
       this.cachedPick = direct;

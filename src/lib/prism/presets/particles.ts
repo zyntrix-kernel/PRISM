@@ -56,19 +56,23 @@ export class ParticlePool {
   }
 
   update(dt: number): void {
+    if (this.aliveCount === 0) return;
+    let dirty = false;
     for (let i = 0; i < this.max; i++) {
       if (this.life[i] <= 0) continue;
       this.life[i] -= dt;
       if (this.life[i] <= 0) {
         this.pos[i * 3 + 1] = -999;
         this.aliveCount -= 1;
+        dirty = true;
         continue;
       }
       this.vel[i * 3 + 1] += this.rise * dt;
+      dirty = true;
       this.pos[i * 3] += this.vel[i * 3] * dt;
       this.pos[i * 3 + 1] += this.vel[i * 3 + 1] * dt;
       this.pos[i * 3 + 2] += this.vel[i * 3 + 2] * dt;
     }
-    (this.points.geometry.getAttribute('position') as THREE.BufferAttribute).needsUpdate = true;
+    if (dirty) (this.points.geometry.getAttribute('position') as THREE.BufferAttribute).needsUpdate = true;
   }
 }

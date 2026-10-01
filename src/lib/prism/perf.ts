@@ -1,6 +1,6 @@
 // FPS governor: the backstop that keeps PRISM smooth on unknown hardware.
 // Detection picks the starting tier; this watches actual frame times and
-// steps quality DOWN when the machine can't hold ~28 fps. Never steps up
+// steps quality DOWN when the machine can't hold ~30 fps. Never steps up
 // on its own (avoids oscillation) — the user can always raise it manually.
 
 import type { QualityTier } from './config';
@@ -15,8 +15,8 @@ export class PerfGovernor {
   constructor(
     initial: QualityTier,
     private readonly onTier: (tier: QualityTier) => void,
-    private readonly floorFps = 28,
-    private readonly holdSeconds = 2.5,
+    private readonly floorFps = 30,
+    private readonly holdSeconds = 1.5,
   ) {
     this.appliedTier = initial;
   }

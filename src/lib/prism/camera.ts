@@ -69,6 +69,10 @@ export async function startCamera(video: HTMLVideoElement): Promise<CameraHandle
   video.playsInline = true;
   video.autoplay = true;
   video.srcObject = stream;
+  const videoTrack = stream.getVideoTracks()[0];
+  if (videoTrack && 'contentHint' in videoTrack) {
+    try { videoTrack.contentHint = 'motion'; } catch { /* optional browser hint */ }
+  }
 
   try {
     await video.play();

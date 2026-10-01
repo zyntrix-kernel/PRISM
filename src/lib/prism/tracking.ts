@@ -1,5 +1,5 @@
 // MediaPipe HandLandmarker wrapper.
-// Keeps inference off the render thread and always prefers the freshest camera frame.
+// Latency-first: never queue stale frames and never deliberately slow the tracker.
 
 import { FilesetResolver, HandLandmarker } from '@mediapipe/tasks-vision';
 import { PrismConfig } from './config';
@@ -46,7 +46,7 @@ export class HandTracker {
   private lastSubmittedAt = -Infinity;
   private videoFrameCallbackHandle = 0;
   private requestedIntervalMs: number | null = null;
-  private baseIntervalMs = 180;
+  private baseIntervalMs = 16;
   private workerFailureCount = 0;
   private mainThreadFallbackStarted = false;
 
@@ -75,10 +75,8 @@ export class HandTracker {
       const timeout = window.setTimeout(() => reject(new Error('Tracking worker initialization timed out')), 20_000);
       worker.onmessage = (event: MessageEvent<WorkerMessage>) => {
         const message = event.data;
-        if (message.type === 'ready') {
-          window.clearTimeout(timeout); this.modelOffline = message.offline; this.delegateUsed = message.delegate;
-          this.useWorker = true; this.workerFailureCount = 0; resolve();
-        } else if (message.type === 'error') { window.clearTimeout(timeout); reject(new Error(message.message)); }
+        if (message.type === 'ready') { window.clearTimeout(timeout); this.modelOffline = message.offline; this.delegateUsed = message.delegate; this.useWorker = true; this.workerFailureCount = 0; resolve(); }
+        else if (message.type === 'error') { window.clearTimeout(timeout); reject(new Error(message.message)); }
       };
       worker.onerror = (event) => { window.clearTimeout(timeout); reject(new Error(event.message || 'Tracking worker failed to initialize')); };
       worker.postMessage({ type: 'init' });
@@ -89,16 +87,15 @@ export class HandTracker {
   private async initMainThread(onProgress: (msg: string) => void): Promise<void> {
     onProgress('Loading vision runtime…');
     const wasmUrls = [PrismConfig.tracking.wasmUrl, PrismConfig.tracking.cdnWasmUrl].filter((u, i, all) => u && all.indexOf(u) === i);
+    const model = await resolveModel();
     let lastError: unknown = null;
-    let model: { bytes: Uint8Array; offline: boolean };
-    model = await resolveModel();
     for (const wasmUrl of wasmUrls) {
       try {
         const vision = await FilesetResolver.forVisionTasks(wasmUrl);
         for (const delegate of ['GPU', 'CPU'] as const) {
           try {
             onProgress(`Loading hand model (${model.offline ? 'local' : 'network fallback'}, ${delegate})…`);
-            this.landmarker = await HandLandmarker.createFromOptions(vision, { baseOptions: { modelAssetBuffer: model.bytes, delegate }, runningMode: 'VIDEO', numHands: PrismConfig.tracking.numHands, minHandDetectionConfidence: PrismConfig.tracking.minHandDetectionConfidence, minHandPresenceConfidence: PrismConfig.tracking.minHandPresenceConfidence, minTrackingConfidence: PrismConfig.tracking.minTrackingConfidence });
+            this.landmarker = await HandLandmarker.createFromOptions(vision, { baseOptions: { modelAssetBuffer: model.bytes, delegate }, runningMode: 'VIDEO', numHands: 1, minHandDetectionConfidence: 0.25, minHandPresenceConfidence: 0.25, minTrackingConfidence: 0.25 });
             this.modelOffline = model.offline; this.delegateUsed = delegate; this.mainThreadFallbackStarted = false; return;
           } catch (err) { lastError = err; }
         }
@@ -113,11 +110,10 @@ export class HandTracker {
   start(video: HTMLVideoElement, opts?: { intervalMs?: number }): void {
     if (!this.isReady) throw new Error('HandTracker.start() called before init().');
     this.stop(); this.video = video as VideoFrameVideo; this.running = true; this.lastSubmittedAt = -Infinity; this.workerFailureCount = 0;
-    const defaultInterval = isTabletDevice() ? PrismConfig.tracking.tabletIntervalMs : PrismConfig.tracking.intervalMs;
-    this.baseIntervalMs = Math.max(16, defaultInterval);
+    const defaultInterval = isTabletDevice() ? 16 : 16;
+    this.baseIntervalMs = defaultInterval;
     this.requestedIntervalMs = opts?.intervalMs != null ? Math.max(16, opts.intervalMs) : null;
     const videoWithCallback = this.video;
-
     if (this.useWorker && videoWithCallback.requestVideoFrameCallback && typeof VideoFrame !== 'undefined') {
       const schedule = (): void => {
         if (!this.running || !this.video || !videoWithCallback.requestVideoFrameCallback) return;
@@ -129,13 +125,8 @@ export class HandTracker {
       };
       schedule(); return;
     }
-
-    const loop = (): void => {
-      if (!this.running) return;
-      this.pump(performance.now());
-      this.loopHandle = window.setTimeout(loop, this.getTargetIntervalMs()) as unknown as number;
-    };
-    this.loopHandle = window.setTimeout(loop, this.getTargetIntervalMs()) as unknown as number;
+    const loop = (): void => { if (!this.running) return; this.pump(performance.now()); this.loopHandle = window.setTimeout(loop, 16) as unknown as number; };
+    this.loopHandle = window.setTimeout(loop, 16) as unknown as number;
   }
 
   stop(): void {
@@ -151,17 +142,14 @@ export class HandTracker {
 
   private pump(timestampHint: number): void {
     const video = this.video;
-    if (!video || video.readyState < 1 || (video.videoWidth === 0 && video.readyState < 2)) return;
+    if (!video || video.readyState < 2 || video.videoWidth === 0) return;
     if (this.useWorker && this.worker) {
       if (this.workerBusy) return;
       try {
-        if (typeof VideoFrame === 'undefined') throw new Error('VideoFrame API unavailable');
         const frame = new VideoFrame(video);
         this.workerBusy = true; this.lastSubmittedAt = performance.now();
         this.worker.postMessage({ type: 'frame', frame, timestampMs: timestampHint }, [frame]);
-      } catch (err) {
-        this.workerBusy = false; this.pumpErrorCount += 1; this.workerFailureCount += 1; this.lastPumpError = err instanceof Error ? err.message : String(err); void this.fallbackFromWorker();
-      }
+      } catch (err) { this.workerBusy = false; this.pumpErrorCount += 1; this.lastPumpError = err instanceof Error ? err.message : String(err); void this.fallbackFromWorker(); }
       return;
     }
     if (!this.landmarker) return;
@@ -173,13 +161,8 @@ export class HandTracker {
   }
 
   private handleWorkerMessage(message: WorkerMessage): void {
-    if (message.type === 'result') {
-      this.workerBusy = false; this.workerFailureCount = 0; this.pumpErrorCount = 0;
-      this.acceptResult(message.hands, message.timestampMs, message.inferenceMs);
-    } else if (message.type === 'pump-error') {
-      this.workerBusy = false; this.pumpErrorCount += 1; this.workerFailureCount += 1; this.lastPumpError = message.message;
-      if (this.workerFailureCount >= 3) void this.fallbackFromWorker();
-    }
+    if (message.type === 'result') { this.workerBusy = false; this.workerFailureCount = 0; this.pumpErrorCount = 0; this.acceptResult(message.hands, message.timestampMs, message.inferenceMs); }
+    else if (message.type === 'pump-error') { this.workerBusy = false; this.pumpErrorCount += 1; this.workerFailureCount += 1; this.lastPumpError = message.message; if (this.workerFailureCount >= 3) void this.fallbackFromWorker(); }
   }
 
   private async fallbackFromWorker(): Promise<void> {
@@ -193,32 +176,12 @@ export class HandTracker {
 
   private getTargetIntervalMs(): number {
     if (this.requestedIntervalMs !== null) return this.requestedIntervalMs;
-    const inference = this.averageInferenceMs;
-    const pressure = inference > 45 ? (inference - 45) * 1.2 : 0;
-    // Never impose an artificial 30ms floor. At 60fps cameras the tracker
-    // should be allowed to sample every frame when inference can keep up.
-    return Math.max(16, Math.min(180, this.baseIntervalMs + pressure));
+    return 16;
   }
 
   private acceptResult(hands: TrackedHand[], timestampMs: number, inferenceMs: number): void {
     this.detectionCount += 1; this.detectionTotalMs += inferenceMs;
     if (this.detectionCount > 30) { this.detectionCount = Math.floor(this.detectionCount / 2); this.detectionTotalMs /= 2; }
     this.latest = { hands, timestampMs };
-  }
-}
-
-const SKELETON: Array<readonly [number, number]> = [
-  [0, 1], [1, 2], [2, 3], [3, 4], [0, 5], [5, 6], [6, 7], [7, 8], [0, 9], [9, 10], [10, 11], [11, 12], [0, 13], [13, 14], [14, 15], [15, 16], [0, 17], [17, 18], [18, 19], [19, 20], [5, 9], [9, 13], [13, 17],
-];
-
-export function drawLandmarkOverlay(ctx: CanvasRenderingContext2D, frame: HandFrame | null): void {
-  const canvas = ctx.canvas; ctx.clearRect(0, 0, canvas.width, canvas.height); if (!frame) return;
-  const top = 0.125; const scaleX = canvas.width; const scaleY = canvas.height / 0.75;
-  for (let handIndex = 0; handIndex < frame.hands.length; handIndex++) {
-    const hand = frame.hands[handIndex]; const color = handIndex === 0 ? '#9adcff' : '#a8ffc9'; ctx.strokeStyle = color; ctx.lineWidth = 2; ctx.beginPath();
-    for (const [a, b] of SKELETON) { const p = hand.landmarks[a]; const q = hand.landmarks[b]; ctx.moveTo(p.x * scaleX, (p.y - top) * scaleY); ctx.lineTo(q.x * scaleX, (q.y - top) * scaleY); }
-    ctx.stroke(); ctx.fillStyle = color; ctx.beginPath();
-    for (let i = 0; i < hand.landmarks.length; i++) { const point = hand.landmarks[i]; const x = point.x * scaleX; const y = (point.y - top) * scaleY; const r = i === 4 || i === 8 ? 4 : 2.5; ctx.moveTo(x + r, y); ctx.arc(x, y, r, 0, Math.PI * 2); }
-    ctx.fill();
   }
 }

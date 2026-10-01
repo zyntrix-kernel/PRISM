@@ -16,7 +16,7 @@ export const PrismConfig = {
   },
   camera: {
     idealWidth: 480, idealHeight: 360, maxWidth: 480, maxHeight: 360, maxFrameRate: 60,
-    tabletIdealWidth: 480, tabletIdealHeight: 360, tabletMaxFrameRate: 30,
+    tabletIdealWidth: 480, tabletIdealHeight: 360, tabletMaxFrameRate: 30, tabletMaxFrameRate: 30,
   },
   gestures: {
     pinchEnter: 0.36, pinchExit: 0.55, pinchMinFrames: 1, pinchEnterMs: 0, pinchExitMs: 90, extendedRatio: 1.10,

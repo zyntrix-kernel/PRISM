@@ -68,28 +68,6 @@ async function init(): Promise<void> {
             minTrackingConfidence: PrismConfig.tracking.minTrackingConfidence,
           });
 
-          // Warm the delegate once before the camera starts feeding real
-          // frames. This moves shader/kernel compilation out of the first
-          // interaction gesture, where a cold GPU can otherwise feel like
-          // camera latency.
-          try {
-            const warmCanvas = new OffscreenCanvas(2, 2);
-            const warmCtx = warmCanvas.getContext('2d');
-            if (warmCtx) {
-              warmCtx.fillRect(0, 0, 2, 2);
-              const warmBitmap = warmCanvas.transferToImageBitmap();
-              try {
-                landmarker.detectForVideo(warmBitmap, 1);
-              } finally {
-                warmBitmap.close();
-              }
-            }
-          } catch {
-            // Warm-up is opportunistic; the detector remains usable if a
-            // browser does not permit ImageBitmap/OffscreenCanvas in the
-            // worker's MediaPipe path.
-          }
-
           self.postMessage({ type: 'ready', delegate, offline: model.offline });
           return;
         } catch (err) { lastError = err; }

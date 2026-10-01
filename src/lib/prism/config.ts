@@ -13,8 +13,8 @@ export const PrismConfig = {
     minHandDetectionConfidence: 0.3,
     minHandPresenceConfidence: 0.3,
     minTrackingConfidence: 0.3,
-    intervalMs: 30,
-    tabletIntervalMs: 30,
+    intervalMs: 20,
+    tabletIntervalMs: 20,
   },
   camera: {
     idealWidth: 640, idealHeight: 480, maxWidth: 640, maxHeight: 480, maxFrameRate: 30,
@@ -24,7 +24,7 @@ export const PrismConfig = {
     pinchEnter: 0.36, pinchExit: 0.55, pinchMinFrames: 1, pinchEnterMs: 0, pinchExitMs: 90, extendedRatio: 1.10,
   },
   interaction: {
-    pointerAdaptive: { maxSpeed: 7.5, slowCutoff: 2.5, fastCutoff: 18, betaBase: 0.32, betaRate: 0.18, maxLeadSec: 0.035, maxLeadDist: 0.028 },
+    pointerAdaptive: { maxSpeed: 8.5, slowCutoff: 10, fastCutoff: 22, betaBase: 0.18, betaRate: 0.32, maxLeadSec: 0.018, maxLeadDist: 0.018 },
     grabSmoothing: 0.56, tabletGrabSmoothing: 0.48, tabletOrbitSpeed: 0.0038, tabletPanSpeed: 0.0030, tabletZoomSpeed: 2.2,
     zoomSpeed: 2.5, rotateSpeed: 0.6, worldScaleMin: 0.4, worldScaleMax: 3.0, gridSnap: 0.6, hoverRadius: 0.12,
     hoverClearMs: 150, coastMs: 500, tapMaxMs: 700, tapMaxMove: 0.08,

@@ -171,8 +171,8 @@ export class HandTracker {
     this.lastSubmittedAt = -Infinity;
     this.workerFailureCount = 0;
     const defaultInterval = isTabletDevice() ? PrismConfig.tracking.tabletIntervalMs : PrismConfig.tracking.intervalMs;
-    this.baseIntervalMs = Math.max(30, defaultInterval);
-    this.requestedIntervalMs = opts?.intervalMs != null ? Math.max(30, opts.intervalMs) : null;
+    this.baseIntervalMs = Math.max(20, defaultInterval);
+    this.requestedIntervalMs = opts?.intervalMs != null ? Math.max(20, opts.intervalMs) : null;
     const videoWithCallback = this.video;
 
     if (this.useWorker && videoWithCallback.requestVideoFrameCallback && typeof VideoFrame !== 'undefined') {

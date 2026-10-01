@@ -66,6 +66,8 @@ export class InteractionController {
   private readonly tmpProj = new THREE.Vector3();
   private readonly rayHits: THREE.Intersection[] = [];
   private lastHandFrameTimestamp = -1;
+  /** performance.now() when the latest fresh hand result was consumed. */
+  private lastHandResultAt = 0;
   /** Per-frame pick memo: hover, grab, and cursor share one raycast. */
   private frameCount = 0;
   private pickFrame = -1;
@@ -360,6 +362,7 @@ export class InteractionController {
     this.lastRaw.x = 0;
     this.lastRaw.y = 0;
     this.lastHandFrameTimestamp = -1;
+    this.lastHandResultAt = 0;
     this.calibrator.reset();
   }
 
@@ -460,10 +463,25 @@ export class InteractionController {
     // monotonic exponential chase fills the gaps without a spring state or
     // second velocity simulation in the hot render loop.
     if (this.mode === 'hand') {
+      // Continue the last measured hand trajectory between MediaPipe samples.
+      // This compensates for capture/inference age without adding a second
+      // slow smoothing stage that makes the cursor feel detached.
       const stepDt = Math.min(Math.max(dt, 1 / 240), 0.05);
-      const followRate = 88 + Math.min(this.pointerFilter.pointerSpeed * 8, 24);
+      const age = this.lastHandResultAt > 0
+        ? Math.min((performance.now() - this.lastHandResultAt) / 1000, 0.035)
+        : 0;
+      const predictedX = this.pointerTarget.x + this.pointerFilter.velocityX * age;
+      const predictedY = this.pointerTarget.y + this.pointerFilter.velocityY * age;
+      const dx = predictedX - this.pointerTarget.x;
+      const dy = predictedY - this.pointerTarget.y;
+      const extra = Math.hypot(dx, dy);
+      const maxExtra = 0.035;
+      const k = extra > maxExtra ? maxExtra / extra : 1;
+      this.tmpNdcSample.x = this.pointerTarget.x + dx * k;
+      this.tmpNdcSample.y = this.pointerTarget.y + dy * k;
+      const followRate = 240 + Math.min(this.pointerFilter.pointerSpeed * 12, 100);
       const alpha = 1 - Math.exp(-followRate * stepDt);
-      this.pointerNdc.lerp(this.pointerTarget, alpha);
+      this.pointerNdc.lerp(this.tmpNdcSample, alpha);
     }
 
     // Unified action edges (hand pinch or non-orbit mouse hold / click).
@@ -635,8 +653,10 @@ export class InteractionController {
     // Tracking-clock step (NOT render dt) + sensor confidence: the filter
     // stays honest whether frames arrive at 10 Hz or 120 Hz, clean or noisy.
     this.pointerFilter.update(this.tmpNdcSample, trackDtMs, primaryHand.confidence, this.tmpSmoothed);
-    // Set the TARGET — pointerNdc will chase this at render rate (below).
+    // Timestamp the fresh target so render-rate extrapolation only covers the
+    // small gap since the latest completed tracking result.
     this.pointerTarget.set(this.tmpSmoothed.x, this.tmpSmoothed.y);
+    this.lastHandResultAt = performance.now();
 
     // Two-hand transform takes precedence over single-hand dragging.
     // COAST for slow cameras: the second hand often drops out for 1-3 frames.

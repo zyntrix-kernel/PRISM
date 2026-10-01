@@ -82,13 +82,13 @@ export class AdaptivePointerFilter {
   private speed = 0; // filtered pointer speed, NDC/sec
 
   constructor(opts: AdaptivePointerOpts = {}) {
-    this.maxSpeed = opts.maxSpeed ?? 3.5;
-    this.slowCutoff = opts.slowCutoff ?? 0.42;
-    this.fastCutoff = opts.fastCutoff ?? 2.8;
-    this.betaBase = opts.betaBase ?? 0.09;
-    this.betaRate = opts.betaRate ?? 0.08;
-    this.maxLeadSec = opts.maxLeadSec ?? 0.12;
-    this.maxLeadDist = opts.maxLeadDist ?? 0.05;
+    this.maxSpeed = opts.maxSpeed ?? 8.5;
+    this.slowCutoff = opts.slowCutoff ?? 10;
+    this.fastCutoff = opts.fastCutoff ?? 22;
+    this.betaBase = opts.betaBase ?? 0.18;
+    this.betaRate = opts.betaRate ?? 0.32;
+    this.maxLeadSec = opts.maxLeadSec ?? 0.018;
+    this.maxLeadDist = opts.maxLeadDist ?? 0.018;
   }
 
   /** Measured tracking rate (Hz). Drives every adaptive tuning. */
@@ -118,6 +118,15 @@ export class AdaptivePointerFilter {
 
   get isInitialized(): boolean {
     return this.init;
+  }
+
+  /** Low-latency trend velocity used by the render-rate predictor. */
+  get velocityX(): number {
+    return this.tx;
+  }
+
+  get velocityY(): number {
+    return this.ty;
   }
 
   reset(sample: PointerSample): void {
@@ -193,7 +202,7 @@ export class AdaptivePointerFilter {
     // frames pass through nearly untouched.
     const refX = this.fx + this.tx * dt;
     const refY = this.fy + this.ty * dt;
-    const w = 0.55 + 0.45 * conf;
+    const w = 0.96 + 0.04 * conf;
     const ex = refX + (gx - refX) * w;
     const ey = refY + (gy - refY) * w;
 
@@ -202,10 +211,10 @@ export class AdaptivePointerFilter {
     // Measured jitter pushes the rest cutoff down further.
     const r01 = clamp((this.rate - 5) / 55, 0, 1);
     let rest = this.slowCutoff + (this.fastCutoff - this.slowCutoff) * Math.pow(r01, 1.5);
-    rest /= 1 + Math.min(this.noisePerSample * 60, 0.8) * 0.25;
-    rest = Math.max(1.5, rest);
+    rest /= 1 + Math.min(this.noisePerSample * 60, 0.8) * 0.12;
+    rest = Math.max(8, rest);
     const beta = this.betaBase + this.betaRate * r01;
-    const dcut = 0.6 + 1.2 * r01;
+    const dcut = 2.2 + 3.2 * r01;
 
     const aD = euroAlpha(dcut, dt);
     this.vx += ((ex - this.fx) / dt - this.vx) * aD;
@@ -219,7 +228,7 @@ export class AdaptivePointerFilter {
 
     // Stage 4 — slow trend velocity for prediction (immune to spikes: a
     // gated frame contributes at most `allow` worth of motion).
-    const aV = euroAlpha(2.2, dt);
+    const aV = euroAlpha(5.0, dt);
     const tvx = (this.fx - prevFx) / dt;
     const tvy = (this.fy - prevFy) / dt;
     this.tx += (tvx - this.tx) * aV;

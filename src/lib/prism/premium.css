@@ -1,152 +1,78 @@
 /* PRISM / Premium Product Surface
  * Refined spatial-instrument layer. CSS-only, low-overhead, touch-aware.
  */
-
 :root {
-  --prism-premium-blue: #7dd3fc;
-  --prism-premium-blue-strong: #38bdf8;
-  --prism-premium-surface: rgba(9, 16, 28, 0.62);
-  --prism-premium-surface-strong: rgba(10, 18, 31, 0.82);
-  --prism-premium-border: rgba(191, 230, 255, 0.14);
-  --prism-premium-border-hover: rgba(191, 230, 255, 0.28);
-  --prism-premium-shadow: 0 18px 60px rgba(0,0,0,.34), 0 2px 10px rgba(0,0,0,.28);
-  --prism-premium-ease: cubic-bezier(.2,0,0,1);
+  --prism-premium-blue:#7dd3fc;
+  --prism-premium-blue-strong:#38bdf8;
+  --prism-premium-surface:rgba(9,16,28,.62);
+  --prism-premium-surface-strong:rgba(10,18,31,.82);
+  --prism-premium-border:rgba(191,230,255,.14);
+  --prism-premium-border-hover:rgba(191,230,255,.28);
+  --prism-premium-shadow:0 18px 60px rgba(0,0,0,.34),0 2px 10px rgba(0,0,0,.28);
+  --prism-premium-ease:cubic-bezier(.2,0,0,1);
 }
 
-.prism-root { contain: layout paint style; isolation: isolate; }
-.prism-scene { contain: strict; will-change: contents; }
+.prism-root{contain:layout paint style;isolation:isolate}
+.prism-scene{contain:strict;will-change:contents}
+.prism-glass,.prism-glass-hover,.prism-pressable,.prism-webcam-placeholder{
+  -webkit-backdrop-filter:blur(18px) saturate(135%);backdrop-filter:blur(18px) saturate(135%);
+  border-color:var(--prism-premium-border);box-shadow:var(--prism-premium-shadow),inset 0 1px 0 rgba(255,255,255,.07)
+}
+.prism-glass-hover,.prism-pressable{transition:transform 180ms var(--prism-premium-ease),background-color 180ms var(--prism-premium-ease),border-color 180ms var(--prism-premium-ease),box-shadow 180ms var(--prism-premium-ease),color 180ms var(--prism-premium-ease)}
+.prism-glass-hover:hover,.prism-pressable:hover{border-color:var(--prism-premium-border-hover);box-shadow:0 22px 72px rgba(0,0,0,.4),inset 0 1px 0 rgba(255,255,255,.1),0 0 0 1px rgba(125,211,252,.035)}
+.prism-pressable:hover{transform:translateY(-1px)}
+.prism-pressable:active{transform:translateY(1px) scale(.985);transition-duration:70ms}
+.prism-pressable:focus-visible,.prism-glass button:focus-visible,.prism-glass select:focus-visible{outline:2px solid rgba(125,211,252,.85);outline-offset:3px;box-shadow:0 0 0 5px rgba(56,189,248,.11),var(--prism-premium-shadow)}
 
-.prism-glass,
-.prism-glass-hover,
-.prism-pressable,
-.prism-webcam-placeholder {
-  -webkit-backdrop-filter: blur(18px) saturate(135%);
-  backdrop-filter: blur(18px) saturate(135%);
-  border-color: var(--prism-premium-border);
-  box-shadow: var(--prism-premium-shadow), inset 0 1px 0 rgba(255,255,255,.07);
+/* HUD: turn a flat toolbar into a compact instrument dock. */
+#prism-hud{
+  border:1px solid var(--prism-premium-border);background:linear-gradient(180deg,rgba(16,25,39,.76),rgba(5,10,18,.60));
+  box-shadow:0 20px 70px rgba(0,0,0,.34),inset 0 1px 0 rgba(255,255,255,.08);
+  -webkit-backdrop-filter:blur(24px) saturate(145%);backdrop-filter:blur(24px) saturate(145%);
+}
+#prism-hud::after{content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;background:linear-gradient(105deg,rgba(255,255,255,.055),transparent 28%,transparent 72%,rgba(125,211,252,.025))}
+#prism-hud-title{min-width:92px}
+.prism-wordmark{letter-spacing:.22em;font-weight:650;text-shadow:0 0 22px rgba(125,211,252,.13)}
+.prism-status-dot{flex:0 0 auto}
+#prism-hud-status{min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#prism-hud-controls{gap:7px!important}
+#prism-hud-controls button,#prism-hud-controls [role="button"],#prism-hud-controls select{transition:transform 140ms var(--prism-premium-ease),background-color 140ms var(--prism-premium-ease),border-color 140ms var(--prism-premium-ease)}
+#prism-hud-controls button:active,#prism-hud-controls [role="button"]:active{transform:scale(.94)}
+.prism-btn-sep{width:1px;height:22px;margin:0 3px;background:linear-gradient(180deg,transparent,rgba(191,230,255,.18),transparent)}
+
+/* Camera window: deliberately framed, readable, secondary to the world. */
+#prism-webcam,#prism-webcam-frame,#prism-landmark-overlay{border-radius:14px}
+#prism-webcam{box-shadow:0 18px 54px rgba(0,0,0,.42),inset 0 1px rgba(255,255,255,.08)}
+#prism-webcam-frame::before{content:"LIVE SENSOR";position:absolute;left:10px;top:9px;z-index:2;padding:4px 6px;border:1px solid rgba(191,230,255,.12);border-radius:999px;background:rgba(3,10,18,.54);color:rgba(226,247,255,.62);font:600 7px/1 ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:.15em;pointer-events:none;opacity:0;transition:opacity 180ms var(--prism-premium-ease)}
+#prism-webcam.live + #prism-landmark-overlay + #prism-webcam-frame::before,#prism-webcam.live ~ #prism-webcam-frame::before{opacity:1}
+
+/* Menus inherit the same optical language instead of looking like browser chrome. */
+.prism-root [role="menu"],.prism-root [data-radix-popper-content-wrapper]{-webkit-backdrop-filter:blur(22px) saturate(145%);backdrop-filter:blur(22px) saturate(145%)}
+.prism-root [role="menu"]{border-color:rgba(191,230,255,.14);box-shadow:0 24px 80px rgba(0,0,0,.45),inset 0 1px rgba(255,255,255,.06)}
+
+/* Large touch tablets, including 12.7-inch-class panels. */
+@media (pointer:coarse) and (min-width:768px){
+  #prism-hud{top:max(18px,env(safe-area-inset-top))!important;left:max(18px,env(safe-area-inset-left))!important;right:max(18px,env(safe-area-inset-right))!important;border-radius:18px}
+  #prism-hud-controls{gap:9px!important}
+  #prism-hud-controls button,#prism-hud-controls [role="button"],#prism-hud-controls select{min-width:52px;min-height:52px}
+  #prism-webcam,#prism-webcam-frame,#prism-landmark-overlay{right:max(22px,env(safe-area-inset-right));bottom:max(24px,env(safe-area-inset-bottom));width:clamp(220px,22vw,300px);border-radius:18px}
+  #prism-webcam-frame::before{left:12px;top:11px;font-size:7px}
+  .prism-glass-hover:hover,.prism-pressable:hover{transform:none;box-shadow:var(--prism-premium-shadow),inset 0 1px 0 rgba(255,255,255,.07)}
 }
 
-.prism-glass-hover,
-.prism-pressable {
-  transition: transform 180ms var(--prism-premium-ease), background-color 180ms var(--prism-premium-ease), border-color 180ms var(--prism-premium-ease), box-shadow 180ms var(--prism-premium-ease), color 180ms var(--prism-premium-ease);
+/* 12.7-inch portrait: preserve a clean central stage and avoid chrome swallowing it. */
+@media (pointer:coarse) and (min-width:768px) and (orientation:portrait){
+  #prism-hud{max-height:24svh;overflow:auto}
+  #prism-webcam,#prism-webcam-frame,#prism-landmark-overlay{width:min(42vw,280px)}
 }
 
-.prism-glass-hover:hover,
-.prism-pressable:hover {
-  border-color: var(--prism-premium-border-hover);
-  box-shadow: 0 22px 72px rgba(0,0,0,.4), inset 0 1px 0 rgba(255,255,255,.1), 0 0 0 1px rgba(125,211,252,.035);
+@media (max-width:760px){
+  .prism-root{min-height:100dvh}
+  #prism-hud{left:10px!important;right:10px!important;top:10px!important;border-radius:16px}
+  #prism-hud-controls{gap:5px!important}
+  #prism-hud-controls .prism-btn-sep,#prism-hud-controls select,#prism-hud-controls .prism-wordmark + *{display:none}
+  #prism-webcam,#prism-webcam-frame,#prism-landmark-overlay{right:10px;bottom:max(10px,env(safe-area-inset-bottom));width:min(168px,39vw)}
+  #prism-webcam-frame::before{font-size:6px}
 }
 
-.prism-pressable:hover { transform: translateY(-1px); }
-.prism-pressable:active { transform: translateY(1px) scale(.985); transition-duration: 70ms; }
-
-.prism-pressable:focus-visible,
-.prism-glass button:focus-visible,
-.prism-glass select:focus-visible {
-  outline: 2px solid rgba(125,211,252,.85);
-  outline-offset: 3px;
-  box-shadow: 0 0 0 5px rgba(56,189,248,.11), var(--prism-premium-shadow);
-}
-
-#prism-hud {
-  border: 1px solid var(--prism-premium-border);
-  background: linear-gradient(180deg, rgba(16,25,39,.72), rgba(5,10,18,.58));
-  box-shadow: 0 20px 70px rgba(0,0,0,.34), inset 0 1px 0 rgba(255,255,255,.08);
-}
-
-#prism-hud-title { min-width: 92px; }
-.prism-wordmark { letter-spacing: .22em; font-weight: 650; text-shadow: 0 0 22px rgba(125,211,252,.13); }
-.prism-status-dot { flex: 0 0 auto; }
-#prism-hud-status { min-width: 0; white-space: nowrap; }
-#prism-hud-controls { gap: 7px !important; }
-
-.prism-btn-sep {
-  width: 1px; height: 22px; margin: 0 3px;
-  background: linear-gradient(180deg, transparent, rgba(191,230,255,.18), transparent);
-}
-
-#prism-webcam,
-#prism-webcam-frame,
-#prism-landmark-overlay { border-radius: 14px; }
-#prism-webcam { box-shadow: 0 18px 54px rgba(0,0,0,.42), inset 0 1px rgba(255,255,255,.08); }
-
-#prism-webcam-frame::before {
-  content: "LIVE SENSOR";
-  position: absolute; left: 10px; top: 9px; z-index: 2;
-  padding: 4px 6px; border: 1px solid rgba(191,230,255,.12); border-radius: 999px;
-  background: rgba(3,10,18,.54); color: rgba(226,247,255,.62);
-  font: 600 7px/1 ui-monospace, SFMono-Regular, Menlo, monospace;
-  letter-spacing: .15em; pointer-events: none; opacity: 0;
-  transition: opacity 180ms var(--prism-premium-ease);
-}
-
-#prism-webcam.live + #prism-landmark-overlay + #prism-webcam-frame::before,
-#prism-webcam.live ~ #prism-webcam-frame::before { opacity: 1; }
-
-.prism-root [role="menu"],
-.prism-root [data-radix-popper-content-wrapper] {
-  -webkit-backdrop-filter: blur(22px) saturate(145%);
-  backdrop-filter: blur(22px) saturate(145%);
-}
-
-/* 12.7-inch-class tablets: spacious, edge-safe, but never oversized. */
-@media (pointer: coarse) and (min-width: 768px) {
-  #prism-hud {
-    top: max(18px, env(safe-area-inset-top)) !important;
-    left: max(18px, env(safe-area-inset-left)) !important;
-    right: max(18px, env(safe-area-inset-right)) !important;
-    border-radius: 18px;
-  }
-
-  #prism-hud-controls { gap: 9px !important; }
-  #prism-hud-controls button,
-  #prism-hud-controls [role="button"],
-  #prism-hud-controls select { min-width: 52px; min-height: 52px; }
-
-  /* Keep the sensor window readable from arm's length without stealing the scene. */
-  #prism-webcam,
-  #prism-webcam-frame,
-  #prism-landmark-overlay {
-    right: max(22px, env(safe-area-inset-right));
-    bottom: max(24px, env(safe-area-inset-bottom));
-    width: clamp(220px, 22vw, 300px);
-    border-radius: 18px;
-  }
-
-  #prism-webcam-frame::before { left: 12px; top: 11px; font-size: 7px; }
-
-  /* Avoid expensive hover transitions on a touch-first surface. */
-  .prism-glass-hover:hover,
-  .prism-pressable:hover {
-    transform: none;
-    box-shadow: var(--prism-premium-shadow), inset 0 1px 0 rgba(255,255,255,.07);
-  }
-}
-
-/* 12.7-inch portrait: stack the chrome gently and protect the camera preview. */
-@media (pointer: coarse) and (min-width: 768px) and (orientation: portrait) {
-  #prism-hud { max-height: 24svh; overflow: auto; }
-  #prism-webcam,
-  #prism-webcam-frame,
-  #prism-landmark-overlay { width: min(42vw, 280px); }
-}
-
-@media (max-width: 760px) {
-  .prism-root { min-height: 100dvh; }
-  #prism-hud { left: 10px !important; right: 10px !important; top: 10px !important; border-radius: 16px; }
-  #prism-hud-controls { gap: 5px !important; }
-  #prism-hud-controls .prism-btn-sep,
-  #prism-hud-controls select,
-  #prism-hud-controls .prism-wordmark + * { display: none; }
-  #prism-webcam,
-  #prism-webcam-frame,
-  #prism-landmark-overlay {
-    right: 10px; bottom: max(10px, env(safe-area-inset-bottom)); width: min(168px, 39vw);
-  }
-  #prism-webcam-frame::before { font-size: 6px; }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .prism-glass-hover, .prism-pressable { transition: none !important; }
-  .prism-pressable:hover, .prism-pressable:active { transform: none; }
-}
+@media (prefers-reduced-motion:reduce){.prism-glass-hover,.prism-pressable{transition:none!important}.prism-pressable:hover,.prism-pressable:active{transform:none}}

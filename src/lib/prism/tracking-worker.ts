@@ -138,8 +138,12 @@ async function runTrack(track: MediaStreamTrack, session: number): Promise<void>
       try {
         while (session === trackSession) {
           const next = await reader!.read();
-          if (next.done || session !== trackSession) break;
+          if (next.done) break;
           const frame = next.value;
+          if (session !== trackSession) {
+            frame.close();
+            break;
+          }
           const mediaMs = frame.timestamp / 1000;
           const nowMs = performance.now();
           const observedOffset = nowMs - mediaMs;

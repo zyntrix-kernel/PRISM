@@ -7,49 +7,48 @@ type Message = InitMessage | FrameMessage;
 
 let landmarker: HandLandmarker | null = null;
 
-async function resolveModelUrl(): Promise<{ url: string; offline: boolean }> {
+async function resolveModelUrls(): Promise<{ urls: string[]; offline: boolean }> {
   try {
     const probe = await fetch(PrismConfig.tracking.localModelUrl, { method: 'HEAD' });
     const type = probe.headers.get('content-type') ?? '';
     const length = Number(probe.headers.get('content-length') ?? '0');
     if (probe.ok && !type.includes('text/html') && length > 1_000_000) {
-      return { url: PrismConfig.tracking.localModelUrl, offline: true };
+      return { urls: [PrismConfig.tracking.localModelUrl], offline: true };
     }
   } catch {
-    // CDN fallback below.
+    // Continue to resilient remote sources.
   }
-  return { url: PrismConfig.tracking.cdnModelUrl, offline: false };
+  return {
+    urls: [PrismConfig.tracking.cdnModelUrl, PrismConfig.tracking.fallbackModelUrl],
+    offline: false,
+  };
 }
 
 async function init(): Promise<void> {
-  const wasmUrls = [PrismConfig.tracking.wasmUrl, PrismConfig.tracking.cdnWasmUrl].filter(
-    (u, i, all) => u && all.indexOf(u) === i,
-  );
+  const wasmUrls = [PrismConfig.tracking.wasmUrl, PrismConfig.tracking.cdnWasmUrl].filter((u, i, all) => u && all.indexOf(u) === i);
   let lastError: unknown = null;
+  const { urls: modelUrls, offline } = await resolveModelUrls();
 
   for (const wasmUrl of wasmUrls) {
     try {
       const vision = await FilesetResolver.forVisionTasks(wasmUrl);
-      const { url, offline } = await resolveModelUrl();
-      for (const delegate of ['GPU', 'CPU'] as const) {
-        try {
-          landmarker = await HandLandmarker.createFromOptions(vision, {
-            baseOptions: { modelAssetPath: url, delegate },
-            runningMode: 'VIDEO',
-            numHands: PrismConfig.tracking.numHands,
-            minHandDetectionConfidence: PrismConfig.tracking.minHandDetectionConfidence,
-            minHandPresenceConfidence: PrismConfig.tracking.minHandPresenceConfidence,
-            minTrackingConfidence: PrismConfig.tracking.minTrackingConfidence,
-          });
-          self.postMessage({ type: 'ready', delegate, offline });
-          return;
-        } catch (err) {
-          lastError = err;
+      for (const modelUrl of modelUrls) {
+        for (const delegate of ['GPU', 'CPU'] as const) {
+          try {
+            landmarker = await HandLandmarker.createFromOptions(vision, {
+              baseOptions: { modelAssetPath: modelUrl, delegate },
+              runningMode: 'VIDEO',
+              numHands: PrismConfig.tracking.numHands,
+              minHandDetectionConfidence: PrismConfig.tracking.minHandDetectionConfidence,
+              minHandPresenceConfidence: PrismConfig.tracking.minHandPresenceConfidence,
+              minTrackingConfidence: PrismConfig.tracking.minTrackingConfidence,
+            });
+            self.postMessage({ type: 'ready', delegate, offline });
+            return;
+          } catch (err) { lastError = err; }
         }
       }
-    } catch (err) {
-      lastError = err;
-    }
+    } catch (err) { lastError = err; }
   }
 
   self.postMessage({ type: 'error', message: lastError instanceof Error ? lastError.message : String(lastError) });
@@ -73,12 +72,7 @@ self.onmessage = async (event: MessageEvent<Message>) => {
         handedness: result.handedness?.[i]?.[0]?.categoryName ?? 'Unknown',
         confidence: result.handedness?.[i]?.[0]?.score ?? 0,
       }));
-      self.postMessage({
-        type: 'result',
-        hands,
-        timestampMs: message.timestampMs,
-        inferenceMs: performance.now() - started,
-      });
+      self.postMessage({ type: 'result', hands, timestampMs: message.timestampMs, inferenceMs: performance.now() - started });
     } catch (err) {
       self.postMessage({ type: 'pump-error', message: err instanceof Error ? err.message : String(err) });
     } finally {

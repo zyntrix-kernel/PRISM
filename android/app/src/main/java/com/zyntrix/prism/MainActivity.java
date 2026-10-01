@@ -1,4 +1,4 @@
-package com.zyntrix.prism;
+package com.zynashlabs.prism;
 
 import com.getcapacitor.BridgeActivity;
 

@@ -43,3 +43,38 @@
     backdrop-filter: blur(14px) saturate(140%);
   }
 }
+
+
+/* Quiet-material mode for exhibition tablets:
+   preserve the translucent Apple-like hierarchy while stopping decorative
+   background animation and expensive blur on secondary chrome. */
+@media (pointer: coarse) and (min-width: 768px) {
+  .prism-orb {
+    animation-play-state: paused !important;
+  }
+
+  .prism-command-left,
+  .prism-command-right,
+  .prism-command-inspection {
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+    box-shadow: 0 14px 44px rgba(0,0,0,.22), inset 0 1px 0 rgba(255,255,255,.045);
+  }
+
+  .prism-command-top,
+  .prism-command-focus {
+    -webkit-backdrop-filter: blur(10px) saturate(132%);
+    backdrop-filter: blur(10px) saturate(132%);
+    box-shadow: 0 18px 56px rgba(0,0,0,.28), inset 0 1px 0 rgba(255,255,255,.07);
+  }
+
+  .prism-command-status > span.is-live {
+    animation: none !important;
+  }
+
+  .prism-root button,
+  .prism-root [role="button"],
+  .prism-root select {
+    -webkit-tap-highlight-color: transparent;
+  }
+}

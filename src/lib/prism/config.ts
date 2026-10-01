@@ -5,9 +5,6 @@ import type { PresetId } from './presets/types';
 export const PrismConfig = {
   tracking: {
     localModelUrl: './models/hand_landmarker.task',
-    // Same-origin proxy is the primary network path. It avoids browser/network
-    // restrictions that can block direct requests to Google's model host.
-    modelProxyUrl: '/api/hand-model',
     cdnModelUrl: 'https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task',
     fallbackModelUrl: 'https://huggingface.co/Leo-TX/mediapipe-hand/resolve/main/hand_landmarker.task?download=true',
     wasmUrl: './wasm',

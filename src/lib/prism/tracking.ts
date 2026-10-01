@@ -20,6 +20,8 @@ async function fetchModel(url: string): Promise<Uint8Array> {
 }
 
 async function resolveModel(): Promise<{ bytes: Uint8Array; offline: boolean }> {
+  // Static-export deployment has no server route, so model resolution stays
+  // fully client-side: bundled asset first, then CORS-capable CDN mirrors.
   const urls = [
     PrismConfig.tracking.localModelUrl,
     PrismConfig.tracking.cdnModelUrl,

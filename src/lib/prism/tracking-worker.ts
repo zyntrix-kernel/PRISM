@@ -16,10 +16,10 @@ async function fetchModel(url: string): Promise<Uint8Array> {
 }
 
 async function resolveModel(): Promise<{ bytes: Uint8Array; offline: boolean }> {
-  const proxyUrl = new URL(PrismConfig.tracking.modelProxyUrl, self.location.origin).toString();
+  // Static-export deployment has no server route. Keep this worker fully
+  // client-side and fall back through the same public model mirrors.
   const urls = [
     PrismConfig.tracking.localModelUrl,
-    proxyUrl,
     PrismConfig.tracking.cdnModelUrl,
     PrismConfig.tracking.fallbackModelUrl,
   ];

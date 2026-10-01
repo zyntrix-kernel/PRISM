@@ -202,8 +202,8 @@ export class AdaptivePointerFilter {
     // Measured jitter pushes the rest cutoff down further.
     const r01 = clamp((this.rate - 5) / 55, 0, 1);
     let rest = this.slowCutoff + (this.fastCutoff - this.slowCutoff) * Math.pow(r01, 1.5);
-    rest /= 1 + Math.min(this.noisePerSample * 90, 1.6) * 0.55;
-    rest = Math.max(0.55, rest);
+    rest /= 1 + Math.min(this.noisePerSample * 60, 0.8) * 0.25;
+    rest = Math.max(1.5, rest);
     const beta = this.betaBase + this.betaRate * r01;
     const dcut = 0.6 + 1.2 * r01;
 
@@ -232,7 +232,7 @@ export class AdaptivePointerFilter {
     let ox = this.fx;
     let oy = this.fy;
     if (!spiked && conf >= 0.35 && dtMs <= 200 && this.speed > 1e-4) {
-      const lead = Math.min(2.35 / Math.max(this.rate, 5), this.maxLeadSec);
+      const lead = Math.min(1.0 / Math.max(this.rate, 5), this.maxLeadSec);
       let lx = this.tx * lead;
       let ly = this.ty * lead;
       const ld = Math.hypot(lx, ly);

@@ -47,7 +47,8 @@ export async function startCamera(video: HTMLVideoElement): Promise<CameraHandle
         facingMode: { ideal: 'user' },
         width: { ideal: PrismConfig.camera.idealWidth, max: PrismConfig.camera.maxWidth },
         height: { ideal: PrismConfig.camera.idealHeight, max: PrismConfig.camera.maxHeight },
-        frameRate: { ideal: Math.min(24, PrismConfig.camera.maxFrameRate), max: PrismConfig.camera.maxFrameRate },
+        aspectRatio: { ideal: 4 / 3 },
+        frameRate: { ideal: PrismConfig.camera.maxFrameRate, max: PrismConfig.camera.maxFrameRate },
       },
       audio: false,
     });

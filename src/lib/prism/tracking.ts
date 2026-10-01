@@ -315,6 +315,26 @@ const SKELETON: Array<readonly [number, number]> = [
   [0, 17], [17, 18], [18, 19], [19, 20], [5, 9], [9, 13], [13, 17],
 ];
 
+function coverCoordinate(x: number, y: number, sourceAspect = 4 / 3, viewAspect = 16 / 9): { x: number; y: number } {
+  if (sourceAspect < viewAspect) {
+    const visibleHeight = sourceAspect / viewAspect;
+    const top = (1 - visibleHeight) * 0.5;
+    return {
+      x,
+      y: (y - top) / visibleHeight,
+    };
+  }
+  if (sourceAspect > viewAspect) {
+    const visibleWidth = viewAspect / sourceAspect;
+    const left = (1 - visibleWidth) * 0.5;
+    return {
+      x: (x - left) / visibleWidth,
+      y,
+    };
+  }
+  return { x, y };
+}
+
 export function drawLandmarkOverlay(ctx: CanvasRenderingContext2D, frame: HandFrame | null): void {
   const canvas = ctx.canvas;
   ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -325,13 +345,19 @@ export function drawLandmarkOverlay(ctx: CanvasRenderingContext2D, frame: HandFr
     ctx.lineWidth = 2;
     ctx.fillStyle = color;
     for (const [a, b] of SKELETON) {
-      const p = hand.landmarks[a];
-      const q = hand.landmarks[b];
-      ctx.beginPath(); ctx.moveTo(p.x * canvas.width, p.y * canvas.height); ctx.lineTo(q.x * canvas.width, q.y * canvas.height); ctx.stroke();
+      const p = coverCoordinate(hand.landmarks[a].x, hand.landmarks[a].y);
+      const q = coverCoordinate(hand.landmarks[b].x, hand.landmarks[b].y);
+      ctx.beginPath();
+      ctx.moveTo(p.x * canvas.width, p.y * canvas.height);
+      ctx.lineTo(q.x * canvas.width, q.y * canvas.height);
+      ctx.stroke();
     }
-    hand.landmarks.forEach((p, i) => {
+    hand.landmarks.forEach((point, i) => {
+      const p = coverCoordinate(point.x, point.y);
       const r = i === 4 || i === 8 ? 4 : 2.5;
-      ctx.beginPath(); ctx.arc(p.x * canvas.width, p.y * canvas.height, r, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath();
+      ctx.arc(p.x * canvas.width, p.y * canvas.height, r, 0, Math.PI * 2);
+      ctx.fill();
     });
   });
 }

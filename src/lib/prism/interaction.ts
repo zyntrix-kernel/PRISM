@@ -44,10 +44,6 @@ export class InteractionController {
   // cursor smoothness from tracking rate — a 10fps camera produces a smooth
   // 60fps cursor instead of a jerky 10fps one.
   private readonly pointerTarget = new THREE.Vector2(0, 0);
-  // Render-rate velocity for the critically-damped hand cursor. This keeps
-  // the cursor continuous between camera samples without adding a second
-  // heavy smoothing layer.
-  private readonly pointerRenderVelocity = new THREE.Vector2(0, 0);
   // Adaptive pointer: self-retunes to any camera on earth (5–120 fps),
   // outlier-gates spikes, and predicts ~2 frames ahead to hide latency.
   private readonly pointerFilter = new AdaptivePointerFilter({
@@ -396,20 +392,24 @@ export class InteractionController {
     return { x: this.tmpLocal.x, z: this.tmpLocal.z };
   }
 
-  /** Landmark x is unmirrored camera space; the selfie view needs a flip.
-   *  Maps the hand's normalized [0..1] position to NDC [-1..+1].
-   *  The hand doesn't need to reach the screen edge — we map the useful
-   *  central region [0.15..0.85] to full NDC range so small hand movements
-   *  cover the whole screen. This feels more natural — you don't have to
-   *  stretch your arm to reach the corners. */
+  /** Map MediaPipe's normalized camera coordinates to the visible selfie
+   *  camera framing. The camera is requested as 4:3 and the preview is
+   *  rendered with object-fit: cover into a 16:9 window, so the browser crops
+   *  12.5% from the top and bottom. Keeping that same transform makes the
+   *  interaction cursor spatially agree with the camera image instead of
+   *  silently stretching the center 70% of the hand space.
+   */
   private toNdc(lm: Landmark): { x: number; y: number } {
-    // Remap the central 70% of camera space to full NDC.
-    // x: 0.15 → +1.0 (right edge), 0.85 → -1.0 (left edge), flipped for selfie.
-    const remapX = (lm.x - 0.15) / (0.85 - 0.15); // 0..1 across the useful range
-    const remapY = (lm.y - 0.15) / (0.85 - 0.15);
+    const sourceAspect = 4 / 3;
+    const viewAspect = 16 / 9;
+    const visibleHeight = sourceAspect / viewAspect; // 0.75 of the source
+    const visibleTop = (1 - visibleHeight) * 0.5; // 0.125 crop at top/bottom
+    const x = Math.max(0, Math.min(1, lm.x));
+    const y = Math.max(0, Math.min(1, (lm.y - visibleTop) / visibleHeight));
     return {
-      x: 1 - Math.max(0, Math.min(1, remapX)) * 2,
-      y: -(Math.max(0, Math.min(1, remapY)) * 2 - 1),
+      // Selfie preview is mirrored with CSS, so mirror X here too.
+      x: 1 - x * 2,
+      y: -(y * 2 - 1),
     };
   }
 
@@ -449,35 +449,14 @@ export class InteractionController {
     }
 
     // ── RENDER-RATE POINTER FOLLOW ───────────────────────────────────────
-    // Tracking arrives at a lower cadence than rendering. Use an exact
-    // critically-damped spring instead of a plain lerp so the visual cursor
-    // stays fluid without carrying a large "rubber-band" delay.
+    // Tracking arrives at a lower cadence than rendering. One fast,
+    // monotonic exponential chase fills the gaps without a spring state or
+    // second velocity simulation in the hot render loop.
     if (this.mode === 'hand') {
       const stepDt = Math.min(Math.max(dt, 1 / 240), 0.05);
-      const speed = this.pointerFilter.pointerSpeed;
-      const omega = 30 + Math.min(speed * 3.5, 12);
-      const decay = Math.exp(-omega * stepDt);
-
-      const ex = this.pointerNdc.x - this.pointerTarget.x;
-      const ey = this.pointerNdc.y - this.pointerTarget.y;
-      const vx = this.pointerRenderVelocity.x;
-      const vy = this.pointerRenderVelocity.y;
-      const tx = (vx + omega * ex) * stepDt;
-      const ty = (vy + omega * ey) * stepDt;
-
-      this.pointerNdc.x = this.pointerTarget.x + (ex + tx) * decay;
-      this.pointerNdc.y = this.pointerTarget.y + (ey + ty) * decay;
-      this.pointerRenderVelocity.x = (vx - omega * tx) * decay;
-      this.pointerRenderVelocity.y = (vy - omega * ty) * decay;
-
-      // Never allow the spring to accumulate velocity after a long frame.
-      const maxVelocity = 12;
-      const renderSpeed = Math.hypot(this.pointerRenderVelocity.x, this.pointerRenderVelocity.y);
-      if (renderSpeed > maxVelocity) {
-        const k = maxVelocity / renderSpeed;
-        this.pointerRenderVelocity.x *= k;
-        this.pointerRenderVelocity.y *= k;
-      }
+      const followRate = 88 + Math.min(this.pointerFilter.pointerSpeed * 8, 24);
+      const alpha = 1 - Math.exp(-followRate * stepDt);
+      this.pointerNdc.lerp(this.pointerTarget, alpha);
     }
 
     // Unified action edges (hand pinch or non-orbit mouse hold / click).
@@ -600,17 +579,15 @@ export class InteractionController {
       this.tmpNdcSample.x = raw.x;
       this.tmpNdcSample.y = raw.y;
       this.pointerFilter.reset(this.tmpNdcSample);
-      this.pointerRenderVelocity.set(0, 0);
       this.pointerNdc.set(raw.x, raw.y);
       this.lastRaw.x = raw.x;
       this.lastRaw.y = raw.y;
     } else {
-      // Adaptive micro-deadzone: sub-pixel tremor never enters the filter.
-      // It breathes with measured noise (old cameras get a wider floor)
-      // and vanishes the moment the hand genuinely moves.
+      // Tiny rest-only deadzone. Deliberate movement bypasses it entirely.
+      // Keep this below a single visible pixel on the 3D cursor.
       const dead =
         this.pointerFilter.pointerSpeed < 0.3
-          ? 0.0007 + Math.min(this.pointerFilter.noisePerSample * 0.18, 0.0025)
+          ? 0.00025 + Math.min(this.pointerFilter.noisePerSample * 0.06, 0.001)
           : 0;
       if (dead > 0 && Math.hypot(raw.x - this.lastRaw.x, raw.y - this.lastRaw.y) < dead) {
         raw.x = this.lastRaw.x;

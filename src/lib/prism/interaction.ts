@@ -46,6 +46,7 @@ export class InteractionController {
   private readonly rayHits: THREE.Intersection[] = [];
   private lastHandFrameTimestamp = -1;
   private lastHandResultAt = 0;
+  private lastHandCaptureAgeMs = 0;
   /** Estimated capture-to-display age from the tracker, in milliseconds. */
   private lastHandCaptureAgeMs = 0;
   private frameCount = 0;

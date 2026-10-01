@@ -72,6 +72,7 @@ export class InteractionController {
   private frameCount = 0;
   private pickFrame = -1;
   private cachedPick: THREE.Mesh | null = null;
+  private pickDirty = true;
   // Orbit-drag temporaries: the pointer ray is converted into world-local
   // space so two-hand zoom/rotation doesn't skew the ecliptic plane.
   private readonly eclipticPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
@@ -542,26 +543,11 @@ export class InteractionController {
     // cadence. Keep raycast/drag/cursor rendering live, but don't redo hand
     // matching, gesture decoding, or filtering against the same frame.
     if (frame.timestampMs === this.lastHandFrameTimestamp) {
-      // Fill the pointer from the latest target/prediction before interaction
-      // evaluation so hit-testing and the visible cursor share the same point.
+      // Keep the cursor and active drag at render rate, but do not repeat the
+      // expensive scene/world pick while the camera result is unchanged.
       this.advanceHandPointer(dt);
       this.raycaster.setFromCamera(this.pointerNdc, this.prism.camera);
-      this.prism.trackPointer(this.pointerNdc.x, this.pointerNdc.y);
-      if (this.twoHandActive) {
-        this.applyHover(null, dtMs);
-        this.lastSeenAt = performance.now();
-        this.updateCursor();
-        return;
-      }
-      const hovered = this.pick();
-      if (this.isPinching) {
-        if (!this.grabbed && hovered) this.grab(hovered);
-        if (this.grabbed) this.drag(dt);
-      } else if (this.grabbed) {
-        this.release();
-      }
-      this.applyHover(hovered, dtMs);
-      this.grabbedName = this.grabbed?.name ?? null;
+      if (this.grabbed) this.drag(dt);
       this.lastSeenAt = performance.now();
       this.updateCursor();
       return;
@@ -661,6 +647,7 @@ export class InteractionController {
     // but do not make the visible cursor wait for its smoothed output.
     this.pointerFilter.update(this.tmpNdcSample, trackDtMs, primaryHand.confidence, this.tmpSmoothed);
     this.pointerTarget.set(this.tmpNdcSample.x, this.tmpNdcSample.y);
+    this.pickDirty = true;
 
     // Preserve capture-time, not completion-time. Worker inference can take
     // tens of milliseconds; prediction must compensate for that full age.
@@ -668,6 +655,13 @@ export class InteractionController {
 
     // Advance the displayed pointer immediately after fresh tracking data.
     this.advanceHandPointer(dt);
+
+    // The fresh tracking sample is the only point where expensive
+    // scene/world hit-testing needs to run.
+    this.prism.trackPointer(this.pointerNdc.x, this.pointerNdc.y);
+    this.raycaster.setFromCamera(this.pointerNdc, this.prism.camera);
+    this.cachedPick = this.pick();
+    this.pickDirty = false;
 
     // Two-hand transform takes precedence over single-hand dragging.
     this.advanceHandPointer(dt);
@@ -787,6 +781,7 @@ export class InteractionController {
   // ---- shared mechanics ---------------------------------------------------
 
   private pick(): THREE.Mesh | null {
+    if (!this.pickDirty && this.cachedPick !== null) return this.cachedPick;
     if (this.pickFrame === this.frameCount) return this.cachedPick;
     this.pickFrame = this.frameCount;
     this.rayHits.length = 0;

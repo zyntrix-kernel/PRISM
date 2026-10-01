@@ -87,7 +87,7 @@ async function runTrack(track: MediaStreamTrack, session: number): Promise<void>
       MediaStreamTrackProcessor?: TrackProcessorCtor;
     }).MediaStreamTrackProcessor;
     if (!Processor) {
-      self.postMessage({ type: 'pump-error', message: 'MediaStreamTrackProcessor unavailable in worker' });
+      self.postMessage({ type: 'track-error', message: 'MediaStreamTrackProcessor unavailable in worker' });
       return;
     }
 

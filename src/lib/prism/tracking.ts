@@ -48,6 +48,10 @@ export class HandTracker {
   private requestedIntervalMs: number | null = null;
   private baseIntervalMs = 16;
   private workerOwnsTrack = false;
+  private lastResultSignature = '';
+
+  /** Called on the main thread only when a meaningfully changed result arrives. */
+  onResult: (() => void) | null = null;
 
   modelOffline = false;
   delegateUsed = 'GPU';
@@ -251,8 +255,28 @@ export class HandTracker {
   private getTargetIntervalMs(): number { return this.requestedIntervalMs !== null ? this.requestedIntervalMs : this.baseIntervalMs; }
 
   private acceptResult(hands: TrackedHand[], timestampMs: number, inferenceMs: number): void {
-    this.detectionCount += 1; this.detectionTotalMs += inferenceMs;
-    if (this.detectionCount > 30) { this.detectionCount = Math.floor(this.detectionCount / 2); this.detectionTotalMs /= 2; }
+    this.detectionCount += 1;
+    this.detectionTotalMs += inferenceMs;
+    if (this.detectionCount > 30) {
+      this.detectionCount = Math.floor(this.detectionCount / 2);
+      this.detectionTotalMs /= 2;
+    }
+
     this.latest = { hands, timestampMs };
+
+    // Landmarks are compact enough to compare on the main thread. A sub-pixel
+    // threshold suppresses duplicate/noise-only results so the renderer is
+    // not woken for frames that produce no visible interaction change.
+    let signature = String(hands.length);
+    for (const hand of hands) {
+      for (const p of hand.landmarks) {
+        signature += ',' + Math.round(p.x * 2000);
+        signature += ',' + Math.round(p.y * 2000);
+        signature += ',' + Math.round(p.z * 1000);
+      }
+    }
+    if (signature === this.lastResultSignature) return;
+    this.lastResultSignature = signature;
+    this.onResult?.();
   }
 }

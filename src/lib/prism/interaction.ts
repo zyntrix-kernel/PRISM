@@ -76,6 +76,7 @@ export class InteractionController {
   private readonly tmpRay = new THREE.Ray();
   private readonly tmpMat = new THREE.Matrix4();
   private readonly tmpLocal = new THREE.Vector3();
+  private readonly groundPoint = { x: 0, z: 0 };
   private orbitDragPrimed = false;
 
   // Two-hand incremental state
@@ -392,7 +393,9 @@ export class InteractionController {
     this.tmpMat.copy(this.prism.world.matrixWorld).invert();
     this.tmpRay.copy(this.raycaster.ray).applyMatrix4(this.tmpMat);
     if (!this.tmpRay.intersectPlane(this.eclipticPlane, this.tmpLocal)) return null;
-    return { x: this.tmpLocal.x, z: this.tmpLocal.z };
+    this.groundPoint.x = this.tmpLocal.x;
+    this.groundPoint.z = this.tmpLocal.z;
+    return this.groundPoint;
   }
 
   /** Map MediaPipe's normalized camera coordinates to the visible selfie

@@ -317,49 +317,42 @@ const SKELETON: Array<readonly [number, number]> = [
   [0, 17], [17, 18], [18, 19], [19, 20], [5, 9], [9, 13], [13, 17],
 ];
 
-function coverCoordinate(x: number, y: number, sourceAspect = 4 / 3, viewAspect = 16 / 9): { x: number; y: number } {
-  if (sourceAspect < viewAspect) {
-    const visibleHeight = sourceAspect / viewAspect;
-    const top = (1 - visibleHeight) * 0.5;
-    return {
-      x,
-      y: (y - top) / visibleHeight,
-    };
-  }
-  if (sourceAspect > viewAspect) {
-    const visibleWidth = viewAspect / sourceAspect;
-    const left = (1 - visibleWidth) * 0.5;
-    return {
-      x: (x - left) / visibleWidth,
-      y,
-    };
-  }
-  return { x, y };
-}
-
 export function drawLandmarkOverlay(ctx: CanvasRenderingContext2D, frame: HandFrame | null): void {
   const canvas = ctx.canvas;
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   if (!frame) return;
-  frame.hands.forEach((hand, handIndex) => {
+
+  // Preview = 16:9 cover, source camera = 4:3. Keep the transform scalar and
+  // batch canvas paths so a fresh hand frame creates no temporary objects.
+  const top = 0.125;
+  const scaleX = canvas.width;
+  const scaleY = canvas.height / 0.75;
+
+  for (let handIndex = 0; handIndex < frame.hands.length; handIndex++) {
+    const hand = frame.hands[handIndex];
     const color = handIndex === 0 ? '#9adcff' : '#a8ffc9';
     ctx.strokeStyle = color;
     ctx.lineWidth = 2;
-    ctx.fillStyle = color;
+
+    ctx.beginPath();
     for (const [a, b] of SKELETON) {
-      const p = coverCoordinate(hand.landmarks[a].x, hand.landmarks[a].y);
-      const q = coverCoordinate(hand.landmarks[b].x, hand.landmarks[b].y);
-      ctx.beginPath();
-      ctx.moveTo(p.x * canvas.width, p.y * canvas.height);
-      ctx.lineTo(q.x * canvas.width, q.y * canvas.height);
-      ctx.stroke();
+      const p = hand.landmarks[a];
+      const q = hand.landmarks[b];
+      ctx.moveTo(p.x * scaleX, (p.y - top) * scaleY);
+      ctx.lineTo(q.x * scaleX, (q.y - top) * scaleY);
     }
-    hand.landmarks.forEach((point, i) => {
-      const p = coverCoordinate(point.x, point.y);
+    ctx.stroke();
+
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    for (let i = 0; i < hand.landmarks.length; i++) {
+      const point = hand.landmarks[i];
+      const x = point.x * scaleX;
+      const y = (point.y - top) * scaleY;
       const r = i === 4 || i === 8 ? 4 : 2.5;
-      ctx.beginPath();
-      ctx.arc(p.x * canvas.width, p.y * canvas.height, r, 0, Math.PI * 2);
-      ctx.fill();
-    });
-  });
+      ctx.moveTo(x + r, y);
+      ctx.arc(x, y, r, 0, Math.PI * 2);
+    }
+    ctx.fill();
+  }
 }

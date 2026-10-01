@@ -8,6 +8,7 @@ import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { PrismConfig, type QualityTier } from './config';
+import { isAndroidWebView } from './device';
 import { pinchRingScale, setEmissiveBoost } from './highlight';
 import { buildAtom } from './presets/atom';
 import { buildBlocks } from './presets/blocks';
@@ -327,9 +328,11 @@ export class PrismScene {
   private readonly planetTex: PlanetTextureSet;
   private readonly tmpVec = new THREE.Vector3();
   private hovered: THREE.Object3D | null = null;
+  private readonly androidWebView: boolean;
 
   constructor(container: HTMLElement, quality: QualityTier, preset: PresetId) {
     this.quality = quality;
+    this.androidWebView = isAndroidWebView();
     // Performance: request high-performance GPU adapter explicitly. This forces
     // the browser to use the discrete GPU on dual-GPU machines (common on laptops).
     // Use antialias only on high/ultra (MSAA is expensive; pixelRatio covers it on lower tiers).
@@ -527,7 +530,8 @@ export class PrismScene {
 
   private applyPixelRatio(): void {
     const ratio = PrismConfig.quality[this.quality]?.pixelRatio ?? 1.25;
-    const pr = Math.min(window.devicePixelRatio || 1, ratio);
+    const nativeCap = this.androidWebView ? 0.65 : ratio;
+    const pr = Math.min(window.devicePixelRatio || 1, ratio, nativeCap);
     this.renderer.setPixelRatio(pr);
     this.composer?.setPixelRatio(pr);
     if (this.starMat) this.starMat.uniforms.uPixelRatio.value = pr;

@@ -8,7 +8,7 @@
 import { describeMediaError, startCamera, type CameraHandle } from './camera';
 import { PrismConfig, type QualityTier } from './config';
 import { DebugOverlay } from './debug';
-import { detectDevice, type DeviceInfo } from './device';
+import { detectDevice, isAndroidWebView, type DeviceInfo } from './device';
 import { InteractionController } from './interaction';
 import { PRESET_LABELS, PRESET_ORDER, type PresetId } from './presets/types';
 import { AiObserver, captureVideoFrame } from './ai/observer';
@@ -133,6 +133,7 @@ export class PrismApp {
     if (initialQuality === 'ultra' || initialQuality === 'high' || initialQuality === 'low' || initialQuality === 'medium') qualitySel.value = initialQuality;
     else qualitySel.value = 'auto';
     this.device = detectDevice();
+    if (typeof document !== 'undefined' && isAndroidWebView()) document.documentElement.dataset.prismRuntime = 'android-webview';
     const resolveQuality = (): QualityTier => qualitySel.value === 'auto' ? this.device.tier : (qualitySel.value as QualityTier);
     const requestedPreset = queryParam('preset') as PresetId | null;
     const initialPreset = requestedPreset && PRESET_ORDER.includes(requestedPreset) ? requestedPreset : PrismConfig.preset;
@@ -253,7 +254,7 @@ export class PrismApp {
         this.cameraHandle &&
         this.interaction.mode === 'hand' &&
         (this.interaction.pointerSpeed > 0.06 || this.interaction.twoHandActive || !!this.interaction.grabbedName);
-      if (handMoving) this.handMotionUntil = Math.max(this.handMotionUntil, now + 120);
+      if (handMoving) this.handMotionUntil = Math.max(this.handMotionUntil, now + (isAndroidWebView() ? 48 : 120));
       if(this.el.qualitySel.value==='auto')this.governor.update(dt);
       if(world&&this.cachedCandidatePreset!==this.scene.currentPreset){this.cachedCandidatePreset=this.scene.currentPreset;this.cachedCandidates=this.scene.grabbables.map(o=>o.name).filter((n):n is string=>n.length>0);}
       if(this.observer.isEnabled)this.observer.tick(now,this.cachedCandidates,this.interaction.gesture);

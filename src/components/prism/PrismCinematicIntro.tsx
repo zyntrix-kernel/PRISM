@@ -11,7 +11,7 @@
  * when the act actually changes, so the overlay never re-renders per frame.
  */
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import type { CSSProperties } from "react";
 import { CAPTIONS, TEAM, TOTAL, actAt, memberAt, type ActId } from "@/lib/prism/intro3d/timeline";
 import { PrismIntroFilm, type FilmQuality } from "@/lib/prism/intro3d/film";
@@ -47,8 +47,15 @@ export default function PrismCinematicIntro({ onComplete, showSkip = true }: Pro
   const [memberIdx, setMemberIdx] = useState(-1);
   const [exiting, setExiting] = useState(false);
   const [poster, setPoster] = useState(false); // no-WebGL fallback
-  const [muted, setMuted] = useState(true); // mirrored from the score singleton
-  const [armed, setArmed] = useState(false); // true once an AudioContext exists
+
+  /*
+   * Sound state lives in the score singleton (an external store) — reading
+   * it through useSyncExternalStore keeps the chip honest without ever
+   * calling setState inside an effect (CI lint + render cascade safe).
+   */
+  const store = prismScore();
+  const muted = useSyncExternalStore(store.subscribe, () => store.isMuted, () => false);
+  const armed = useSyncExternalStore(store.subscribe, () => store.hasContext, () => false);
 
   useEffect(() => {
     onCompleteRef.current = onComplete;
@@ -81,11 +88,8 @@ export default function PrismCinematicIntro({ onComplete, showSkip = true }: Pro
     // first gesture; before that the film simply plays silent, never blocked.
     const score = prismScore();
     score.buildScore();
-    setMuted(score.isMuted);
-    setArmed(score.hasContext);
     const unlock = () => {
       score.unlock();
-      setArmed(score.hasContext);
     };
     // Capture phase — arms audio BEFORE any element handler runs, so even the
     // very first click's cue has a live context (bubble listeners fire late).
@@ -213,13 +217,9 @@ export default function PrismCinematicIntro({ onComplete, showSkip = true }: Pro
       // First activation — create the context and let the score in.
       score.setMuted(false);
       score.unlock();
-      setMuted(false);
-      setArmed(true);
       return;
     }
-    const next = !score.isMuted;
-    score.setMuted(next);
-    setMuted(next);
+    score.setMuted(!score.isMuted);
   }, []);
 
   const caption = captionIdx >= 0 ? CAPTIONS[captionIdx] : null;

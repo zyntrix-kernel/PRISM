@@ -44,6 +44,8 @@ export class PrismScore {
   private lastT = 0;
   private finished = false;
   private muted = false;
+  /** React external-store listeners — notified when mute/armed state flips. */
+  private listeners = new Set<() => void>();
 
   constructor() {
     if (typeof window !== "undefined") {
@@ -53,6 +55,23 @@ export class PrismScore {
 
   get isMuted(): boolean {
     return this.muted;
+  }
+
+  /**
+   * React 18 external-store plumbing. Components read isMuted / hasContext /
+   * unlocked via useSyncExternalStore instead of mirroring them into local
+   * state inside effects (which the hooks lint rule — and cascading renders
+   * — rightly forbid).
+   */
+  subscribe = (listener: () => void): (() => void) => {
+    this.listeners.add(listener);
+    return () => {
+      this.listeners.delete(listener);
+    };
+  };
+
+  private emit(): void {
+    this.listeners.forEach((listener) => listener());
   }
 
   /** True once an AudioContext exists (i.e. the user has interacted). */
@@ -89,6 +108,7 @@ export class PrismScore {
       this.noiseBuf = this.makeNoise(this.ctx);
     }
     if (this.ctx.state === "suspended") void this.ctx.resume();
+    this.emit();
   }
 
   setMuted(muted: boolean): void {
@@ -113,6 +133,7 @@ export class PrismScore {
         this.master.gain.linearRampToValueAtTime(0.9, now + 0.6);
       }
     }
+    this.emit();
   }
 
   /** Called from the film render hook with current film time (seconds). */

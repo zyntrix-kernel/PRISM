@@ -2091,3 +2091,29 @@ video#prism-webcam.live + #prism-webcam-frame .prism-webcam-placeholder {
     opacity: 0.66;
   }
 }
+
+/* ── Quality gallery rows — horizontal variant of the preset card ────────── */
+.prism-preset-card.prism-quality-card {
+  flex-direction: row;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+}
+
+.prism-quality-card .prism-quality-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+/* ── HUD brand mark — the PRISM crystal, replacing the generic chip ──────── */
+#prism-hud-title .prism-mark-img {
+  width: 24px;
+  height: 24px;
+  object-fit: contain;
+  flex-shrink: 0;
+  filter: drop-shadow(0 0 7px rgba(125, 211, 252, 0.5));
+  user-select: none;
+  -webkit-user-drag: none;
+}

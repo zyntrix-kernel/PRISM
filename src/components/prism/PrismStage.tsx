@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { PrismApp, type PrismState } from "@/lib/prism/app";
 import { prismScore } from "@/lib/prism/audio";
 import "@/lib/prism/prism.css";
@@ -64,6 +64,16 @@ const PRESET_VISUALS: Record<string, { icon: LucideIcon; hue: string; blurb: str
   ]),
 );
 
+/* Quality tiers rendered with the same visual language as the worlds picker. */
+const QUALITY_ORDER = ["auto", "ultra", "high", "medium", "low"] as const;
+const QUALITY_VISUALS: Record<string, { icon: LucideIcon; hue: string; blurb: string }> = {
+  auto: { icon: Gauge, hue: "125, 211, 252", blurb: "Adaptive — trades effects for a locked frame rate" },
+  ultra: { icon: Sparkles, hue: "196, 132, 252", blurb: "Everything maxed — bloom, textures, full particles" },
+  high: { icon: Sun, hue: "94, 234, 212", blurb: "Procedural planet textures + bloom glow" },
+  medium: { icon: Disc, hue: "250, 204, 21", blurb: "Balanced look with lighter particle fields" },
+  low: { icon: Zap, hue: "148, 163, 184", blurb: "Featherweight — keeps weak GPUs realtime" },
+};
+
 /*
  * Startup phase machine:
  *   film — the "FIRST LIGHT" ZYNASH LABS cinematic owns the machine.
@@ -99,12 +109,18 @@ export default function PrismStage() {
   const [state, setState] = useState<PrismState | null>(null);
   const [app, setApp] = useState<PrismApp | null>(null);
   const [presetOpen, setPresetOpen] = useState(false);
+  const [qualityOpen, setQualityOpen] = useState(false);
   const [cmdOpen, setCmdOpen] = useState(false);
   const [onboardMin, setOnboardMin] = useState(false);
-  const [sfxMuted, setSfxMuted] = useState(true);
-  // True only when an AudioContext actually exists AND is running — the chip
-  // may only read "on" when sound is genuinely audible, never before.
-  const [sfxArmed, setSfxArmed] = useState(false);
+
+  /*
+   * Sound state lives in the score singleton (external store). Reading it via
+   * useSyncExternalStore keeps the chip honest — and avoids setState-inside-
+   * effect, which the hooks lint rule (CI) rightly rejects.
+   */
+  const scoreStore = prismScore();
+  const sfxMuted = useSyncExternalStore(scoreStore.subscribe, () => scoreStore.isMuted, () => false);
+  const sfxArmed = useSyncExternalStore(scoreStore.subscribe, () => scoreStore.unlocked, () => false);
 
   /*
    * App-phase audio: the film score hands the AudioContext over to the
@@ -116,8 +132,6 @@ export default function PrismStage() {
   useEffect(() => {
     if (phase !== "live") return;
     const score = prismScore();
-    setSfxMuted(score.isMuted);
-    setSfxArmed(score.unlocked);
     score.restoreMaster(0.85, 0.9);
 
     /*
@@ -139,7 +153,6 @@ export default function PrismStage() {
      * fire after the target — that ordering used to swallow the first sound). */
     const unlock = () => {
       score.unlock();
-      setSfxArmed(score.unlocked);
       playBoot();
     };
     window.addEventListener("pointerdown", unlock, true);
@@ -198,12 +211,7 @@ export default function PrismStage() {
 
   const toggleAppSfx = useCallback(() => {
     const score = prismScore();
-    const next = !score.isMuted;
-    score.setMuted(next);
-    setSfxMuted(next);
-    // Unmuting calls unlock() inside this gesture — re-sync the armed light
-    // immediately so the chip never claims "on" without a running context.
-    setSfxArmed(score.unlocked);
+    score.setMuted(!score.isMuted);
   }, []);
 
   // Cmd/Ctrl + K opens the command palette
@@ -393,16 +401,16 @@ export default function PrismStage() {
         <div id="prism-webcam-frame" aria-hidden="true">
           <div className="prism-webcam-placeholder">
             <img
-              src="/zynash-logo.png"
-              alt="ZYNASH LABS"
+              src="/prism-logo-icon.png"
+              alt="PRISM"
               className="prism-wcam-logo"
               style={{
-                width: 72,
-                height: 72,
+                width: 118,
+                height: "auto",
                 objectFit: "contain",
-                marginBottom: 4,
-                opacity: 0.9,
-                filter: "drop-shadow(0 0 12px rgba(125, 211, 252, 0.3))",
+                marginBottom: 2,
+                opacity: 0.95,
+                filter: "drop-shadow(0 0 14px rgba(125, 211, 252, 0.35))",
               }}
             />
             <span className="prism-wcam-brand">ZYNASH LABS</span>
@@ -414,7 +422,13 @@ export default function PrismStage() {
       {/* ===== Top HUD — spatial control bar ===== */}
       <header id="prism-hud" className="prism-glass prism-glass-hover">
         <div id="prism-hud-title">
-          <span className="prism-mark" aria-hidden="true" />
+          <img
+            src="/prism-logo-mark.png"
+            alt=""
+            aria-hidden="true"
+            className="prism-mark-img"
+            draggable={false}
+          />
           <span className="prism-wordmark">PRISM</span>
         </div>
         <div
@@ -545,34 +559,62 @@ export default function PrismStage() {
           {/* Premium separator between primary actions and utility group */}
           <span className="prism-btn-sep" aria-hidden="true" />
 
-          {/* Quality dropdown — directly in the top bar (moved from settings) */}
-          <select
-            id="prism-sel-quality"
-            ref={setEl<HTMLSelectElement>("qualitySel")}
-            title="Render quality"
-            aria-label="Render quality"
-            defaultValue="auto"
-            style={{
-              background: "rgba(255,255,255,0.06)",
-              border: "1px solid var(--glass-line)",
-              borderRadius: "var(--radius-pill)",
-              color: "var(--hud-fg-dim)",
-              fontFamily: "inherit",
-              fontSize: 11,
-              fontWeight: 500,
-              padding: "5px 8px",
-              cursor: "pointer",
-              outline: "none",
-              appearance: "none",
-              WebkitAppearance: "none",
-            }}
-          >
-            <option value="auto">Auto</option>
-            <option value="ultra">Ultra</option>
-            <option value="high">High</option>
-            <option value="medium">Medium</option>
-            <option value="low">Low</option>
-          </select>
+          {/* Quality picker — same dreamy gallery as the worlds picker */}
+          <div style={{ position: "relative" }}>
+            <button
+              type="button"
+              className={`prism-pressable ${qualityOpen ? "active" : ""}`}
+              onClick={() => setQualityOpen((v) => !v)}
+              aria-label="Render quality"
+              aria-expanded={qualityOpen}
+              title="Render quality"
+              style={{ display: "flex", alignItems: "center", gap: 7 }}
+            >
+              {(() => {
+                const QIcon = QUALITY_VISUALS[quality].icon;
+                return (
+                  <QIcon
+                    size={14}
+                    style={{ color: `rgb(${QUALITY_VISUALS[quality].hue})` }}
+                  />
+                );
+              })()}
+              <span style={{ textTransform: "capitalize" }}>{quality}</span>
+              <ChevronRight
+                size={13}
+                style={{
+                  transform: qualityOpen ? "rotate(90deg)" : "rotate(0deg)",
+                  transition: "transform 140ms cubic-bezier(0.2,0,0,1)",
+                }}
+              />
+            </button>
+            {qualityOpen && (
+              <QualityGallery
+                current={quality}
+                onPick={(q) => {
+                  app?.setQuality(q);
+                  setQualityOpen(false);
+                }}
+                onClose={() => setQualityOpen(false)}
+              />
+            )}
+
+            {/* Hidden native select kept in sync for the engine's change events */}
+            <select
+              id="prism-sel-quality"
+              ref={setEl<HTMLSelectElement>("qualitySel")}
+              title="Render quality"
+              aria-label="Render quality"
+              defaultValue="auto"
+              style={{ position: "absolute", opacity: 0, pointerEvents: "none", width: 1, height: 1 }}
+            >
+              <option value="auto">Auto</option>
+              <option value="ultra">Ultra</option>
+              <option value="high">High</option>
+              <option value="medium">Medium</option>
+              <option value="low">Low</option>
+            </select>
+          </div>
 
           {/* AI toggle — directly in the top bar */}
           <button
@@ -819,8 +861,8 @@ export default function PrismStage() {
         {/* Credits */}
         <div className="prism-credits">
           <div className="prism-credits-logo">
-            <img src="/zynash-logo.png" alt="ZYNASH LABS" style={{ width: 28, height: 28, objectFit: "contain" }} />
-            <span className="prism-credits-brand">ZYNASH LABS</span>
+            <img src="/prism-logo-mark.png" alt="PRISM" style={{ width: 30, height: 30, objectFit: "contain" }} />
+            <span className="prism-credits-brand">PRISM</span>
           </div>
           <p className="prism-credits-tagline">
             PRISM — Projected Reality Interaction &amp; Spatial Manipulation
@@ -984,6 +1026,124 @@ function PresetGallery({
                       right: 8,
                       color: `rgb(${v.hue})`,
                       filter: `drop-shadow(0 0 4px rgba(${v.hue}, 0.6))`,
+                    }}
+                  />
+                )}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+    </>
+  );
+}
+
+/*
+ * Quality gallery — single-column sibling of the PresetGallery. Same glass
+ * panel, accent bar and active-check styling; each row reads icon → name →
+ * blurb so the tradeoffs are obvious at a glance.
+ */
+function QualityGallery({
+  current,
+  onPick,
+  onClose,
+}: {
+  current: string;
+  onPick: (id: string) => void;
+  onClose: () => void;
+}) {
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
+  return (
+    <>
+      <div
+        onClick={onClose}
+        style={{ position: "fixed", inset: 0, zIndex: 30 }}
+        aria-hidden="true"
+      />
+      <div
+        className="prism-glass prism-glass-premium prism-dropdown-enter"
+        style={{
+          position: "absolute",
+          top: "calc(100% + 8px)",
+          right: 0,
+          minWidth: 292,
+          padding: 10,
+          borderRadius: "var(--radius-lg)",
+          zIndex: 31,
+        }}
+      >
+        <div style={{ display: "grid", gap: 6 }}>
+          {QUALITY_ORDER.map((id) => {
+            const v = QUALITY_VISUALS[id];
+            const active = id === current;
+            return (
+              <button
+                key={id}
+                type="button"
+                className="prism-preset-card prism-quality-card"
+                onClick={() => onPick(id)}
+                style={{
+                  background: active ? `rgba(${v.hue}, 0.22)` : undefined,
+                  borderColor: active ? `rgba(${v.hue}, 0.6)` : undefined,
+                  boxShadow: active
+                    ? `0 0 16px rgba(${v.hue}, 0.35), inset 0 0.5px 0 rgba(255,255,255,0.06)`
+                    : undefined,
+                  "--accent-hue": `rgb(${v.hue})`,
+                } as React.CSSProperties}
+              >
+                <span
+                  className="prism-preset-accent-bar"
+                  aria-hidden="true"
+                  style={{
+                    background: active
+                      ? `rgb(${v.hue})`
+                      : `linear-gradient(180deg, rgba(${v.hue}, 0.9), rgba(${v.hue}, 0))`,
+                    opacity: active ? 1 : undefined,
+                  }}
+                />
+                {(() => {
+                  const QIcon = v.icon;
+                  return (
+                    <QIcon
+                      size={20}
+                      style={{
+                        color: `rgb(${v.hue})`,
+                        filter: `drop-shadow(0 0 8px rgba(${v.hue}, 0.6))`,
+                        flexShrink: 0,
+                      }}
+                    />
+                  );
+                })()}
+                <span className="prism-quality-copy">
+                  <span
+                    style={{
+                      fontSize: 13,
+                      fontWeight: 600,
+                      textTransform: "capitalize",
+                      letterSpacing: 0.2,
+                    }}
+                  >
+                    {id}
+                  </span>
+                  <span style={{ fontSize: 11, color: "var(--hud-fg-faint)", lineHeight: 1.4 }}>
+                    {v.blurb}
+                  </span>
+                </span>
+                {active && (
+                  <Check
+                    size={14}
+                    style={{
+                      marginLeft: "auto",
+                      color: `rgb(${v.hue})`,
+                      filter: `drop-shadow(0 0 4px rgba(${v.hue}, 0.6))`,
+                      flexShrink: 0,
                     }}
                   />
                 )}

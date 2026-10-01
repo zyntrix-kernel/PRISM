@@ -78,3 +78,26 @@
     -webkit-tap-highlight-color: transparent;
   }
 }
+
+
+/* Android System WebView compositor budget. Chrome can often hide the cost of
+   stacked backdrop filters; WebView pays that cost alongside camera + WebGL.
+   Keep the glass language through translucent fills/borders while removing
+   full-surface backdrop reconstruction on the native exhibit build. */
+@media (pointer: coarse) {
+  html[data-prism-runtime="android-webview"] .prism-glass,
+  html[data-prism-runtime="android-webview"] .prism-glass-premium,
+  html[data-prism-runtime="android-webview"] #prism-hud,
+  html[data-prism-runtime="android-webview"] .prism-command-top,
+  html[data-prism-runtime="android-webview"] .prism-command-focus,
+  html[data-prism-runtime="android-webview"] .prism-command-left,
+  html[data-prism-runtime="android-webview"] .prism-command-right,
+  html[data-prism-runtime="android-webview"] .prism-command-inspection {
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+  }
+
+  html[data-prism-runtime="android-webview"] .prism-orb {
+    filter: blur(28px);
+  }
+}

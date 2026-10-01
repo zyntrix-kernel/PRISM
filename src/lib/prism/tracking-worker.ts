@@ -208,7 +208,8 @@ async function runTrack(track: MediaStreamTrack, session: number): Promise<void>
   } catch (err) {
     self.postMessage({ type: 'pump-error', message: err instanceof Error ? err.message : String(err) });
   } finally {
-    if (latestFrame) latestFrame.close();
+    // The active reader/inference paths own their frames. Any frame observed
+    // during shutdown is closed in the drain loop before exit.
     try { await reader?.cancel(); } catch {}
     reader = null;
     if (currentReaderCancel) currentReaderCancel = null;

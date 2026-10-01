@@ -79,9 +79,22 @@ async function init(): Promise<void> {
 
 let trackSession = 0;
 let currentTrack: MediaStreamTrack | null = null;
+let currentReaderCancel: (() => void) | null = null;
+let currentWakeInference: (() => void) | null = null;
 
 async function runTrack(track: MediaStreamTrack, session: number): Promise<void> {
   currentTrack = track;
+  let reader: ReadableStreamDefaultReader<VideoFrame> | null = null;
+  let latestFrame: VideoFrame | null = null;
+  let latestVersion = 0;
+  let consumedVersion = 0;
+  let readerDone = false;
+  let wakeInference: (() => void) | null = null;
+  let clockOffsetMs: number | null = null;
+
+  currentReaderCancel = () => { void reader?.cancel(); };
+  currentWakeInference = () => { wakeInference?.(); wakeInference = null; };
+
   try {
     const Processor = (globalThis as typeof globalThis & {
       MediaStreamTrackProcessor?: TrackProcessorCtor;
@@ -91,22 +104,59 @@ async function runTrack(track: MediaStreamTrack, session: number): Promise<void>
       return;
     }
 
-    // One-frame buffer is critical for interaction: when inference is slower
-    // than the camera, the processor discards old frames rather than building
-    // a latency queue. The next read is therefore as fresh as the platform
-    // can provide.
     const processor = new Processor({ track, maxBufferSize: 1 });
-    const reader = processor.readable.getReader();
+    reader = processor.readable.getReader();
 
-    try {
+    // Keep draining the camera while inference is running. The previous
+    // sequential read -> infer loop could leave the single buffered frame
+    // older than the newest camera sample. Here we always retain ONLY the
+    // newest frame and close the replaced frame immediately.
+    const drainCamera = async (): Promise<void> => {
+      try {
+        while (session === trackSession) {
+          const next = await reader!.read();
+          if (next.done || session !== trackSession) break;
+          const frame = next.value;
+          const mediaMs = frame.timestamp / 1000;
+          const nowMs = performance.now();
+          const observedOffset = nowMs - mediaMs;
+          clockOffsetMs = clockOffsetMs === null
+            ? observedOffset
+            : clockOffsetMs + (observedOffset - clockOffsetMs) * 0.02;
+
+          if (latestFrame) latestFrame.close();
+          latestFrame = frame;
+          latestVersion += 1;
+          wakeInference?.();
+          wakeInference = null;
+        }
+      } finally {
+        readerDone = true;
+        wakeInference?.();
+        wakeInference = null;
+      }
+    };
+
+    const inferNewest = async (): Promise<void> => {
       while (session === trackSession) {
-        const next = await reader.read();
-        if (next.done || session !== trackSession) break;
-        const frame = next.value;
+        if (consumedVersion === latestVersion) {
+          if (readerDone) break;
+          await new Promise<void>((resolve) => { wakeInference = resolve; });
+          continue;
+        }
+
+        const frame = latestFrame;
+        latestFrame = null;
+        consumedVersion = latestVersion;
+        if (!frame) continue;
+
         const started = performance.now();
         try {
           if (!landmarker) throw new Error('Tracking worker is not initialized');
           const result = landmarker.detectForVideo(frame, frame.timestamp / 1000);
+          const mediaMs = frame.timestamp / 1000;
+          const captureNowEstimate = mediaMs + (clockOffsetMs ?? (started - mediaMs));
+          const captureAgeMs = Math.max(0, performance.now() - captureNowEstimate);
           const hands = (result.landmarks ?? []).map((landmarks, i) => ({
             landmarks: landmarks.map((p) => ({ x: p.x, y: p.y, z: p.z ?? 0 })),
             handedness: result.handedness?.[i]?.[0]?.categoryName ?? 'Unknown',
@@ -115,10 +165,8 @@ async function runTrack(track: MediaStreamTrack, session: number): Promise<void>
           self.postMessage({
             type: 'result',
             hands,
-            // VideoFrame.timestamp is microseconds; convert to milliseconds
-            // so the main-thread interaction clock uses the actual capture
-            // timeline rather than worker completion time.
-            timestampMs: frame.timestamp / 1000,
+            timestampMs: mediaMs,
+            captureAgeMs,
             inferenceMs: performance.now() - started,
           });
         } catch (err) {
@@ -127,20 +175,21 @@ async function runTrack(track: MediaStreamTrack, session: number): Promise<void>
           frame.close();
         }
       }
-      reader.releaseLock();
-    } catch (err) {
-      self.postMessage({ type: 'pump-error', message: err instanceof Error ? err.message : String(err) });
-    } finally {
-      track.stop();
-      if (currentTrack === track) currentTrack = null;
-    }
+    };
+
+    await Promise.all([drainCamera(), inferNewest()]);
   } catch (err) {
+    self.postMessage({ type: 'pump-error', message: err instanceof Error ? err.message : String(err) });
+  } finally {
+    if (latestFrame) latestFrame.close();
+    try { await reader?.cancel(); } catch {}
+    reader = null;
+    if (currentReaderCancel) currentReaderCancel = null;
+    if (currentWakeInference) currentWakeInference = null;
     track.stop();
     if (currentTrack === track) currentTrack = null;
-    self.postMessage({ type: 'pump-error', message: err instanceof Error ? err.message : String(err) });
   }
 }
-
 self.onmessage = async (event: MessageEvent<Message>) => {
   const message = event.data;
   if (message.type === 'init') {
@@ -157,6 +206,8 @@ self.onmessage = async (event: MessageEvent<Message>) => {
 
   if (message.type === 'stop-track') {
     trackSession += 1;
+    currentReaderCancel?.();
+    currentWakeInference?.();
     currentTrack?.stop();
     currentTrack = null;
     return;

@@ -13,7 +13,6 @@ import type { Landmark, Point2D } from './types';
 
 export type PoseKind = 'PINCH' | 'POINT' | 'OPEN_PALM' | 'FIST' | 'NONE';
 
-// MediaPipe hand landmark indices.
 const WRIST = 0;
 const THUMB_TIP = 4;
 const INDEX_PIP = 6;
@@ -33,55 +32,38 @@ function dist3(a: Landmark, b: Landmark): number {
   return Math.sqrt(dx * dx + dy * dy + dz * dz);
 }
 
-/** Hand size in normalized units; guards against degenerate input. */
 function handScale(landmarks: Landmark[]): number {
   if (landmarks.length < MIDDLE_MCP + 1) return 1e-6;
   return Math.max(1e-6, dist3(landmarks[WRIST], landmarks[MIDDLE_MCP]));
 }
 
-/** Thumb-tip to index-tip distance, normalized by hand size. */
 export function pinchRatio(landmarks: Landmark[]): number {
   if (landmarks.length < INDEX_TIP + 1) return Number.POSITIVE_INFINITY;
   return dist3(landmarks[THUMB_TIP], landmarks[INDEX_TIP]) / handScale(landmarks);
 }
 
-/** Raw (non-debounced) pinch test using the strict enter threshold. */
 function detectPinchRaw(landmarks: Landmark[]): boolean {
   return pinchRatio(landmarks) <= PrismConfig.gestures.pinchEnter;
 }
 
 function isExtended(landmarks: Landmark[], tip: number, pip: number): boolean {
   const ratio = PrismConfig.gestures.extendedRatio;
-  return (
-    dist3(landmarks[tip], landmarks[WRIST]) >
-    dist3(landmarks[pip], landmarks[WRIST]) * ratio
-  );
+  return dist3(landmarks[tip], landmarks[WRIST]) > dist3(landmarks[pip], landmarks[WRIST]) * ratio;
 }
 
-/** Stateless pose classification (no hysteresis — see PinchState). */
 export function classifyPose(landmarks: Landmark[]): PoseKind {
   if (landmarks.length < PINKY_TIP + 1) return 'NONE';
   if (detectPinchRaw(landmarks)) return 'PINCH';
-
   const index = isExtended(landmarks, INDEX_TIP, INDEX_PIP);
   const middle = isExtended(landmarks, MIDDLE_TIP, MIDDLE_PIP);
   const ring = isExtended(landmarks, RING_TIP, RING_PIP);
   const pinky = isExtended(landmarks, PINKY_TIP, PINKY_PIP);
-
   if (index && middle && ring && pinky) return 'OPEN_PALM';
   if (index && !middle && !ring && !pinky) return 'POINT';
   if (!index && !middle && !ring && !pinky) return 'FIST';
   return 'NONE';
 }
 
-/**
- * Time-based debounced pinch latch with hysteresis. Frame COUNT used to be
- * the debounce unit, which made grabs rate-dependent (50 ms at 60 fps,
- * 300 ms at 10 fps — and sub-frame taps vanished entirely on slow cameras).
- * Now the latch needs BOTH a minimum frame count (noise rejection) AND a
- * minimum held time (rate invariance), fed with tracking-clock deltas:
- * identical feel from sluggish to high-speed cameras.
- */
 export class PinchState {
   private pinching = false;
   private runFrames = 0;
@@ -99,17 +81,10 @@ export class PinchState {
           this.runFrames = 0;
           this.runMs = 0;
         }
-      } else {
-        this.runFrames = 0;
-        this.runMs = 0;
-      }
+      } else { this.runFrames = 0; this.runMs = 0; }
     } else {
-      // While pinching, use the looser exit threshold via pinchRatio check
-      // done by the caller: pass `stillPinching` computed with pinchExit.
-      if (rawPinch) {
-        this.runFrames = 0;
-        this.runMs = 0;
-      } else {
+      if (rawPinch) { this.runFrames = 0; this.runMs = 0; }
+      else {
         this.runFrames += 1;
         this.runMs += dt;
         if (this.runFrames >= cfg.pinchMinFrames && this.runMs >= cfg.pinchExitMs) {
@@ -122,59 +97,27 @@ export class PinchState {
     return this.pinching;
   }
 
-  /** Convenience: feeds landmarks directly, applying the exit threshold while latched. */
   updateFromLandmarks(landmarks: Landmark[], dtMs = 16.7): boolean {
     if (!this.pinching) return this.update(detectPinchRaw(landmarks), dtMs);
-    const stillPinching = pinchRatio(landmarks) <= PrismConfig.gestures.pinchExit;
-    return this.update(stillPinching, dtMs);
+    return this.update(pinchRatio(landmarks) <= PrismConfig.gestures.pinchExit, dtMs);
   }
 
-  reset(): void {
-    this.pinching = false;
-    this.runFrames = 0;
-    this.runMs = 0;
-  }
-
-  get isPinching(): boolean {
-    return this.pinching;
-  }
+  reset(): void { this.pinching = false; this.runFrames = 0; this.runMs = 0; }
+  get isPinching(): boolean { return this.pinching; }
 }
 
 const clampNum = (v: number, lo: number, hi: number): number => Math.min(hi, Math.max(lo, v));
 
-/**
- * Self-calibrating pinch thresholds. Every hand and camera reads a different
- * "open" distance, so fixed thresholds are always wrong for someone. The
- * calibrator watches clearly-open hands (pointing or open palm — never
- * pinching frames) and eases the enter/exit thresholds toward that user's
- * own geometry, hard-clamped to sane bounds. Writes go straight into the
- * central config so every consumer (latch, gas pedal, debug) stays in sync.
- */
 export class PinchCalibrator {
   private baseline = 1.0;
   private openSamples = 0;
-
-  reset(): void {
-    this.baseline = 1.0;
-    this.openSamples = 0;
-  }
-
-  get openBaseline(): number {
-    return this.baseline;
-  }
-
-  /** Feed the live ratio; only openly-open frames move the baseline. */
+  reset(): void { this.baseline = 1.0; this.openSamples = 0; }
+  get openBaseline(): number { return this.baseline; }
   observe(ratio: number, handIsOpen: boolean): void {
     if (!handIsOpen || !Number.isFinite(ratio) || ratio <= 0.3 || ratio >= 2.0) return;
     this.baseline += (ratio - this.baseline) * 0.04;
     this.openSamples += 1;
-    // Warmup: a stray frame must never yank the thresholds. Only publish
-    // after enough open samples to trust the baseline.
-    // Reduced from 30 → 10 so calibration kicks in FAST on first load
-    // (critical for low-quality cameras where every frame counts).
     if (this.openSamples < 10) return;
-    // WIDE clamps to match the very-forgiving pinchEnter/pinchExit defaults
-    // (tuned for low-quality cameras). enter up to 0.45, exit up to 0.65.
     const enter = clampNum(this.baseline * 0.45, 0.25, 0.45);
     const exit = clampNum(this.baseline * 0.68, 0.42, 0.65);
     const g = PrismConfig.gestures;
@@ -183,102 +126,70 @@ export class PinchCalibrator {
   }
 }
 
-/** Per-hand gesture state: pose + debounced pinch. Point + pinch is the
- *  entire hand vocabulary — everything else was cut for determinism.
- *
- *  COAST: on a slow camera (5-10 fps), MediaPipe often loses the hand
- *  entirely for 1-3 frames during a pinch (the hand shape changes as
- *  fingers come together). Without a coast, this immediately drops the
- *  grab. The coast keeps the last pinch state alive for COAST_MS, so
- *  brief tracking gaps don't kill the interaction. */
-const PINCH_COAST_MS = 400; // keep pinch alive through 400ms of tracking loss
+const PINCH_COAST_MS = 400;
 
 export class GestureTracker {
   readonly pinch = new PinchState();
   pose: PoseKind = 'NONE';
   private lastLandmarkAt = 0;
   private wasPinching = false;
-
   update(landmarks: Landmark[] | null, dtMs: number): void {
-    void dtMs;
     const now = typeof performance !== 'undefined' ? performance.now() : Date.now();
     if (!landmarks) {
-      // Tracking lost. COAST: if we were pinching recently, keep the pinch
-      // alive for PINCH_COAST_MS instead of immediately resetting. This is
-      // the #1 fix for slow cameras — they drop frames mid-pinch constantly.
-      if (this.wasPinching && now - this.lastLandmarkAt < PINCH_COAST_MS) {
-        // Keep the pinch latched; just don't update pose (no landmarks).
-        // The pose stays PINCH so the interaction system keeps the grab.
-        this.pose = 'PINCH';
-      } else {
-        this.pinch.reset();
-        this.wasPinching = false;
-        this.pose = 'NONE';
-      }
+      if (this.wasPinching && now - this.lastLandmarkAt < PINCH_COAST_MS) this.pose = 'PINCH';
+      else { this.pinch.reset(); this.wasPinching = false; this.pose = 'NONE'; }
       return;
     }
     this.lastLandmarkAt = now;
     this.pinch.updateFromLandmarks(landmarks, dtMs);
     this.wasPinching = this.pinch.isPinching;
-    // A latched pinch overrides the raw pose so grab survives finger noise.
     this.pose = this.pinch.isPinching ? 'PINCH' : classifyPose(landmarks);
   }
-
-  reset(): void {
-    this.pinch.reset();
-    this.wasPinching = false;
-    this.lastLandmarkAt = 0;
-    this.pose = 'NONE';
-  }
+  reset(): void { this.pinch.reset(); this.wasPinching = false; this.lastLandmarkAt = 0; this.pose = 'NONE'; }
 }
 
 export interface TwoHandDelta {
-  /** Multiplicative scale factor since the two-hand gesture began (1 = unchanged). */
+  /** Multiplicative scale factor from gesture entry. */
   scaleRatio: number;
-  /** Signed rotation (radians) of the hand-to-hand axis since gesture began. */
+  /** Signed, continuously unwrapped rotation from gesture entry. */
   angleDelta: number;
 }
 
-/**
- * Two-hand transform gesture: while both hands pinch, hand separation maps
- * to zoom and axis twist maps to rotation. Baseline is captured on entry so
- * deltas are drift-free.
- */
+/** Two-hand pinch transform: separation controls zoom, axis angle controls rotation. */
 export class TwoHandGesture {
   private active = false;
   private baseDistance = 0;
   private baseAngle = 0;
+  private previousAngle = 0;
 
-  get isActive(): boolean {
-    return this.active;
-  }
+  get isActive(): boolean { return this.active; }
 
-  /**
-   * @param a first pinch point (normalized image coords) or null
-   * @param b second pinch point or null
-   */
   update(a: Point2D | null, b: Point2D | null): TwoHandDelta | null {
-    if (!a || !b) {
-      this.active = false;
-      return null;
-    }
+    if (!a || !b) { this.active = false; return null; }
     const dx = b.x - a.x;
     const dy = b.y - a.y;
     const distance = Math.hypot(dx, dy);
-    const angle = Math.atan2(dy, dx);
+    const rawAngle = Math.atan2(dy, dx);
     if (!this.active) {
       this.active = true;
       this.baseDistance = Math.max(1e-6, distance);
-      this.baseAngle = angle;
+      this.baseAngle = rawAngle;
+      this.previousAngle = rawAngle;
       return { scaleRatio: 1, angleDelta: 0 };
     }
+
+    // Unwrap across +/-PI so a hand-axis crossing the boundary never causes
+    // a giant reverse rotation jump.
+    let stepAngle = rawAngle - this.previousAngle;
+    if (stepAngle > Math.PI) stepAngle -= Math.PI * 2;
+    else if (stepAngle < -Math.PI) stepAngle += Math.PI * 2;
+    this.previousAngle += stepAngle;
+
     return {
       scaleRatio: distance / this.baseDistance,
-      angleDelta: angle - this.baseAngle,
+      angleDelta: this.previousAngle - this.baseAngle,
     };
   }
 
-  reset(): void {
-    this.active = false;
-  }
+  reset(): void { this.active = false; this.baseDistance = 0; this.baseAngle = 0; this.previousAngle = 0; }
 }

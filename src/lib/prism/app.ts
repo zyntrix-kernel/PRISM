@@ -119,6 +119,7 @@ export class PrismApp {
   private listeners = new Set<PrismStateListener>();
   private lastStateStr = '';
   private presentationMode = false;
+  private handMotionUntil = 0;
   private readonly uiAbort = new AbortController();
 
   constructor(elements: PrismElements) {
@@ -195,6 +196,7 @@ export class PrismApp {
     this.tracker.stop();
     this.cameraHandle?.stop();
     this.cameraHandle=null;
+    this.handMotionUntil=0;
     this.requestFrame();
     this.el.video.classList.remove('live');
     this.el.cameraBtn.classList.remove('active');
@@ -247,6 +249,11 @@ export class PrismApp {
       const showDebug=this.debug.isVisible;
       const dt=Math.min(.1,Math.max(1e-4,(now-this.last)/1000));this.last=now;this.elapsed+=dt;this.renderFps+=(1/dt-this.renderFps)*.05;
       const frame=this.tracker.getFrame();this.interaction.update(dt,frame);const world=this.scene.currentWorld;
+      const handMoving =
+        this.cameraHandle &&
+        this.interaction.mode === 'hand' &&
+        (this.interaction.pointerSpeed > 0.06 || this.interaction.twoHandActive || !!this.interaction.grabbedName);
+      if (handMoving) this.handMotionUntil = Math.max(this.handMotionUntil, now + 120);
       if(this.el.qualitySel.value==='auto')this.governor.update(dt);
       if(world&&this.cachedCandidatePreset!==this.scene.currentPreset){this.cachedCandidatePreset=this.scene.currentPreset;this.cachedCandidates=this.scene.grabbables.map(o=>o.name).filter((n):n is string=>n.length>0);}
       if(this.observer.isEnabled)this.observer.tick(now,this.cachedCandidates,this.interaction.gesture);
@@ -275,7 +282,7 @@ export class PrismApp {
       // Static scene + camera active: wait for the next meaningful tracker
       // result. Camera mode therefore does not burn a WebGL frame when nothing
       // changed. Camera off keeps the existing continuous animation behavior.
-      if(!this.cameraHandle && !this.disposed) this.requestFrame();
+      if((!this.cameraHandle || now < this.handMotionUntil) && !this.disposed) this.requestFrame();
     }catch(err){const full=`Frame fault (${err instanceof Error?err.message:String(err)}) — continuing; report this text.`;this.setStatus('Frame fault — continuing',full);console.error('[PRISM] frame fault:',err);}
   };
 

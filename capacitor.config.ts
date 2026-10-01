@@ -4,7 +4,6 @@ const config: CapacitorConfig = {
   appId: 'com.zynashlabs.prism',
   appName: 'PRISM',
   webDir: 'out',
-  bundledWebRuntime: false,
 };
 
 export default config;

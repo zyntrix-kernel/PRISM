@@ -44,6 +44,10 @@ export class InteractionController {
   // cursor smoothness from tracking rate — a 10fps camera produces a smooth
   // 60fps cursor instead of a jerky 10fps one.
   private readonly pointerTarget = new THREE.Vector2(0, 0);
+  // Render-rate velocity for the critically-damped hand cursor. This keeps
+  // the cursor continuous between camera samples without adding a second
+  // heavy smoothing layer.
+  private readonly pointerRenderVelocity = new THREE.Vector2(0, 0);
   // Adaptive pointer: self-retunes to any camera on earth (5–120 fps),
   // outlier-gates spikes, and predicts ~2 frames ahead to hide latency.
   private readonly pointerFilter = new AdaptivePointerFilter({
@@ -444,15 +448,36 @@ export class InteractionController {
       }
     }
 
-    // ── RENDER-RATE POINTER SMOOTHING ─────────────────────────────────
-    // The tracking loop sets pointerTarget at 10fps. The render loop runs at
-    // 60fps. Chase the target with a single exponential lerp — light enough
-    // to feel like a direct 1:1 extension of the hand, heavy enough to kill
-    // tracking jitter. Rate 22 = ~31% per frame at 60fps — natural + responsive.
+    // ── RENDER-RATE POINTER FOLLOW ───────────────────────────────────────
+    // Tracking arrives at a lower cadence than rendering. Use an exact
+    // critically-damped spring instead of a plain lerp so the visual cursor
+    // stays fluid without carrying a large "rubber-band" delay.
     if (this.mode === 'hand') {
-      const damp = 1 - Math.exp(-22 * dt);
-      this.pointerNdc.x += (this.pointerTarget.x - this.pointerNdc.x) * damp;
-      this.pointerNdc.y += (this.pointerTarget.y - this.pointerNdc.y) * damp;
+      const stepDt = Math.min(Math.max(dt, 1 / 240), 0.05);
+      const speed = this.pointerFilter.pointerSpeed;
+      const omega = 30 + Math.min(speed * 3.5, 12);
+      const decay = Math.exp(-omega * stepDt);
+
+      const ex = this.pointerNdc.x - this.pointerTarget.x;
+      const ey = this.pointerNdc.y - this.pointerTarget.y;
+      const vx = this.pointerRenderVelocity.x;
+      const vy = this.pointerRenderVelocity.y;
+      const tx = (vx + omega * ex) * stepDt;
+      const ty = (vy + omega * ey) * stepDt;
+
+      this.pointerNdc.x = this.pointerTarget.x + (ex + tx) * decay;
+      this.pointerNdc.y = this.pointerTarget.y + (ey + ty) * decay;
+      this.pointerRenderVelocity.x = (vx - omega * tx) * decay;
+      this.pointerRenderVelocity.y = (vy - omega * ty) * decay;
+
+      // Never allow the spring to accumulate velocity after a long frame.
+      const maxVelocity = 12;
+      const renderSpeed = Math.hypot(this.pointerRenderVelocity.x, this.pointerRenderVelocity.y);
+      if (renderSpeed > maxVelocity) {
+        const k = maxVelocity / renderSpeed;
+        this.pointerRenderVelocity.x *= k;
+        this.pointerRenderVelocity.y *= k;
+      }
     }
 
     // Unified action edges (hand pinch or non-orbit mouse hold / click).
@@ -575,6 +600,8 @@ export class InteractionController {
       this.tmpNdcSample.x = raw.x;
       this.tmpNdcSample.y = raw.y;
       this.pointerFilter.reset(this.tmpNdcSample);
+      this.pointerRenderVelocity.set(0, 0);
+      this.pointerNdc.set(raw.x, raw.y);
       this.lastRaw.x = raw.x;
       this.lastRaw.y = raw.y;
     } else {
@@ -583,7 +610,7 @@ export class InteractionController {
       // and vanishes the moment the hand genuinely moves.
       const dead =
         this.pointerFilter.pointerSpeed < 0.3
-          ? 0.0015 + Math.min(this.pointerFilter.noisePerSample * 0.3, 0.004)
+          ? 0.0007 + Math.min(this.pointerFilter.noisePerSample * 0.18, 0.0025)
           : 0;
       if (dead > 0 && Math.hypot(raw.x - this.lastRaw.x, raw.y - this.lastRaw.y) < dead) {
         raw.x = this.lastRaw.x;

@@ -7,7 +7,7 @@ export const PrismConfig = {
     fallbackModelUrl: 'https://huggingface.co/Leo-TX/mediapipe-hand/resolve/main/hand_landmarker.task?download=true',
     wasmUrl: './wasm',
     cdnWasmUrl: 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@1.0.1/wasm',
-    numHands: 1,
+    numHands: 2,
     minHandDetectionConfidence: 0.25,
     minHandPresenceConfidence: 0.25,
     minTrackingConfidence: 0.25,
@@ -31,7 +31,7 @@ export const PrismConfig = {
   bloom: { strength: 0.75, radius: 0.5, threshold: 0.85 },
   preset: 'space' as PresetId,
   models: {
-    hand: { backend: 'mediapipe', precision: 'float16', hands: 1, maxInferenceFps: 60 },
+    hand: { backend: 'mediapipe', precision: 'float16', hands: 2, maxInferenceFps: 60 },
     vision: { modelId: 'onnx-community/FastVLM-0.5B-ONNX', intervalMs: 3000, frameWidth: 448, maxTokens: 96 },
   },
   audio: { sfxEnabledByDefault: true, masterGain: 0.9 },

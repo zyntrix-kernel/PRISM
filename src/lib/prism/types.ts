@@ -21,8 +21,10 @@ export interface TrackedHand {
 /** Snapshot of all hands detected in one video frame. */
 export interface HandFrame {
   hands: TrackedHand[];
-  /** performance.now() timestamp (ms) when the frame was produced. */
+  /** Camera/media timeline timestamp (ms). Used for tracking cadence only. */
   timestampMs: number;
+  /** Estimated age of this camera sample when inference completed (ms). */
+  captureAgeMs: number;
 }
 
 /** 2D point in normalized image coordinates. */

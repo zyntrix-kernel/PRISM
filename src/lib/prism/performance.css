@@ -101,3 +101,20 @@
     filter: blur(28px);
   }
 }
+
+
+/* Expo presentation budget: prioritize deterministic frame time over effects. */
+html[data-prism-presentation="1"] .prism-orb {
+  animation: none !important;
+}
+html[data-prism-presentation="1"] .prism-glass,
+html[data-prism-presentation="1"] .prism-glass-premium,
+html[data-prism-presentation="1"] #prism-hud,
+html[data-prism-presentation="1"] .prism-command-top,
+html[data-prism-presentation="1"] .prism-command-left,
+html[data-prism-presentation="1"] .prism-command-right,
+html[data-prism-presentation="1"] .prism-command-focus,
+html[data-prism-presentation="1"] .prism-command-inspection {
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+}

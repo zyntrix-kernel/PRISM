@@ -329,6 +329,7 @@ export class PrismScene {
   private readonly tmpVec = new THREE.Vector3();
   private hovered: THREE.Object3D | null = null;
   private readonly androidWebView: boolean;
+  private presentationMode = false;
 
   constructor(container: HTMLElement, quality: QualityTier, preset: PresetId) {
     this.quality = quality;
@@ -530,8 +531,9 @@ export class PrismScene {
 
   private applyPixelRatio(): void {
     const ratio = PrismConfig.quality[this.quality]?.pixelRatio ?? 1.25;
-    const nativeCap = this.androidWebView ? 0.65 : ratio;
-    const pr = Math.min(window.devicePixelRatio || 1, ratio, nativeCap);
+    const presentationCap = this.presentationMode ? 0.80 : ratio;
+    const nativeCap = this.androidWebView ? 0.65 : presentationCap;
+    const pr = Math.min(window.devicePixelRatio || 1, ratio, presentationCap, nativeCap);
     this.renderer.setPixelRatio(pr);
     this.composer?.setPixelRatio(pr);
     if (this.starMat) this.starMat.uniforms.uPixelRatio.value = pr;
@@ -577,7 +579,7 @@ export class PrismScene {
 
   /** High+ tier gets procedural planet maps; low/med use flat colors. */
   private applyTextureMaps(): void {
-    const on = this.quality === 'high' || this.quality === 'ultra';
+    const on = !this.presentationMode && (this.quality === 'high' || this.quality === 'ultra');
     this.world.traverse((obj) => {
       const mesh = obj as THREE.Mesh;
       const mat = mesh.material as (THREE.MeshStandardMaterial | THREE.MeshBasicMaterial) | undefined;
@@ -589,13 +591,23 @@ export class PrismScene {
     });
   }
 
+  setPresentationMode(enabled: boolean): void {
+    if (this.presentationMode === enabled) return;
+    this.presentationMode = enabled;
+    this.applyPixelRatio();
+    this.applyTextureMaps();
+    this.updateStarDensity(enabled ? 220 : this.quality);
+    if (enabled) this.disposeComposer();
+    else if (this.quality === 'high' || this.quality === 'ultra') this.ensureComposer();
+  }
+
   applyQuality(tier: QualityTier): void {
     if (this.quality === tier) return;
     this.quality = tier;
     this.applyPixelRatio();
     this.applyTextureMaps();
-    this.updateStarDensity(tier);
-    if (tier === 'high' || tier === 'ultra') this.ensureComposer();
+    this.updateStarDensity(this.presentationMode ? 220 : tier);
+    if (!this.presentationMode && (tier === 'high' || tier === 'ultra')) this.ensureComposer();
     else this.disposeComposer();
   }
 
@@ -700,8 +712,8 @@ export class PrismScene {
     this.scene.add(this.stars);
   }
 
-  private updateStarDensity(tier: QualityTier): void {
-    const visible = this.starBudget[tier];
+  private updateStarDensity(tier: QualityTier | number): void {
+    const visible = typeof tier === 'number' ? tier : this.starBudget[tier];
     this.stars.geometry.setDrawRange(0, visible);
   }
 

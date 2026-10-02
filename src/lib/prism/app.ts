@@ -120,6 +120,7 @@ export class PrismApp {
   private lastStateStr = '';
   private presentationMode = false;
   private handMotionUntil = 0;
+  private lastPresentationRenderAt = -Infinity;
   private readonly uiAbort = new AbortController();
 
   constructor(elements: PrismElements) {
@@ -175,7 +176,19 @@ export class PrismApp {
   setQuality(value: string): void { this.el.qualitySel.value = value; const q = this.el.qualitySel.value === 'auto' ? this.device.tier : (this.el.qualitySel.value as QualityTier); this.scene.applyQuality(q); this.governor.rebase(q); this.toast(`Quality set to ${value}`, 'info'); this.emit(); }
   toggleDebug(): boolean { const v = this.debug.toggle(); this.el.debugBtn.classList.toggle('active', v); this.toast(v ? 'Debug overlay on' : 'Debug overlay off', 'info'); this.emit(); return v; }
   toggleAi(): void { this.observer.setEnabled(!this.observer.isEnabled); this.syncAiButton(); this.toast(this.observer.isEnabled ? 'AI observer enabled' : 'AI observer disabled', 'info'); this.emit(); }
-  togglePresentation(): boolean { this.presentationMode = !this.presentationMode; this.toast(this.presentationMode ? 'Presentation mode' : 'Instrument controls restored', 'info'); this.emit(); return this.presentationMode; }
+  togglePresentation(): boolean {
+    this.presentationMode = !this.presentationMode;
+    this.lastPresentationRenderAt = -Infinity;
+    this.scene.setPresentationMode(this.presentationMode);
+    if (typeof document !== 'undefined') {
+      if (this.presentationMode) document.documentElement.dataset.prismPresentation = '1';
+      else delete document.documentElement.dataset.prismPresentation;
+    }
+    this.toast(this.presentationMode ? 'Presentation mode — performance locked' : 'Instrument controls restored', 'info');
+    this.requestFrame();
+    this.emit();
+    return this.presentationMode;
+  }
   toggleEasy(): void { const w = this.scene.currentWorld; if (this.scene.currentPreset !== 'drive' || !w?.setEasyMode || !w?.isEasyMode) return; w.setEasyMode(!w.isEasyMode()); this.syncEasyLabel(); this.emit(); }
   enableCamera(): void { void this.bootVision(); }
   disableCamera(): void { this.stopVision(); }
@@ -260,7 +273,12 @@ export class PrismApp {
       if(this.observer.isEnabled)this.observer.tick(now,this.cachedCandidates,this.interaction.gesture);
       if(world?.setDriveInput){world.setDriveInput({steer:this.interaction.mode==='none'?0:applySteerCurve(this.interaction.pointerNX),throttle:this.interaction.actionHeld?(this.interaction.mode==='hand'?this.interaction.pinchCloseness:1):0,brake:this.interaction.spaceDown,actionPressed:this.interaction.actionPressed,tap:this.interaction.tap,ground:this.interaction.groundXZ()});}
       world?.setPointerAction?.(this.interaction.actionPressed,this.interaction.actionHeld,this.interaction.actionReleased,this.interaction.tap);
-      this.scene.update(dt,this.elapsed);
+      const renderDue = !this.presentationMode || (now - this.lastPresentationRenderAt >= 33);
+      if (renderDue) {
+        this.scene.update(dt,this.elapsed);
+        this.scene.render();
+        this.lastPresentationRenderAt = now;
+      }
       if(now-this.lastUiAt>=250){this.lastUiAt=now;this.updateRailAndCoach(now);this.updateOnboard(now,frame?.hands.length??0,this.interaction.grabbedName);}
       if(this.overlayCtx&&frame&&frame.hands.length>0){
         // Tracking runs slower than rendering. Redraw the 2D landmarks only
@@ -278,8 +296,6 @@ export class PrismApp {
       }
       const infoName=this.interaction.grabbedName??this.interaction.hoveredName;if(infoName!==this._lastInfoName){this._lastInfoName=infoName;const info=this.scene.bodyInfo(infoName);if(info){this.el.planetInfo.textContent=info;this.el.planetInfo.classList.remove('hidden');}else this.el.planetInfo.classList.add('hidden');}
       this.debug.update(now,{renderFps:this.renderFps,hands:frame?.hands.length??0,confidence:frame?.hands[0]?.confidence??0,deviceLine:showDebug?this.deviceLine():''},this.interaction,this.tracker,this.scene.drawCalls,this.scene.triangles,this.scene.grabbables.length,showDebug?this.observer.snapshot():null);
-      this.scene.render();
-
       // Static scene + camera active: wait for the next meaningful tracker
       // result. Camera mode therefore does not burn a WebGL frame when nothing
       // changed. Camera off keeps the existing continuous animation behavior.
